@@ -29,6 +29,8 @@
   var PREFIXE_FILE = 'centrale-progression:';
   var config = { api: '', app: '*', activites: null, surEtat: null, surDeconnexion: null };
   var jetonTransmis = null;    // jeton reçu dans l'adresse (#centrale=…) depuis le portail ou une autre application
+  var activiteTransmise = null; // activité à ouvrir directement (#activite=…)
+  var CLE_RETOUR = 'centrale-retour';
   var memoire = null;          // session si sessionStorage est indisponible
   var attentes = {};           // cle -> { minuteur, promesses: [] }
   var bases = {};              // cle -> date (serveur) de la version sur laquelle l'élève travaille
@@ -46,16 +48,64 @@
     if (config.api && !/\/$/.test(config.api)) config.api += '/';
     if (typeof config.surEtat === 'function') ecouteursEtat.push(config.surEtat);
     lireJetonTransmis();
+    if (config.boutonRetour !== false) {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', afficherBoutonRetour);
+      else afficherBoutonRetour();
+    }
     return Centrale;
   }
 
-  /** Récupère un jeton passé dans l'adresse (#centrale=…) puis le retire de l'adresse. */
+  /* ---------- Retour au portail ---------- */
+
+  function adresseRetour() {
+    try { return sessionStorage.getItem(CLE_RETOUR); } catch (e) { return null; }
+  }
+
+  /** Revient au portail (« Mes ateliers ») en envoyant d'abord ce qui n'est pas enregistré. */
+  function retour() {
+    var r = adresseRetour();
+    if (!r) return false;
+    toutEnvoyer();
+    viderFileProgression();
+    location.href = r;
+    return true;
+  }
+
+  /** Petit bouton « ← Mes ateliers » en bas à gauche, quand l'application a été ouverte depuis le portail. */
+  function afficherBoutonRetour() {
+    if (!adresseRetour() || document.getElementById('centrale-retour')) return;
+    var b = document.createElement('button');
+    b.id = 'centrale-retour';
+    b.type = 'button';
+    b.textContent = '← Mes ateliers';
+    b.title = 'Revenir à la liste de tes ateliers (ton travail est enregistré)';
+    b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483000;font:600 14px/1 system-ui,-apple-system,"Segoe UI",sans-serif;'
+      + 'padding:10px 14px;border-radius:999px;border:1px solid rgba(0,0,0,.15);background:#1f5f8b;color:#fff;cursor:pointer;'
+      + 'box-shadow:0 4px 14px rgba(0,0,0,.2)';
+    b.onclick = retour;
+    document.body.appendChild(b);
+  }
+
+  /** Activité demandée par le portail (ex. "e5-1"), à ouvrir directement. Ne sert qu'une fois. */
+  function activiteDemandee() {
+    var a = activiteTransmise;
+    activiteTransmise = null;
+    return a;
+  }
+
+  /**
+   * Lit ce que le portail (ou une autre application) a passé dans l'adresse, puis l'en retire :
+   *   #centrale=<jeton>&retour=<adresse du portail>&activite=<activité à ouvrir>
+   */
   function lireJetonTransmis() {
     var h = location.hash.replace(/^#/, '');
-    if (!/(^|&)centrale=/.test(h)) return;
+    if (!/(^|&)(centrale|retour|activite)=/.test(h)) return;
     var reste = [];
     h.split('&').forEach(function (morceau) {
-      if (morceau.indexOf('centrale=') === 0) jetonTransmis = decodeURIComponent(morceau.slice(9));
+      var v = function (n) { return decodeURIComponent(morceau.slice(n)); };
+      if (morceau.indexOf('centrale=') === 0) jetonTransmis = v(9);
+      else if (morceau.indexOf('retour=') === 0) { try { sessionStorage.setItem(CLE_RETOUR, v(7)); } catch (e) { /* rien */ } }
+      else if (morceau.indexOf('activite=') === 0) activiteTransmise = v(9);
       else if (morceau) reste.push(morceau);
     });
     try {
@@ -140,21 +190,33 @@
     return donnees;
   }
 
-  /** Adresse d'une autre application, avec le jeton pour que l'élève n'ait pas à retaper son code. */
-  function lien(adresse) {
+  /**
+   * Adresse d'une autre application, avec le jeton pour que l'élève n'ait pas à retaper son code.
+   * options : { activite: "e5-1" (à ouvrir directement), retour: adresse du bouton « ← Mes ateliers » }
+   */
+  function lien(adresse, options) {
+    options = options || {};
     var s = session();
-    if (!s || !s.jeton) return adresse;
     var u = new URL(adresse, location.href);
     var h = u.hash.replace(/^#/, '');
-    u.hash = 'centrale=' + encodeURIComponent(s.jeton) + (h ? '&' + h : '');
+    var morceaux = [];
+    if (s && s.jeton) morceaux.push('centrale=' + encodeURIComponent(s.jeton));
+    var r = options.retour || adresseRetour();
+    if (r) morceaux.push('retour=' + encodeURIComponent(r));
+    if (options.activite) morceaux.push('activite=' + encodeURIComponent(options.activite));
+    if (h) morceaux.push(h);
+    u.hash = morceaux.join('&');
     return u.toString();
   }
 
   /** Ouvre une autre application (même onglet par défaut) en gardant la connexion. */
-  function ouvrir(adresse, nouvelOnglet) {
+  function ouvrir(adresse, options) {
+    if (options === true) options = { nouvelOnglet: true };
+    options = options || {};
     toutEnvoyer();
-    if (nouvelOnglet) window.open(lien(adresse), '_blank', 'noopener');
-    else location.href = lien(adresse);
+    var cible = lien(adresse, options);
+    if (options.nouvelOnglet) window.open(cible, '_blank', 'noopener');
+    else location.href = cible;
   }
 
   function deconnexion() {
@@ -580,6 +642,11 @@
     return (await requeteJSON('progression.php', { method: 'GET' }, { app: '*' })).progression;
   }
 
+  /** Ateliers proposés à la classe, avec l'avancement de l'élève et la liste des activités. */
+  async function ateliers() {
+    return (await requeteJSON('ateliers.php', { method: 'GET' })).ateliers;
+  }
+
   /** Parcours de la classe avec l'avancement de l'élève à chaque étape. */
   async function parcours() {
     return (await requeteJSON('parcours.php', { method: 'GET' })).parcours;
@@ -736,8 +803,11 @@
     toutesMesProgressions: toutesMesProgressions,
     declarerActivites: declarerActivites,
     parcours: parcours,
+    ateliers: ateliers,
     lien: lien,
     ouvrir: ouvrir,
+    retour: retour,
+    activiteDemandee: activiteDemandee,
     reprendreSession: reprendreSession,
     afficherConnexion: afficherConnexion,
     nomFichier: nomFichier,

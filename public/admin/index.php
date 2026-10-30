@@ -466,6 +466,7 @@ match ($page) {
     'eleve'    => page_eleve((int) ($_GET['id'] ?? 0)),
     'suivi'    => page_suivi(),
     'parcours' => page_parcours(),
+    'ateliers' => page_ateliers(),
     default  => page_accueil(),
 };
 
@@ -1034,7 +1035,8 @@ function messages(): void
 
 function barre(string $actif = 'classes'): void
 {
-    $liens = ['classes' => ['./', 'Classes'], 'suivi' => ['./?p=suivi', 'Suivi'], 'parcours' => ['./?p=parcours', 'Parcours']];
+    $liens = ['classes' => ['./', 'Classes'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'],
+              'suivi' => ['./?p=suivi', 'Suivi']];
     ?>
     <header class="barre">
         <nav>

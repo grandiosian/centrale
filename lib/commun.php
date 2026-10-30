@@ -159,6 +159,18 @@ function creer_tables(PDO $pdo): void
             classes     TEXT NOT NULL DEFAULT '',          -- "5A,5B" ; vide = toutes les classes
             cree_le     INTEGER NOT NULL
         );
+        -- Ateliers proposés aux élèves sur le portail (registre des applications)
+        CREATE TABLE IF NOT EXISTS ateliers (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            app         TEXT NOT NULL UNIQUE,
+            nom         TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            url         TEXT NOT NULL,
+            icone       TEXT NOT NULL DEFAULT '',
+            classes     TEXT NOT NULL DEFAULT '',          -- vide = toutes les classes
+            ordre       INTEGER NOT NULL DEFAULT 0,
+            actif       INTEGER NOT NULL DEFAULT 1
+        );
         CREATE TABLE IF NOT EXISTS parcours_etapes (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             parcours_id INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
@@ -272,6 +284,21 @@ function catalogue_activites(?string $app = null): array
         $res[$a['app']][$a['activite']] = $a;
     }
     return $res;
+}
+
+/** Une classe fait-elle partie de la liste "5A,5B" ? (liste vide = toutes) */
+function classe_concernee(string $liste, ?string $classe): bool
+{
+    $classes = array_filter(array_map('trim', explode(',', $liste)));
+    return $classe === null || !$classes
+        || in_array(mb_strtoupper($classe), array_map('mb_strtoupper', $classes), true);
+}
+
+/** Ateliers actifs proposés à une classe, dans l'ordre. */
+function ateliers_pour_classe(?string $classe): array
+{
+    $tous = db()->query('SELECT * FROM ateliers WHERE actif = 1 ORDER BY ordre, nom')->fetchAll();
+    return array_values(array_filter($tous, fn($a) => classe_concernee($a['classes'], $classe)));
 }
 
 /** Parcours visibles par une classe, avec leurs étapes. */

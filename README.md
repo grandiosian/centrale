@@ -7,7 +7,7 @@ Serveur unique pour toutes les applications de technologie :
 - **Pseudonymisation** : le serveur ne connaît que « 5A · élève 07 ». Les noms restent sur l'ordinateur de l'enseignant.
 - **Progression et suivi** : chaque application signale l'avancement de l'élève ; tableau élèves × activités pour toute la classe.
 - **Parcours** : enchaînement d'étapes dans plusieurs logiciels (simulation → modélisation → programmation → questionnaire).
-- **Portail élève** (page d'accueil) : l'élève tape son code une fois, voit ses parcours et ouvre chaque logiciel sans retaper son code.
+- **Portail élève** (page d'accueil) : l'élève tape son code une fois, voit ses **ateliers** et ses parcours, ouvre un atelier (ou directement une activité) déjà connecté, puis revient au portail avec « ← Mes ateliers ».
 - **Espace enseignant** : codes, suivi, parcours, travail de chaque élève, historique, export ZIP, ressources par atelier, quotas.
 
 ```
@@ -119,7 +119,10 @@ Puis ajoutez l'adresse du site de l'application dans **Réglages → Sites autor
 | `await Centrale.mesProgressions()` | Avancement de l'élève dans cet atelier (pour cocher les activités faites) |
 | `Centrale.init({ activites: [...] })` | Liste des activités de l'atelier (colonnes du suivi) |
 | `await Centrale.parcours()` | Parcours de la classe avec l'avancement de l'élève |
-| `Centrale.lien(url)` / `Centrale.ouvrir(url)` | Ouvre une autre application sans retaper le code |
+| `Centrale.lien(url, { activite })` / `Centrale.ouvrir(url, { activite })` | Ouvre une autre application (et une activité) sans retaper le code |
+| `Centrale.activiteDemandee()` | Activité demandée par le portail, à ouvrir directement |
+| `Centrale.retour()` | Revient au portail (bouton « ← Mes ateliers » ajouté automatiquement) |
+| `await Centrale.ateliers()` | Ateliers proposés à la classe, avec l'avancement |
 
 ### Ce qui est géré automatiquement
 
@@ -131,7 +134,42 @@ Puis ajoutez l'adresse du site de l'application dans **Réglages → Sites autor
 
 ---
 
-## 4. Progression, parcours et suivi
+## 4. Ateliers, progression, parcours et suivi
+
+### Organisation recommandée
+
+- **Les activités vivent dans leur application.** NetSim garde ses exercices et leur validation automatique, et le modeleur 3D garde ses défis. Ce sont les applications qui savent vérifier ce que fait l'élève.
+- **La Centrale est le hub.** Elle gère :
+  - la connexion ;
+  - la liste des ateliers ;
+  - la sauvegarde ;
+  - la progression, les parcours et le suivi.
+
+  Chaque application lui *déclare* ses activités, et la Centrale peut alors les afficher, les ouvrir directement et les suivre.
+- Ce qui est de la donnée pure (questionnaire, TP noté, consignes) peut être un petit module hébergé sur la Centrale.
+
+### Ateliers du portail
+
+Onglet **Ateliers** de l'espace enseignant : icône, nom, identifiant (`app`), adresse, classes concernées.
+
+- Sur le portail, chaque atelier est une carte avec son avancement et la liste de ses activités.
+  - **Ouvrir** lance l'atelier dans le même onglet, déjà connecté.
+  - **Ouvrir** sur une activité lance directement cette activité, par exemple l'exercice e5-1 de NetSim.
+- Dans l'atelier, le bouton **« ← Mes ateliers »** (en bas à gauche, ajouté automatiquement par le module) ramène au portail. Il envoie d'abord ce qui n'est pas encore enregistré. L'élève peut alors ouvrir un autre atelier sans rapport.
+- Les applications déjà branchées mais absentes du portail sont proposées en un clic.
+
+Côté application, pour l'ouverture directe d'une activité :
+
+```js
+Centrale.afficherConnexion(element, {
+  onConnecte: () => {
+    const demande = Centrale.activiteDemandee();   // ex. "e5-1", ou null
+    if (demande) ouvrirExercice(demande);
+  }
+});
+```
+
+`Centrale.init({ boutonRetour: false })` masque le bouton retour automatique, si l'application préfère le placer elle-même avec `Centrale.retour()`.
 
 ### Dans une application
 
@@ -244,6 +282,7 @@ Toutes les requêtes, sauf `login.php`, demandent l'en-tête `X-Jeton` reçu à 
 | `GET progression.php?app=` | Avancement de l'élève (`app=*` : tous les ateliers) |
 | `POST activites.php` `{app, activites: [{id, titre, groupe?, total?}]}` | Catalogue des activités de l'atelier |
 | `GET parcours.php` | Parcours de la classe avec l'avancement de l'élève |
+| `GET ateliers.php` | Ateliers proposés à la classe, avec l'avancement et les activités |
 | `GET session.php?app=` | Vérifie un jeton (passage d'une application à l'autre) |
 
 Codes d'erreur : 400 (demande incomplète), 401 (non connecté ou session expirée), 403 (site non autorisé), 409 (conflit), 413 (trop gros), 429 (trop d'essais de codes), 507 (espace de l'élève plein).

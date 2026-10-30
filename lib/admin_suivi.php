@@ -52,6 +52,53 @@ function action_suivi(string $action): bool
             flash('Parcours supprimé (la progression des élèves est conservée).');
             rediriger('./?p=parcours');
 
+        case 'enregistrer_atelier':
+            $id = (int) ($_POST['atelier_id'] ?? 0);
+            $app = normaliser_app((string) ($_POST['app'] ?? ''));
+            $nom = mb_substr(trim((string) ($_POST['nom'] ?? '')), 0, 80);
+            $url = trim((string) ($_POST['url'] ?? ''));
+            $erreurs = [];
+            if ($app === '*') {
+                $erreurs[] = "Identifiant de l'atelier manquant : c'est le nom donné à app dans Centrale.init (ex. netsim).";
+            }
+            if ($nom === '') {
+                $erreurs[] = "Donnez un nom à l'atelier.";
+            }
+            if (!preg_match('#^https?://\S+$#', $url)) {
+                $erreurs[] = "L'adresse doit commencer par https://";
+            }
+            if ($erreurs) {
+                $_SESSION['brouillon_atelier'] = $_POST;
+                foreach ($erreurs as $e) {
+                    flash($e, 'err');
+                }
+                rediriger('./?p=ateliers' . ($id ? '&modifier=' . $id : '&nouveau=1'));
+            }
+            $champs = [$app, $nom, mb_substr(trim((string) ($_POST['description'] ?? '')), 0, 300), $url,
+                mb_substr(trim((string) ($_POST['icone'] ?? '')), 0, 4),
+                implode(',', array_filter(array_map('trim', explode(',', (string) ($_POST['classes'] ?? ''))))),
+                (int) ($_POST['ordre'] ?? 0), empty($_POST['actif']) ? 0 : 1];
+            try {
+                if ($id) {
+                    $pdo->prepare('UPDATE ateliers SET app = ?, nom = ?, description = ?, url = ?, icone = ?, classes = ?, ordre = ?, actif = ? WHERE id = ?')
+                        ->execute([...$champs, $id]);
+                } else {
+                    $pdo->prepare('INSERT INTO ateliers (app, nom, description, url, icone, classes, ordre, actif) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                        ->execute($champs);
+                }
+            } catch (PDOException) {
+                $_SESSION['brouillon_atelier'] = $_POST;
+                flash("Un atelier utilise déjà l'identifiant « $app ».", 'err');
+                rediriger('./?p=ateliers' . ($id ? '&modifier=' . $id : '&nouveau=1'));
+            }
+            flash("Atelier « $nom » enregistré.");
+            rediriger('./?p=ateliers');
+
+        case 'supprimer_atelier':
+            $pdo->prepare('DELETE FROM ateliers WHERE id = ?')->execute([(int) ($_POST['atelier_id'] ?? 0)]);
+            flash("Atelier retiré du portail (le travail et la progression des élèves sont conservés).");
+            rediriger('./?p=ateliers');
+
         case 'oublier_catalogue':
             $app = normaliser_app((string) ($_POST['app'] ?? ''));
             $pdo->prepare('DELETE FROM activites WHERE app = ?')->execute([$app]);
@@ -377,6 +424,106 @@ Questionnaire bilan | quiz | bilan-robot | https://technoversailles.alwaysdata.n
                             <a class="btn petit secondaire" href="./?p=suivi&vue=parcours:<?= (int) $p['id'] ?>">Suivi</a>
                             <a class="btn petit secondaire" href="./?p=parcours&modifier=<?= (int) $p['id'] ?>">Modifier</a>
                             <?= bouton('supprimer_parcours', 'Supprimer', ['parcours_id' => $p['id']], 'danger', 'Supprimer ce parcours ?') ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table></div>
+        <?php endif; ?>
+    </main>
+    <?php
+    pied();
+}
+
+function page_ateliers(): void
+{
+    $pdo = db();
+    $liste = $pdo->query('SELECT * FROM ateliers ORDER BY ordre, nom')->fetchAll();
+    $catalogue = catalogue_activites();
+    $connues = array_values(array_unique(array_merge(array_keys($catalogue),
+        $pdo->query("SELECT DISTINCT app FROM progression UNION SELECT DISTINCT app FROM donnees")->fetchAll(PDO::FETCH_COLUMN))));
+    $enregistrees = array_column($liste, 'app');
+    $suggestions = array_values(array_diff($connues, $enregistrees, ['portail']));
+    sort($suggestions);
+
+    $modifier = (int) ($_GET['modifier'] ?? 0);
+    $brouillon = $_SESSION['brouillon_atelier'] ?? null;
+    unset($_SESSION['brouillon_atelier']);
+    $courant = ['id' => 0, 'app' => (string) ($_GET['app'] ?? ''), 'nom' => '', 'description' => '', 'url' => '',
+                'icone' => '', 'classes' => '', 'ordre' => count($liste) + 1, 'actif' => 1];
+    if ($modifier) {
+        $st = $pdo->prepare('SELECT * FROM ateliers WHERE id = ?');
+        $st->execute([$modifier]);
+        $courant = $st->fetch() ?: $courant;
+    }
+    if ($brouillon) {
+        $courant = array_merge($courant, array_intersect_key($brouillon, $courant), ['id' => (int) ($brouillon['atelier_id'] ?? 0),
+            'actif' => empty($brouillon['actif']) ? 0 : 1]);
+    }
+    $afficher_form = !empty($_GET['nouveau']) || $modifier || $brouillon || isset($_GET['app']) || !$liste;
+
+    entete('Ateliers');
+    barre('ateliers');
+    ?>
+    <main>
+        <div class="titre-section">
+            <h1>Ateliers</h1>
+            <?php if (!$afficher_form): ?><a class="btn" href="./?p=ateliers&nouveau=1">Ajouter un atelier</a><?php endif; ?>
+        </div>
+        <p class="sous">Les ateliers apparaissent sur le portail des élèves (<a href="../" target="_blank"><?= h(url_base()) ?>/</a>).
+            L'élève les ouvre d'un clic, déjà connecté, et revient au portail avec le bouton « ← Mes ateliers ».</p>
+        <?php messages(); ?>
+
+        <?php if ($suggestions && !$afficher_form): ?>
+            <p class="carte">Applications déjà branchées mais pas encore sur le portail :
+                <?php foreach ($suggestions as $s): ?>
+                    <a class="btn petit secondaire" href="./?p=ateliers&app=<?= rawurlencode($s) ?>">+ <?= h($s) ?></a>
+                <?php endforeach; ?></p>
+        <?php endif; ?>
+
+        <?php if ($afficher_form): ?>
+            <form method="post" class="carte">
+                <?= csrf() ?>
+                <input type="hidden" name="action" value="enregistrer_atelier">
+                <input type="hidden" name="atelier_id" value="<?= (int) $courant['id'] ?>">
+                <div class="grille-atelier">
+                    <label>Icône<input name="icone" maxlength="4" value="<?= h($courant['icone']) ?>" placeholder="🌐"></label>
+                    <label>Nom affiché<input name="nom" required maxlength="80" value="<?= h($courant['nom']) ?>" placeholder="NetSim — réseaux"></label>
+                    <label>Identifiant (app)
+                        <input name="app" required maxlength="40" value="<?= h($courant['app']) ?>" placeholder="netsim" list="apps-connues">
+                        <datalist id="apps-connues"><?php foreach ($connues as $c): ?><option value="<?= h($c) ?>"><?php endforeach; ?></datalist>
+                    </label>
+                </div>
+                <label>Adresse de l'application<input name="url" type="url" required value="<?= h($courant['url']) ?>" placeholder="https://grandiosian.github.io/NetSim/"></label>
+                <label>Description (facultative)<input name="description" maxlength="300" value="<?= h($courant['description']) ?>" placeholder="Construire et tester des réseaux"></label>
+                <div class="grille-atelier reglages-atelier">
+                    <label>Classes<span class="aide">Ex. 5A, 5B. Vide = toutes.</span><input name="classes" value="<?= h($courant['classes']) ?>"></label>
+                    <label>Ordre<span class="aide">Position sur le portail.</span><input type="number" name="ordre" value="<?= (int) $courant['ordre'] ?>"></label>
+                    <label class="case"><input type="checkbox" name="actif" value="1" <?= $courant['actif'] ? 'checked' : '' ?>> Visible par les élèves</label>
+                </div>
+                <div class="ligne-actions">
+                    <button>Enregistrer</button>
+                    <?php if ($liste): ?><a href="./?p=ateliers">Annuler</a><?php endif; ?>
+                </div>
+            </form>
+        <?php endif; ?>
+
+        <?php if ($liste): ?>
+            <div class="defile" style="margin-top:20px"><table>
+                <thead><tr><th></th><th>Atelier</th><th>Activités</th><th>Classes</th><th>État</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ($liste as $a): ?>
+                    <tr class="<?= $a['actif'] ? '' : 'inactif' ?>">
+                        <td style="font-size:1.4rem"><?= h($a['icone']) ?></td>
+                        <td><strong><?= h($a['nom']) ?></strong> <code><?= h($a['app']) ?></code><br>
+                            <a href="<?= h($a['url']) ?>" target="_blank" rel="noopener" class="discret"><?= h($a['url']) ?></a></td>
+                        <td><?= count($catalogue[$a['app']] ?? []) ?: '<span class="discret" title="Les activités apparaissent quand l\'application les déclare (à la première connexion d\'un élève)">—</span>' ?></td>
+                        <td><?= $a['classes'] !== '' ? h($a['classes']) : '<span class="discret">toutes</span>' ?></td>
+                        <td><?= $a['actif'] ? 'Visible' : 'Masqué' ?></td>
+                        <td class="actions">
+                            <a class="btn petit secondaire" href="./?p=suivi&vue=app:<?= rawurlencode($a['app']) ?>">Suivi</a>
+                            <a class="btn petit secondaire" href="./?p=ateliers&modifier=<?= (int) $a['id'] ?>">Modifier</a>
+                            <?= bouton('supprimer_atelier', 'Retirer', ['atelier_id' => $a['id']], 'danger', 'Retirer cet atelier du portail ?') ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
