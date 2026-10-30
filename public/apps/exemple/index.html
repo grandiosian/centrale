@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compte rendu · Exemple</title>
+<style>
+  :root {
+    --fond: #f6f5f2; --surface: #fff; --texte: #1d1f24; --doux: #62666f; --bord: #dedbd3;
+    --accent: #1f5f8b; --accent-texte: #fff; --code-fond: #efece6; --ok: #1f6b3a;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fond: #16181c; --surface: #1f2228; --texte: #e8e6e1; --doux: #a2a5ad; --bord: #343841;
+      --accent: #6aa9d6; --accent-texte: #0d1520; --code-fond: #2a2e35; --ok: #8fd3a5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte);
+         font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+           padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--bord); }
+  header strong { font-size: 1.05rem; }
+  main { max-width: 720px; margin: 0 auto; padding: 28px 16px 64px; }
+  h1 { margin: 0 0 6px; font-size: 1.7rem; }
+  .sous { color: var(--doux); margin: 0 0 24px; }
+  .carte { background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; padding: 20px; }
+  textarea { width: 100%; min-height: 220px; padding: 12px; font: inherit; color: var(--texte);
+             background: var(--fond); border: 1px solid var(--bord); border-radius: 8px; resize: vertical; }
+  .etapes { display: grid; gap: 12px; margin-top: 16px; }
+  .etape { display: grid; grid-template-columns: 30px 1fr; align-items: start; gap: 14px; }
+  .etape > div { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 0; }
+  .fait { overflow-wrap: anywhere; }
+  .num { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center;
+         background: var(--accent); color: var(--accent-texte); font-weight: 700; }
+  button { font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 8px; cursor: pointer;
+           border: 1px solid var(--accent); background: var(--accent); color: var(--accent-texte); }
+  button.secondaire { background: transparent; color: var(--accent); }
+  button.petit { padding: 4px 10px; font-size: .9rem; }
+  .mdp { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--doux); font-size: .95rem; }
+  code { font: 600 1rem ui-monospace, Menlo, Consolas, monospace; background: var(--code-fond); padding: 3px 8px; border-radius: 6px; color: var(--texte); }
+  .fait { color: var(--ok); font-weight: 600; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <strong>Compte rendu de séance</strong>
+  <span id="qui" hidden></span>
+</header>
+
+<main>
+  <!-- Étape 1 : connexion avec le code personnel -->
+  <section id="ecran-connexion">
+    <h1>Bonjour !</h1>
+    <p class="sous">Tape le code personnel que ton professeur t'a donné.</p>
+    <div class="carte" id="connexion"></div>
+  </section>
+
+  <!-- Étape 2 : le travail de l'élève -->
+  <section id="ecran-travail" hidden>
+    <h1>Mon compte rendu</h1>
+    <p class="sous">Écris ce que tu as fait pendant la séance, puis dépose ton fichier.</p>
+    <div class="carte">
+      <textarea id="texte" placeholder="Aujourd'hui, nous avons…"></textarea>
+      <div class="etapes">
+        <div class="etape">
+          <span class="num">1</span>
+          <div>
+            <button id="enregistrer">Enregistrer mon fichier</button>
+            <span id="nom-fichier" class="fait" hidden></span>
+          </div>
+        </div>
+        <div class="etape">
+          <span class="num">2</span>
+          <div>
+            <button id="deposer" class="secondaire">Ouvrir le dossier de dépôt</button>
+            <div id="bloc-mdp" class="mdp" hidden>
+              Mot de passe du dossier : <code id="mdp"></code>
+              <button id="copier" class="petit secondaire">Copier</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="sous" style="margin:16px 0 0">Dans le dossier de dépôt, glisse le fichier que tu viens d'enregistrer
+        (il est dans « Téléchargements »).</p>
+    </div>
+  </section>
+</main>
+
+<!--
+  Ici l'application est hébergée sur le même serveur que la Centrale, d'où les chemins relatifs.
+  Pour une application sur GitHub Pages ou la Forge, mettez les adresses complètes :
+    <script src="https://VOTRE-COMPTE.alwaysdata.net/js/centrale-client.js"></script>
+    api: "https://VOTRE-COMPTE.alwaysdata.net/api/login.php"
+  et ajoutez l'adresse du site dans « Sites autorisés » de l'espace enseignant.
+-->
+<script src="../../js/centrale-client.js"></script>
+<script>
+  Centrale.init({ api: '../../api/login.php', app: 'compte-rendu' });
+
+  const $ = (id) => document.getElementById(id);
+
+  Centrale.afficherConnexion($('connexion'), { onConnecte: demarrer });
+
+  function demarrer(infos) {
+    $('ecran-connexion').hidden = true;
+    $('ecran-travail').hidden = false;
+    $('qui').hidden = false;
+    $('qui').innerHTML = '';
+    $('qui').append(`${infos.classe} · ${infos.eleve} `);
+    const sortir = document.createElement('button');
+    sortir.className = 'petit secondaire';
+    sortir.textContent = 'Se déconnecter';
+    sortir.onclick = () => { Centrale.deconnexion(); location.reload(); };
+    $('qui').append(sortir);
+
+    if (infos.depot && infos.depot.mot_de_passe) {
+      $('mdp').textContent = infos.depot.mot_de_passe;
+      $('bloc-mdp').hidden = false;
+    }
+    $('texte').focus();
+  }
+
+  $('enregistrer').onclick = () => {
+    const nom = Centrale.nomFichier('txt');
+    Centrale.telecharger($('texte').value, nom);
+    $('nom-fichier').textContent = '✓ ' + nom;
+    $('nom-fichier').hidden = false;
+  };
+
+  $('deposer').onclick = () => {
+    try { Centrale.ouvrirDepot(); } catch (e) { alert(e.message); }
+  };
+
+  $('copier').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText($('mdp').textContent);
+      $('copier').textContent = 'Copié ✓';
+    } catch (e) {
+      $('copier').textContent = 'Sélectionne-le à la main';
+    }
+  };
+</script>
+</body>
+</html>

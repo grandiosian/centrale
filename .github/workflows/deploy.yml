@@ -1,0 +1,63 @@
+# Envoie automatiquement le code sur alwaysdata à chaque modification de la branche main.
+#
+# À configurer une seule fois dans GitHub : Settings → Secrets and variables → Actions
+#   Secrets :
+#     ALWAYSDATA_COMPTE   nom du compte alwaysdata (ex. lionelc)
+#     ALWAYSDATA_SSH_KEY  clé SSH PRIVÉE dont la clé publique est dans ~/.ssh/authorized_keys sur alwaysdata
+#   Variable (facultative) :
+#     DOSSIER_DISTANT     dossier sur alwaysdata (par défaut : www/centrale)
+#
+# Le dossier data/ (base des codes élèves) n'est jamais touché par le déploiement.
+
+name: Déployer sur alwaysdata
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deployer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier la syntaxe PHP
+        run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Vérifier que les secrets sont configurés
+        id: config
+        env:
+          COMPTE: ${{ secrets.ALWAYSDATA_COMPTE }}
+          CLE: ${{ secrets.ALWAYSDATA_SSH_KEY }}
+        run: |
+          if [ -n "$COMPTE" ] && [ -n "$CLE" ]; then
+            echo "pret=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pret=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Déploiement ignoré : ajoutez les secrets ALWAYSDATA_COMPTE et ALWAYSDATA_SSH_KEY (voir README, partie 5)."
+          fi
+
+      - name: Préparer la connexion SSH
+        if: steps.config.outputs.pret == 'true'
+        env:
+          COMPTE: ${{ secrets.ALWAYSDATA_COMPTE }}
+          CLE: ${{ secrets.ALWAYSDATA_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CLE" > ~/.ssh/id_deploiement
+          chmod 600 ~/.ssh/id_deploiement
+          ssh-keyscan -H "ssh-$COMPTE.alwaysdata.net" >> ~/.ssh/known_hosts
+
+      - name: Envoyer les fichiers
+        if: steps.config.outputs.pret == 'true'
+        env:
+          COMPTE: ${{ secrets.ALWAYSDATA_COMPTE }}
+          DOSSIER: ${{ vars.DOSSIER_DISTANT || 'www/centrale' }}
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_deploiement" \
+            --exclude '/data/' \
+            --exclude '/.git/' \
+            --exclude '/.github/' \
+            ./ "$COMPTE@ssh-$COMPTE.alwaysdata.net:$DOSSIER/"

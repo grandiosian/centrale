@@ -1,0 +1,4 @@
+# Base de données des codes élèves : reste sur le serveur, jamais sur GitHub.
+data/
+*.sqlite
+.DS_Store
