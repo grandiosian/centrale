@@ -227,6 +227,32 @@ if ($action !== null) {
             flash(count($codes) . ' nouveau(x) code(s). Les anciens codes de ces élèves ne fonctionnent plus.');
             rediriger($retour_classe . '#nouveaux');
 
+        case 'apercu_eleve':
+            // Compte « élève test » (classe TEST, élève 01) : l'enseignant ouvre le portail tel qu'un élève le voit,
+            // sans taper de code. Rien n'est envoyé d'autre qu'un jeton de session, dans l'adresse.
+            $st = $pdo->prepare('SELECT * FROM classes WHERE nom = ? COLLATE NOCASE');
+            $st->execute(['TEST']);
+            $classe = $st->fetch();
+            if (!$classe) {
+                $pdo->prepare('INSERT INTO classes (nom, cree_le) VALUES (?, ?)')->execute(['TEST', time()]);
+                $classe = classe_par_id((int) $pdo->lastInsertId());
+                oublier_renommage('TEST');
+            }
+            $st = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ? ORDER BY id LIMIT 1');
+            $st->execute([$classe['id']]);
+            $eid = (int) $st->fetchColumn();
+            if (!$eid) {
+                $pdo->prepare('INSERT INTO eleves (classe_id, etiquette, code_hash, cree_le) VALUES (?, ?, ?, ?)')
+                    ->execute([$classe['id'], '01', hash_code(generer_code(prefixe_codes($classe))), time()]);
+                $eid = (int) $pdo->lastInsertId();
+                attribuer_surnom($eid, (int) $classe['id']);
+            }
+            $pdo->prepare('UPDATE eleves SET actif = 1 WHERE id = ?')->execute([$eid]);
+            $jeton = bin2hex(random_bytes(32));
+            $pdo->prepare('INSERT INTO sessions (jeton_hash, eleve_id, expire) VALUES (?, ?, ?)')
+                ->execute([hash('sha256', $jeton), $eid, time() + 2 * 3600]);
+            rediriger('../#centrale=' . $jeton);
+
         case 'reinitialiser_tous_codes':
             // Tous les codes de toutes les classes. Réponse : numéros et codes seulement (les noms sont dans le navigateur).
             header('Content-Type: application/json; charset=utf-8');
@@ -630,6 +656,16 @@ function page_accueil(): void
             <div class="stat"><strong><?= count($apps) ?></strong><span>atelier<?= count($apps) > 1 ? 's' : '' ?> actif<?= count($apps) > 1 ? 's' : '' ?></span></div>
         </div>
         <?php liste_locale(); ?>
+        <form method="post" target="_blank" class="apercu-eleve" id="form-apercu">
+            <?= csrf() ?>
+            <input type="hidden" name="action" value="apercu_eleve">
+            <div>
+                <strong>Voir comme un élève</strong>
+                <span class="aide">Ouvre le portail élève avec le compte test de la classe « TEST », sans taper de code.
+                    Il voit les ateliers et parcours ouverts à toutes les classes, ou à la classe TEST.</span>
+            </div>
+            <button class="secondaire">Ouvrir le portail élève</button>
+        </form>
         <?php section_aujourdhui(); ?>
 
         <section>

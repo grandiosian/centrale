@@ -329,3 +329,9 @@ td.identifiant button.lien-bouton { padding: 0 4px; font-size: 1rem; }
 details.repartition > summary { cursor: pointer; font-weight: 700; }
 details.repartition[open] > summary { margin-bottom: 12px; }
 #form-groupes .ligne-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+
+/* Voir comme un élève */
+.apercu-eleve { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+  margin-top: 12px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; }
+.apercu-eleve div { display: flex; flex-direction: column; gap: 2px; max-width: 70ch; }
+.apercu-eleve .aide { margin: 0; }

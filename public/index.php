@@ -218,8 +218,12 @@ li.suivante { background: color-mix(in srgb, var(--encre) 7%, transparent); bord
 <script>
   const $ = (id) => document.getElementById(id);
   const PORTAIL = location.origin + location.pathname;   // adresse du bouton « ← Mes ateliers »
+  // « Voir comme un élève » depuis l'espace enseignant : jeton transmis dans l'adresse (#centrale=…)
+  const jetonApercu = decodeURIComponent((location.hash.match(/(?:^#|&)centrale=([^&]+)/) || [])[1] || '');
   Centrale.init({ api: 'api/', app: 'portail', boutonRetour: false, surDeconnexion: () => location.reload() });
-  if (Centrale.connecte()) {
+  if (jetonApercu) {
+    Centrale.reprendreSession(jetonApercu).then(demarrer).catch(() => { $('ecran-connexion').hidden = false; });
+  } else if (Centrale.connecte()) {
     Centrale.afficherConnexion(document.createElement('div'), { onConnecte: demarrer });   // session déjà ouverte
   } else {
     $('ecran-connexion').hidden = false;

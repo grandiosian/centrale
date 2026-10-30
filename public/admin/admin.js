@@ -415,6 +415,12 @@
     window.print();
   }
 
+  /* ---------- « Voir comme un élève » : nom affiché ici pour le compte test ---------- */
+  var formApercu = document.getElementById('form-apercu');
+  if (formApercu) formApercu.addEventListener('submit', function () {
+    if (!nomLocal('TEST', '01')) ajouter('TEST', { '01': 'Élève test' });
+  });
+
   /* ---------- Groupes d'une classe : effectifs et répartition automatique ---------- */
 
   var formGroupes = document.getElementById('form-groupes');
