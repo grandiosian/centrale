@@ -201,7 +201,7 @@
       carte[classe] = carte[classe] || {};
       carte[classe][num] = nom;
       if (iBesoins >= 0) (besoins[classe] = besoins[classe] || {})[num] = typesBesoins(l[iBesoins]);
-      if (iCode >= 0 && /^[A-Za-z0-9]+-[a-z]{7}-[a-z]{4}-[a-z]{5}$/i.test((l[iCode] || '').trim())) (codes[classe] = codes[classe] || {})[num] = l[iCode].trim();
+      if (iCode >= 0 && /^[A-Za-z0-9]+(-[A-Za-z0-9]+){2,4}$/.test((l[iCode] || '').trim())) (codes[classe] = codes[classe] || {})[num] = l[iCode].trim();
       n++;
     });
     ecrire(carte);
@@ -254,19 +254,40 @@
     });
   });
 
-  document.querySelectorAll('.exporter-liste').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var carte = lire(), lignes = [];
-      Object.keys(carte).sort().forEach(function (c) {
-        var codes = codesLocaux(c);
-        Object.keys(carte[c]).sort().forEach(function (num) {
-          lignes.push([c, num, carte[c][num], codes[num] || '', besoinsLocaux(c, num).join(', ')]);
-        });
-      });
-      if (!lignes.length) { afficherMessage('Aucun nom chargé sur cet ordinateur.', true); return; }
-      // Un seul fichier « désanonymiseur » à jour : noms, codes et PAP / PPS / PAI de toutes les classes
-      telechargerCSV('correspondance_eleves_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'], lignes);
+  /**
+   * Liste globale : tous les établissements, toutes les classes, tous les élèves du serveur,
+   * avec ce que cet ordinateur sait d'eux (nom, code, PAP / PPS / PAI). Un seul fichier « désanonymiseur ».
+   */
+  var ENTETE_LISTE = ['Établissement', 'Classe', 'Numéro', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'];
+  function lignesListeGlobale() {
+    var serveur = [];
+    try { serveur = JSON.parse(document.getElementById('json-classes').textContent) || []; } catch (e) { serveur = []; }
+    var noms = lire(), codes = lireCle(CLE_CODES);
+    if (!serveur.length) {   // secours : seulement ce qui est connu ici
+      serveur = Object.keys(noms).map(function (c) { return { nom: c, etablissement: '', numeros: Object.keys(noms[c]) }; });
+    }
+    var tri = function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); };
+    serveur.sort(function (a, b) {
+      return (a.etablissement ? 0 : 1) - (b.etablissement ? 0 : 1) || tri(a.etablissement, b.etablissement) || tri(a.nom, b.nom);
     });
+    var lignes = [];
+    serveur.forEach(function (c) {
+      c.numeros.slice().sort(tri).forEach(function (num) {
+        lignes.push([c.etablissement, c.nom, num, (noms[c.nom] || {})[num] || '', (codes[c.nom] || {})[num] || '',
+          besoinsLocaux(c.nom, num).join(', ')]);
+      });
+    });
+    return lignes;
+  }
+  function telechargerListeGlobale() {
+    var lignes = lignesListeGlobale();
+    if (!lignes.length) { afficherMessage('Aucun élève.', true); return false; }
+    telechargerCSV('liste_eleves_codes_' + aujourdhui() + '.csv', ENTETE_LISTE, lignes);
+    return true;
+  }
+
+  document.querySelectorAll('.exporter-liste').forEach(function (b) {
+    b.addEventListener('click', telechargerListeGlobale);
   });
 
   /* ---------- Génération de codes : les noms restent ici ---------- */
@@ -363,6 +384,76 @@
     });
   });
 
+  function fiche(classe, numero, nom, code, lien) {
+    var f = document.createElement('div');
+    f.className = 'fiche';
+    f.innerHTML = '<div class="fiche-haut"><span></span><span></span></div><div class="fiche-code"></div><div class="fiche-bas"></div>';
+    f.querySelector('.fiche-haut span:first-child').textContent = 'Technologie · ' + classe + ' · n° ' + numero;
+    f.querySelector('.fiche-haut span:last-child').textContent = nom;
+    f.querySelector('.fiche-code').textContent = code;
+    f.querySelector('.fiche-bas').textContent = 'Mon code personnel, à ne pas partager.' + (lien ? ' ' + lien : '');
+    return f;
+  }
+
+  /** Imprime seulement les fiches de « zone » (pas celles d'une autre section de la page). */
+  function imprimerFiches(zone) {
+    var autres = Array.prototype.filter.call(document.querySelectorAll('.fiches'), function (x) { return x !== zone; });
+    autres.forEach(function (x) { x.classList.add('hors-impression'); });
+    window.addEventListener('afterprint', function () {
+      autres.forEach(function (x) { x.classList.remove('hors-impression'); });
+    }, { once: true });
+    window.print();
+  }
+
+  /* ---------- Tableau de bord : réinitialiser TOUS les codes + liste globale ---------- */
+
+  var blocReinit = document.getElementById('json-reinit');
+  if (blocReinit) {
+    var dr = JSON.parse(blocReinit.textContent);
+    var nouveauxTous = [];
+    var conf = document.getElementById('reinit-confirmation');
+    document.getElementById('reinit-ouvrir').addEventListener('click', function () {
+      var n = compter(lire());
+      var li = document.getElementById('reinit-noms');
+      li.textContent = n >= dr.nb_eleves
+        ? 'Noms chargés sur cet ordinateur : ' + n + ' — la liste et les fiches porteront les noms.'
+        : 'Noms chargés sur cet ordinateur : ' + n + ' / ' + dr.nb_eleves + ". Les élèves sans nom ici n'auront que leur numéro dans la liste : chargez d'abord votre fichier de noms si besoin.";
+      li.className = n >= dr.nb_eleves ? '' : 'alerte';
+      conf.hidden = false;
+      conf.scrollIntoView({ block: 'nearest' });
+    });
+    document.getElementById('reinit-annuler').addEventListener('click', function () { conf.hidden = true; });
+    document.getElementById('reinit-confirmer').addEventListener('click', async function () {
+      var b = this;
+      b.disabled = true; b.textContent = 'Remplacement des codes…';
+      try {
+        var f = new FormData();
+        f.append('csrf', dr.csrf); f.append('action', 'reinitialiser_tous_codes');
+        var r = await (await fetch('./', { method: 'POST', body: f, credentials: 'same-origin' })).json();
+        if (!r.ok) throw new Error(r.erreur || 'erreur du serveur');
+        nouveauxTous = [];
+        r.classes.forEach(function (c) {
+          var copie = {};
+          c.codes.forEach(function (x) { copie[x.numero] = x.code; nouveauxTous.push({ classe: c.classe, numero: x.numero, code: x.code }); });
+          ecrireCle(CLE_CODES, Object.assign(lireCle(CLE_CODES), (function () { var o = {}; o[c.classe] = copie; return o; })()));
+        });
+        telechargerListeGlobale();
+        conf.hidden = true;
+        document.getElementById('reinit-titre').textContent = nouveauxTous.length + ' nouveaux codes';
+        var zone = document.getElementById('fiches-toutes');
+        zone.innerHTML = '';
+        nouveauxTous.forEach(function (x) { zone.appendChild(fiche(x.classe, x.numero, nomLocal(x.classe, x.numero), x.code, dr.lien)); });
+        document.getElementById('reinit-resultat').hidden = false;
+        document.getElementById('reinit-resultat').scrollIntoView({ block: 'start' });
+      } catch (e) {
+        afficherMessage('Réinitialisation interrompue : ' + e.message, true);
+      }
+      b.disabled = false; b.textContent = 'Oui, remplacer les ' + dr.nb_eleves + ' codes';
+    });
+    document.getElementById('reinit-imprimer').addEventListener('click', function () { imprimerFiches(document.getElementById('fiches-toutes')); });
+    document.getElementById('reinit-telecharger').addEventListener('click', telechargerListeGlobale);
+  }
+
   /* ---------- Codes de la classe : réimprimer / retélécharger depuis la copie locale ---------- */
 
   var blocCodes = document.getElementById('json-codes-classe');
@@ -409,30 +500,15 @@
     };
 
     document.getElementById('codes-csv').addEventListener('click', function () {
-      telechargerCSV('codes_' + dc.prefixe + '_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'],
-        lignesCodes().map(function (l) { return [dc.classe, l.numero, l.nom, l.code, besoinsLocaux(dc.classe, l.numero).join(', ')]; }));
+      telechargerCSV('codes_' + dc.prefixe + '_' + aujourdhui() + '.csv', ENTETE_LISTE,
+        lignesCodes().map(function (l) { return [dc.etablissement || '', dc.classe, l.numero, l.nom, l.code, besoinsLocaux(dc.classe, l.numero).join(', ')]; }));
     });
 
     document.getElementById('codes-imprimer').addEventListener('click', function () {
       var zone = document.getElementById('fiches-classe');
       zone.innerHTML = '';
-      lignesCodes().forEach(function (l) {
-        var f = document.createElement('div');
-        f.className = 'fiche';
-        f.innerHTML = '<div class="fiche-haut"><span></span><span></span></div><div class="fiche-code"></div><div class="fiche-bas"></div>';
-        f.querySelector('.fiche-haut span:first-child').textContent = 'Technologie · ' + dc.classe + ' · n° ' + l.numero;
-        f.querySelector('.fiche-haut span:last-child').textContent = l.nom;
-        f.querySelector('.fiche-code').textContent = l.code;
-        f.querySelector('.fiche-bas').textContent = 'Mon code personnel, à ne pas partager.' + (dc.lien ? ' ' + dc.lien : '');
-        zone.appendChild(f);
-      });
-      // N'imprimer que ces fiches (pas celles d'une génération affichée plus haut)
-      var autres = Array.prototype.filter.call(document.querySelectorAll('.fiches'), function (x) { return x !== zone; });
-      autres.forEach(function (x) { x.classList.add('hors-impression'); });
-      window.addEventListener('afterprint', function () {
-        autres.forEach(function (x) { x.classList.remove('hors-impression'); });
-      }, { once: true });
-      window.print();
+      lignesCodes().forEach(function (l) { zone.appendChild(fiche(dc.classe, l.numero, l.nom, l.code, dc.lien)); });
+      imprimerFiches(zone);
     });
 
     document.addEventListener('centrale-codes', verifierCodes);

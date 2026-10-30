@@ -297,3 +297,13 @@ td.actions form[data-confirmer] .question-confirmation { position: absolute; rig
 #codes-classe .ligne-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
 #codes-classe .ligne-actions form { margin: 0; }
 @media print { .fiches.hors-impression { display: none !important; } }
+
+/* Réinitialiser tous les codes (tableau de bord) */
+.reinit { margin: 4px 0 18px; }
+.reinit > button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.reinit-confirmation { margin-top: 12px; padding: 14px 18px; border: 2px solid var(--danger); border-radius: 10px; background: var(--err-fond); }
+.reinit-confirmation ul { margin: 8px 0; padding-left: 20px; }
+.reinit-confirmation li.alerte { color: var(--danger); font-weight: 600; }
+.reinit-confirmation button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.reinit .nouveaux { margin-top: 12px; }
+.code-etab { text-transform: uppercase; max-width: 90px; font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .1em; }

@@ -295,6 +295,14 @@ Onglet **Fichiers** :
     - Ces informations restent sur votre ordinateur et dans votre fichier de noms (colonne « Besoins »). Elles ne sont jamais envoyées au serveur.
     - Elles apparaissent en pastilles à côté des noms (classe, suivi, plan de classe) et sont masquées à l'impression.
     - Réimporter le fichier les met à jour.
+- **Format des codes élèves** : `4C-LHA-9943-kfmz-tqpr`.
+  - Le code commence par la classe, puis le code à 3 lettres de l'établissement (onglet Établissements, champ « Code »), puis une partie personnelle tirée au hasard.
+  - Si le nom de la classe contient déjà l'établissement (« 4C-HAUTIERS »), le code reprend seulement « 4C ».
+  - Les majuscules et les espaces ne comptent pas à la saisie.
+- **Réinitialiser tous les codes et télécharger la liste** (bouton rouge en haut du tableau de bord) :
+  - Tous les élèves de tous les établissements reçoivent un nouveau code, après une confirmation. Le travail des élèves est conservé.
+  - La liste globale est téléchargée et toutes les fiches sont prêtes à imprimer.
+- **Liste globale** (« Télécharger la liste ») : un seul fichier pour tous les établissements et toutes les classes, avec les colonnes Établissement ; Classe ; Numéro ; Nom ; Code ; Besoins.
 - **Renommer une classe** (bouton à côté du titre de la classe) :
   - Les codes déjà distribués restent valables : ils gardent l'ancien préfixe. Les nouveaux codes prennent le nouveau nom.
   - Les ateliers et parcours réservés à cette classe sont mis à jour.

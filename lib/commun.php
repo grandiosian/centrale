@@ -269,6 +269,7 @@ function creer_tables(PDO $pdo): void
         SQL);
     ajouter_colonne($pdo, 'ateliers', 'urls_secours', "TEXT NOT NULL DEFAULT ''");
     ajouter_colonne($pdo, 'classes', 'etablissement_id', 'INTEGER REFERENCES etablissements(id) ON DELETE SET NULL');
+    ajouter_colonne($pdo, 'etablissements', 'code', "TEXT NOT NULL DEFAULT ''");   // 3 lettres, dans les codes élèves
 }
 
 /** Ajoute une colonne à une table existante (mise à jour d'une base créée par une version précédente). */
@@ -758,6 +759,7 @@ function regenerer_codes(int $classe_id, ?array $ids): array
         ORDER BY CASE WHEN etiquette GLOB \'[0-9]*\' THEN CAST(etiquette AS INTEGER) ELSE 9999 END, etiquette');
     $st->execute([$classe_id]);
     $codes = [];
+    $prefixe = prefixe_codes($classe);
     $maj = $pdo->prepare('UPDATE eleves SET code_hash = ? WHERE id = ?');
     $sessions = $pdo->prepare('DELETE FROM sessions WHERE eleve_id = ?');
     $pdo->beginTransaction();
@@ -765,7 +767,7 @@ function regenerer_codes(int $classe_id, ?array $ids): array
         if ($ids !== null && !in_array((int) $e['id'], $ids, true)) {
             continue;
         }
-        $code = generer_code($classe['nom']);
+        $code = generer_code($prefixe);
         $maj->execute([hash_code($code), $e['id']]);
         $sessions->execute([$e['id']]);
         $codes[] = ['numero' => $e['etiquette'], 'code' => $code];
@@ -795,18 +797,95 @@ function origines_autorisees(): array
  * Alphabet sans i, l, o (pour éviter les confusions avec 1 et 0) :
  * 16 lettres tirées au hasard = environ 72 bits, impossible à deviner.
  */
-function generer_code(string $classe): string
+/**
+ * Code élève : CLASSE-ÉTB-chiffres-lettres-lettres, ex. « 4C-LHA-9943-kfmz-tqpr ».
+ * Pas de 0/1/i/l/o (confusions à la lecture). Environ 48 bits de hasard : impossible à deviner.
+ */
+function generer_code(string $prefixe): string
 {
-    $alphabet = 'abcdefghjkmnpqrstuvwxyz';
-    $max = strlen($alphabet) - 1;
-    $segment = function (int $n) use ($alphabet, $max): string {
+    $lettres = 'abcdefghjkmnpqrstuvwxyz';
+    $chiffres = '23456789';
+    $tirer = function (string $alphabet, int $n): string {
         $s = '';
         for ($i = 0; $i < $n; $i++) {
-            $s .= $alphabet[random_int(0, $max)];
+            $s .= $alphabet[random_int(0, strlen($alphabet) - 1)];
         }
         return $s;
     };
-    return prefixe_classe($classe) . '-' . $segment(7) . '-' . $segment(4) . '-' . $segment(5);
+    return $prefixe . '-' . $tirer($chiffres, 4) . '-' . $tirer($lettres, 4) . '-' . $tirer($lettres, 4);
+}
+
+function sans_accents_maj(string $s): string
+{
+    $t = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+    return strtoupper($t === false ? $s : $t);
+}
+
+/** « Collège les hautiers » → LHA ; « Collège Albert Camus » → ACA ; « Lycée Hoche » → HOC. */
+function code_etablissement_suggere(string $nom): string
+{
+    $mots = preg_split('/[^A-Z0-9]+/', sans_accents_maj($nom), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $generiques = ['COLLEGE', 'LYCEE', 'ECOLE', 'CLG', 'LGT', 'LP', 'EREA', 'CITE', 'SCOLAIRE', 'ENSEMBLE', 'GROUPE', 'PRIVE', 'PRIVEE', 'PUBLIC', 'PUBLIQUE'];
+    $mots = array_values(array_filter($mots, fn($m) => !in_array($m, $generiques, true)));
+    if (!$mots) {
+        return 'ETB';
+    }
+    $code = count($mots) >= 2 ? $mots[0][0] . substr(end($mots), 0, 2) : substr($mots[0], 0, 3);
+    if (in_array($code, ['SEX', 'CUL', 'CON', 'PUE', 'PET', 'PDF', 'FDP', 'NUL', 'BIT', 'ZOB'], true)) {
+        $code = substr(end($mots), 0, 3);   // ex. « Saint-Exupéry » → EXU
+    }
+    return str_pad(preg_replace('/[^A-Z]/', 'X', $code), 3, 'X');
+}
+
+/** Code à 3 lettres de l'établissement ; s'il n'a pas encore été choisi, on en propose un (unique) et on l'enregistre. */
+function code_etablissement(int $eid): string
+{
+    $pdo = db();
+    $st = $pdo->prepare('SELECT nom, code FROM etablissements WHERE id = ?');
+    $st->execute([$eid]);
+    $e = $st->fetch();
+    if (!$e) {
+        return '';
+    }
+    if ($e['code'] !== '') {
+        return $e['code'];
+    }
+    $pris = $pdo->query("SELECT code FROM etablissements WHERE code <> ''")->fetchAll(PDO::FETCH_COLUMN);
+    $code = code_etablissement_suggere($e['nom']);
+    for ($i = 0; in_array($code, $pris, true) && $i < 26; $i++) {
+        $code = substr($code, 0, 2) . chr(65 + $i);
+    }
+    $pdo->prepare('UPDATE etablissements SET code = ? WHERE id = ?')->execute([$code, $eid]);
+    return $code;
+}
+
+/**
+ * Début des codes d'une classe : « 4C-LHA ». Si le nom de la classe contient déjà l'établissement
+ * (« 4C-HAUTIERS », « 4A-ALBERTCAMUS »), on ne garde que la classe.
+ */
+function prefixe_codes(array $classe): string
+{
+    $eid = (int) ($classe['etablissement_id'] ?? 0);
+    $code_etab = $eid ? code_etablissement($eid) : '';
+    $segments = preg_split('/[^A-Z0-9]+/', sans_accents_maj($classe['nom']), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if ($eid && count($segments) > 1) {
+        $e = etablissement_par_id($eid);
+        $mots = preg_split('/[^A-Z0-9]+/', sans_accents_maj($e['nom'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $mots = array_values(array_filter($mots, fn($m) => strlen($m) > 2 && !in_array($m, ['COLLEGE', 'LYCEE', 'ECOLE', 'LES'], true)));
+        $reconnus = array_merge([$code_etab, implode('', $mots)], $mots);
+        while (count($segments) > 1 && in_array(end($segments), $reconnus, true)) {
+            array_pop($segments);
+        }
+    }
+    $classe_part = substr(implode('', $segments), 0, 10) ?: 'X';
+    return $classe_part . ($code_etab !== '' ? '-' . $code_etab : '');
+}
+
+function etablissement_par_id(int $id): ?array
+{
+    $st = db()->prepare('SELECT * FROM etablissements WHERE id = ?');
+    $st->execute([$id]);
+    return $st->fetch() ?: null;
 }
 
 function prefixe_classe(string $classe): string

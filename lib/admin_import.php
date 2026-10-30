@@ -47,11 +47,13 @@ function action_import(string $action): bool
     }
     $codes = [];
     if ($n > 0) {
+        $classe = classe_par_id((int) $classe['id']);   // établissement éventuellement rattaché ci-dessus
+        $prefixe = prefixe_codes($classe);
         $numero = prochain_numero((int) $classe['id']);
         $ins = $pdo->prepare('INSERT INTO eleves (classe_id, etiquette, code_hash, cree_le) VALUES (?, ?, ?, ?)');
         $pdo->beginTransaction();
         for ($i = 0; $i < $n; $i++) {
-            $code = generer_code($classe['nom']);
+            $code = generer_code($prefixe);
             $etiquette = sprintf('%02d', $numero + $i);
             $ins->execute([$classe['id'], $etiquette, hash_code($code), time()]);
             $codes[] = ['numero' => $etiquette, 'code' => $code];

@@ -29,6 +29,19 @@ function action_organisation(string $action): bool
             if ($nom === '') {
                 $erreurs[] = "Donnez un nom à l'établissement.";
             }
+            $code = strtoupper(trim((string) ($p['code'] ?? '')));
+            if ($code === '' && $nom !== '') {
+                $code = code_etablissement_suggere($nom);
+            }
+            if (!preg_match('/^[A-Z]{3}$/', $code)) {
+                $erreurs[] = 'Le code de l’établissement doit faire exactement 3 lettres (ex. LHA).';
+            } else {
+                $st = $pdo->prepare('SELECT nom FROM etablissements WHERE code = ? AND id <> ?');
+                $st->execute([$code, $eid]);
+                if ($autre = $st->fetchColumn()) {
+                    $erreurs[] = "Le code $code est déjà celui de « $autre ».";
+                }
+            }
             if (!empty($p['ab_actif']) && !date_valide($ref)) {
                 $erreurs[] = 'Indiquez une date de semaine A (un jour de n’importe quelle semaine A).';
             }
@@ -46,11 +59,11 @@ function action_organisation(string $action): bool
                        empty($p['ab_sans_vacances']) ? 0 : 1, empty($p['samedi']) ? 0 : 1];
             $pdo->beginTransaction();
             if ($eid) {
-                $pdo->prepare('UPDATE etablissements SET nom = ?, zone = ?, ab_actif = ?, ref_semaine_a = ?, ab_sans_vacances = ?, samedi = ? WHERE id = ?')
-                    ->execute([...$champs, $eid]);
+                $pdo->prepare('UPDATE etablissements SET nom = ?, zone = ?, ab_actif = ?, ref_semaine_a = ?, ab_sans_vacances = ?, samedi = ?, code = ? WHERE id = ?')
+                    ->execute([...$champs, $code, $eid]);
             } else {
-                $pdo->prepare('INSERT INTO etablissements (nom, zone, ab_actif, ref_semaine_a, ab_sans_vacances, samedi, cree_le) VALUES (?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([...$champs, time()]);
+                $pdo->prepare('INSERT INTO etablissements (nom, zone, ab_actif, ref_semaine_a, ab_sans_vacances, samedi, code, cree_le) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([...$champs, $code, time()]);
                 $eid = (int) $pdo->lastInsertId();
             }
             // Grille : on met à jour les créneaux existants dans l'ordre, pour ne pas perdre les cours qui y sont rattachés
@@ -361,7 +374,7 @@ function page_etablissements(): void
                     <a class="carte classe" href="./?p=etablissements&id=<?= (int) $x['id'] ?>">
                         <strong><?= h($x['nom']) ?></strong>
                         <span><?= (int) $x['nb_classes'] ?> classe<?= $x['nb_classes'] > 1 ? 's' : '' ?> · <?= (int) $x['nb_salles'] ?> salle<?= $x['nb_salles'] > 1 ? 's' : '' ?></span>
-                        <span class="discret"><?= $x['zone'] ? 'Zone ' . h($x['zone']) : 'Zone non précisée' ?><?= $x['ab_actif'] ? ' · semaines A/B' : '' ?></span>
+                        <span class="discret">Code <?= h(code_etablissement((int) $x['id'])) ?> · <?= $x['zone'] ? 'Zone ' . h($x['zone']) : 'Zone non précisée' ?><?= $x['ab_actif'] ? ' · semaines A/B' : '' ?></span>
                     </a>
                 <?php endforeach; ?>
             </div>
@@ -379,6 +392,11 @@ function page_etablissements(): void
                 <div class="deux-colonnes">
                     <div>
                         <label>Nom<input name="nom" required maxlength="80" value="<?= h($v['nom'] ?? '') ?>" placeholder="Collège Jean Moulin"></label>
+                        <label>Code (3 lettres)
+                            <span class="aide">Il apparaît dans les codes de connexion des élèves : 4C-<strong><?= h(($v['code'] ?? '') ?: 'LHA') ?></strong>-9943-kfmz-tqpr.
+                                Le changer ne modifie pas les codes déjà distribués.</span>
+                            <input name="code" maxlength="3" pattern="[A-Za-z]{3}" class="code-etab" value="<?= h($v['code'] ?? ($e ? code_etablissement($id) : '')) ?>"
+                                   placeholder="<?= h(code_etablissement_suggere($v['nom'] ?? '')) ?>"></label>
                         <label>Zone de vacances
                             <select name="zone"><?= options_html(['A' => 'Zone A', 'B' => 'Zone B', 'C' => 'Zone C'], $v['zone'] ?? '', 'Non précisée') ?></select></label>
                         <label class="case"><input type="checkbox" name="samedi" value="1" <?= !empty($v['samedi']) ? 'checked' : '' ?>> Cours le samedi</label>

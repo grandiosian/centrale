@@ -220,6 +220,18 @@ if ($action !== null) {
             flash(count($codes) . ' nouveau(x) code(s). Les anciens codes de ces élèves ne fonctionnent plus.');
             rediriger($retour_classe . '#nouveaux');
 
+        case 'reinitialiser_tous_codes':
+            // Tous les codes de toutes les classes. Réponse : numéros et codes seulement (les noms sont dans le navigateur).
+            header('Content-Type: application/json; charset=utf-8');
+            $resultat = [];
+            $liste = $pdo->query('SELECT c.id, c.nom, COALESCE(e.nom, \'\') AS etablissement FROM classes c
+                                  LEFT JOIN etablissements e ON e.id = c.etablissement_id ORDER BY e.nom, c.nom')->fetchAll();
+            foreach ($liste as $c) {
+                $resultat[] = ['classe' => $c['nom'], 'etablissement' => $c['etablissement'], 'codes' => regenerer_codes((int) $c['id'], null)];
+            }
+            echo json_encode(['ok' => true, 'classes' => $resultat], JSON_UNESCAPED_UNICODE);
+            exit;
+
         case 'verifier_codes':
             // Le navigateur envoie l'EMPREINTE des codes qu'il connaît (jamais les codes) ; on répond lesquels sont à jour.
             header('Content-Type: application/json; charset=utf-8');
@@ -309,9 +321,10 @@ if ($action !== null) {
             $numero = prochain_numero($classe_id);
             $nouveaux = [];
             $ins = $pdo->prepare('INSERT INTO eleves (classe_id, etiquette, code_hash, cree_le) VALUES (?, ?, ?, ?)');
+            $prefixe = prefixe_codes($classe);
             $pdo->beginTransaction();
             for ($i = 0; $i < $n; $i++) {
-                $code = generer_code($classe['nom']);
+                $code = generer_code($prefixe);
                 $etiquette = sprintf('%02d', $numero + $i);
                 $ins->execute([$classe_id, $etiquette, hash_code($code), time()]);
                 $nouveaux[] = ['numero' => $etiquette, 'code' => $code];
@@ -321,11 +334,10 @@ if ($action !== null) {
             rediriger($retour_classe . '#nouveaux');
 
         case 'regenerer':
-            $st = $pdo->prepare('SELECT e.etiquette, c.nom FROM eleves e JOIN classes c ON c.id = e.classe_id
-                                 WHERE e.id = ? AND e.classe_id = ?');
+            $st = $pdo->prepare('SELECT e.etiquette FROM eleves e WHERE e.id = ? AND e.classe_id = ?');
             $st->execute([$eleve_id, $classe_id]);
             if ($e = $st->fetch()) {
-                $code = generer_code($e['nom']);
+                $code = generer_code(prefixe_codes(classe_par_id($classe_id)));
                 $pdo->prepare('UPDATE eleves SET code_hash = ? WHERE id = ?')->execute([hash_code($code), $eleve_id]);
                 $pdo->prepare('DELETE FROM sessions WHERE eleve_id = ?')->execute([$eleve_id]);
                 $_SESSION['nouveaux'] = ['classe_id' => $classe_id, 'codes' => [['numero' => $e['etiquette'], 'code' => $code]]];
@@ -593,6 +605,7 @@ function page_accueil(): void
     ?>
     <main>
         <?php messages(); ?>
+        <?php if ($nb_eleves): section_reinitialiser_codes(count($classes), $nb_eleves); endif; ?>
         <div class="stats">
             <div class="stat"><strong><?= count($classes) ?></strong><span>classe<?= count($classes) > 1 ? 's' : '' ?></span></div>
             <div class="stat"><strong><?= $nb_eleves ?></strong><span>élève<?= $nb_eleves > 1 ? 's' : '' ?></span></div>
@@ -895,6 +908,7 @@ function page_classe(int $id): void
                     <div class="fiches" id="fiches-classe" aria-hidden="true"></div>
                     <script type="application/json" id="json-codes-classe"><?= json_encode([
                         'classe' => $nom, 'classe_id' => $id, 'prefixe' => prefixe_classe($nom), 'csrf' => $_SESSION['csrf'],
+                        'etablissement' => $classe['etablissement_id'] ? (etablissement_par_id((int) $classe['etablissement_id'])['nom'] ?? '') : '',
                         'lien' => reglage('lien_eleves', ''),
                         'eleves' => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif']], $eleves),
                     ], $json) ?></script>
@@ -1119,6 +1133,47 @@ function exporter_classe(int $id): never
 
 /* ---------------------------------------------------------------------- */
 
+/** Tout en haut du tableau de bord : nouveaux codes pour TOUS les élèves + liste globale (tous établissements). */
+function section_reinitialiser_codes(int $nb_classes, int $nb_eleves): void
+{
+    $nb_etabs = (int) db()->query('SELECT COUNT(DISTINCT etablissement_id) FROM classes WHERE etablissement_id IS NOT NULL')->fetchColumn();
+    ?>
+    <section class="reinit" id="reinit">
+        <button type="button" class="danger" id="reinit-ouvrir">Réinitialiser tous les codes et télécharger la liste</button>
+        <div class="reinit-confirmation" id="reinit-confirmation" hidden>
+            <p><strong>Attention : les codes de connexion des <?= $nb_eleves ?> élèves vont tous être remplacés</strong>
+                (<?= $nb_classes ?> classe<?= $nb_classes > 1 ? 's' : '' ?><?= $nb_etabs ? ', ' . $nb_etabs . ' établissement' . ($nb_etabs > 1 ? 's' : '') : '' ?>).</p>
+            <ul>
+                <li>Les anciens codes ne fonctionneront plus, et les élèves connectés seront déconnectés.</li>
+                <li>Il faudra redistribuer les nouvelles fiches à tous les élèves.</li>
+                <li>Le travail et l'avancement des élèves sont conservés.</li>
+                <li>Nouveau format : classe, code de l'établissement, puis le code personnel (ex. 4C-LHA-9943-kfmz-tqpr).</li>
+                <li id="reinit-noms"></li>
+            </ul>
+            <p>Un seul fichier sera téléchargé : tous les établissements, toutes les classes, avec noms, codes et PAP / PPS / PAI.
+                Rangez-le dans un dossier privé de votre Nuage.</p>
+            <div class="ligne-actions">
+                <button type="button" class="danger" id="reinit-confirmer">Oui, remplacer les <?= $nb_eleves ?> codes</button>
+                <button type="button" class="secondaire" id="reinit-annuler">Annuler</button>
+            </div>
+        </div>
+        <div class="nouveaux" id="reinit-resultat" hidden>
+            <div class="titre-section">
+                <h2 id="reinit-titre">Nouveaux codes</h2>
+                <div class="boutons">
+                    <button type="button" id="reinit-imprimer">Imprimer toutes les fiches</button>
+                    <button type="button" class="secondaire" id="reinit-telecharger">Télécharger la liste à nouveau</button>
+                </div>
+            </div>
+            <p class="alerte-bloc">La liste a été téléchargée : elle contient les noms et les codes. Rangez-la dans un dossier privé de votre Nuage.</p>
+            <div class="fiches" id="fiches-toutes" aria-hidden="true"></div>
+        </div>
+        <script type="application/json" id="json-reinit"><?= json_encode(['csrf' => $_SESSION['csrf'], 'nb_eleves' => $nb_eleves,
+            'lien' => reglage('lien_eleves', '')], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+    </section>
+    <?php
+}
+
 function liste_locale(): void
 {
     ?>
@@ -1186,6 +1241,16 @@ function pied(): void
     if (!empty($_SESSION['admin'])) {
         echo "\n<script type=\"application/json\" id=\"json-renommages\">"
             . json_encode(renommages_classes(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';
+        // Classes du serveur (établissement + numéros) : pour la liste globale « Télécharger la liste »
+        $classes = [];
+        foreach (db()->query('SELECT c.nom, COALESCE(e.nom, \'\') AS etablissement,
+                (SELECT GROUP_CONCAT(etiquette) FROM eleves WHERE classe_id = c.id) AS numeros
+                FROM classes c LEFT JOIN etablissements e ON e.id = c.etablissement_id') as $c) {
+            $classes[] = ['nom' => $c['nom'], 'etablissement' => $c['etablissement'],
+                          'numeros' => $c['numeros'] ? explode(',', $c['numeros']) : []];
+        }
+        echo "\n<script type=\"application/json\" id=\"json-classes\">"
+            . json_encode($classes, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';
     }
     echo "\n<script src=\"admin.js?v=$v\"></script>\n</body>\n</html>\n";
 }
