@@ -314,3 +314,18 @@ td.identifiant form { display: inline; }
 td.identifiant button.lien-bouton { padding: 0 4px; font-size: 1rem; }
 .surnom.ressemble-nom { background: var(--err-fond); color: var(--danger); border-radius: 4px; padding: 1px 4px; font-weight: 700; }
 .surnom.ressemble-nom::after { content: " ⚠ nom ?"; font-family: system-ui, sans-serif; font-size: .75rem; }
+
+/* Groupes d'une classe */
+.groupes-liste { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.groupe-carte { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; }
+.groupe-carte form { margin: 0; }
+.groupe-carte input[name=nom] { width: 7em; font-weight: 700; }
+.groupe-carte .effectif { color: var(--doux); font-size: .9rem; }
+.table-groupes .col-groupe { text-align: center; width: 90px; }
+.table-groupes input[type=radio] { width: 18px; height: 18px; }
+.compte-groupe { font-weight: 400; color: var(--doux); }
+.badge-groupe { font-size: .72rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--code-fond); color: var(--doux); margin-left: 6px; vertical-align: 1px; }
+.choix-groupe { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+details.repartition > summary { cursor: pointer; font-weight: 700; }
+details.repartition[open] > summary { margin-bottom: 12px; }
+#form-groupes .ligne-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }

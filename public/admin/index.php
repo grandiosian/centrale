@@ -11,6 +11,7 @@ require __DIR__ . '/../../lib/commun.php';
 require __DIR__ . '/../../lib/admin_suivi.php';
 require __DIR__ . '/../../lib/admin_organisation.php';
 require __DIR__ . '/../../lib/admin_fichiers.php';
+require __DIR__ . '/../../lib/admin_groupes.php';
 require __DIR__ . '/../../lib/admin_import.php';
 
 header('X-Frame-Options: DENY');
@@ -173,6 +174,7 @@ if ($action !== null) {
     action_organisation($action); // établissements, emploi du temps, salles, plans
     action_fichiers($action);     // fichiers du serveur
     action_import($action);       // import Pronote (réponse JSON)
+    action_groupes($action);      // groupes d'une classe (GR1, GR2…)
 
     switch ($action) {
         case 'deconnexion':
@@ -547,7 +549,7 @@ match ($page) {
     'etablissements' => page_etablissements(),
     'edt'      => page_edt(),
     'salle'    => page_salle((int) ($_GET['id'] ?? 0)),
-    'placement' => page_placement((int) ($_GET['classe'] ?? 0), (int) ($_GET['salle'] ?? 0)),
+    'placement' => page_placement((int) ($_GET['classe'] ?? 0), (int) ($_GET['salle'] ?? 0), (int) ($_GET['groupe'] ?? 0)),
     'fichiers' => page_fichiers(),
     'import'   => page_import(),
     default  => page_accueil(),
@@ -777,6 +779,7 @@ function page_classe(int $id): void
     $quota = quota_eleve_octets();
     $nom = $classe['nom'];
     $prefixe_codes = prefixe_codes($classe);
+    $noms_groupes = array_column(groupes_de($id), 'nom', 'id');
 
     $nouveaux = null;
     if (!empty($_SESSION['nouveaux']) && (int) $_SESSION['nouveaux']['classe_id'] === $id) {
@@ -867,6 +870,7 @@ function page_classe(int $id): void
         <?php endif; ?>
 
         <?php section_organisation_classe($classe); ?>
+        <?php section_groupes_classe($classe, $eleves); ?>
 
         <section id="eleves">
             <div class="titre-section">
@@ -882,7 +886,7 @@ function page_classe(int $id): void
                     <?php foreach ($eleves as $e): $ch = ['classe_id' => $id, 'eleve_id' => $e['id']]; ?>
                         <tr class="<?= $e['actif'] ? '' : 'inactif' ?>">
                             <td class="numero"><?= est_pseudonyme($e['etiquette']) ? h($e['etiquette']) : '?' ?></td>
-                            <td><?= nom_eleve($nom, $e['etiquette']) ?><?= $e['actif'] ? '' : ' <span class="discret">(désactivé)</span>' ?></td>
+                            <td><?= nom_eleve($nom, $e['etiquette']) ?><?= $e['groupe_id'] && isset($noms_groupes[$e['groupe_id']]) ? ' <span class="badge-groupe">' . h($noms_groupes[$e['groupe_id']]) . '</span>' : '' ?><?= $e['actif'] ? '' : ' <span class="discret">(désactivé)</span>' ?></td>
                             <td class="identifiant"><span class="surnom" data-surnom="<?= h($e['surnom']) ?>" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>"><span class="discret"><?= h($prefixe_codes) ?>-</span><?= h($e['surnom']) ?></span>
                                 <?= bouton('nouveau_surnom', '↻', $ch, 'lien-bouton', '', 'Donner un nouveau surnom au hasard') ?></td>
                             <td><?= quand($e['derniere_connexion'] ? (int) $e['derniere_connexion'] : null) ?></td>
@@ -1265,11 +1269,11 @@ function pied(): void
         $classes = [];
         foreach (db()->query('SELECT c.nom, COALESCE(e.nom, \'\') AS etablissement,
                 c.etablissement_id, c.id FROM classes c LEFT JOIN etablissements e ON e.id = c.etablissement_id') as $c) {
-            $st = db()->prepare('SELECT etiquette, surnom FROM eleves WHERE classe_id = ?');
+            $st = db()->prepare('SELECT e.etiquette, e.surnom, COALESCE(g.nom, \'\') AS groupe FROM eleves e LEFT JOIN groupes g ON g.id = e.groupe_id WHERE e.classe_id = ?');
             $st->execute([$c['id']]);
             $prefixe = prefixe_codes($c);
             $classes[] = ['nom' => $c['nom'], 'etablissement' => $c['etablissement'],
-                          'eleves' => array_map(fn($e) => [$e['etiquette'], $prefixe . '-' . $e['surnom']], $st->fetchAll())];
+                          'eleves' => array_map(fn($e) => [$e['etiquette'], $prefixe . '-' . $e['surnom'], $e['groupe']], $st->fetchAll())];
         }
         echo "\n<script type=\"application/json\" id=\"json-classes\">"
             . json_encode($classes, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';

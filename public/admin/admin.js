@@ -267,13 +267,13 @@
    * Liste globale : tous les établissements, toutes les classes, tous les élèves du serveur,
    * avec ce que cet ordinateur sait d'eux (nom, code, PAP / PPS / PAI). Un seul fichier « désanonymiseur ».
    */
-  var ENTETE_LISTE = ['Établissement', 'Classe', 'Numéro', 'Identifiant', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'];
+  var ENTETE_LISTE = ['Établissement', 'Classe', 'Groupe', 'Numéro', 'Identifiant', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'];
   function lignesListeGlobale() {
     var serveur = [];
     try { serveur = JSON.parse(document.getElementById('json-classes').textContent) || []; } catch (e) { serveur = []; }
     var noms = lire(), codes = lireCle(CLE_CODES);
     if (!serveur.length) {   // secours : seulement ce qui est connu ici
-      serveur = Object.keys(noms).map(function (c) { return { nom: c, etablissement: '', eleves: Object.keys(noms[c]).map(function (n) { return [n, '']; }) }; });
+      serveur = Object.keys(noms).map(function (c) { return { nom: c, etablissement: '', eleves: Object.keys(noms[c]).map(function (n) { return [n, '', '']; }) }; });
     }
     var tri = function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); };
     serveur.sort(function (a, b) {
@@ -283,7 +283,7 @@
     serveur.forEach(function (c) {
       c.eleves.slice().sort(function (a, b) { return tri(a[0], b[0]); }).forEach(function (e) {
         var num = e[0];
-        lignes.push([c.etablissement, c.nom, num, e[1], (noms[c.nom] || {})[num] || '', (codes[c.nom] || {})[num] || '',
+        lignes.push([c.etablissement, c.nom, e[2] || '', num, e[1], (noms[c.nom] || {})[num] || '', (codes[c.nom] || {})[num] || '',
           besoinsLocaux(c.nom, num).join(', ')]);
       });
     });
@@ -415,6 +415,40 @@
     window.print();
   }
 
+  /* ---------- Groupes d'une classe : effectifs et répartition automatique ---------- */
+
+  var formGroupes = document.getElementById('form-groupes');
+  if (formGroupes) {
+    var lignesG = Array.prototype.slice.call(formGroupes.querySelectorAll('tbody tr'));
+    var colonnesG = Array.prototype.map.call(formGroupes.querySelectorAll('.compte-groupe'), function (x) { return x.dataset.groupe; });
+    var compterGroupes = function () {
+      formGroupes.querySelectorAll('.compte-groupe').forEach(function (x) {
+        x.textContent = '(' + formGroupes.querySelectorAll('input[type=radio][value="' + x.dataset.groupe + '"]:checked').length + ')';
+      });
+    };
+    formGroupes.addEventListener('change', compterGroupes);
+    document.getElementById('groupes-auto').addEventListener('click', function () {
+      // Ordre alphabétique des noms gardés ici (sinon ordre des numéros), puis moitié / moitié
+      var classe = formGroupes.querySelector('[data-nom-local]') ? formGroupes.querySelector('[data-nom-local]').dataset.classe : '';
+      var cle = function (tr) {
+        var nom = nomLocal(classe, tr.dataset.numero);
+        if (!nom) return '~' + tr.dataset.numero;
+        var m = nom.split(' ');   // « Léa D. » → trier par nom puis prénom quand c'est possible
+        return sansAccents(m.length > 1 ? m.slice(1).join(' ') + ' ' + m[0] : nom);
+      };
+      var tries = lignesG.slice().sort(function (a, b) { return cle(a).localeCompare(cle(b), 'fr', { numeric: true }); });
+      var vrais = colonnesG.filter(function (g) { return g !== '0'; });
+      var taille = Math.ceil(tries.length / vrais.length);
+      tries.forEach(function (tr, i) {
+        var g = vrais[Math.min(vrais.length - 1, Math.floor(i / taille))];
+        tr.querySelector('input[value="' + g + '"]').checked = true;
+      });
+      compterGroupes();
+      document.getElementById('groupes-info').textContent = 'Répartition proposée : vérifiez-la, puis enregistrez.';
+    });
+    compterGroupes();
+  }
+
   /* ---------- Tableau de bord : réinitialiser TOUS les codes + liste globale ---------- */
 
   var blocReinit = document.getElementById('json-reinit');
@@ -513,7 +547,8 @@
       telechargerCSV('codes_' + dc.prefixe + '_' + aujourdhui() + '.csv', ENTETE_LISTE,
         lignesCodes().map(function (l) {
           var s = document.querySelector('.surnom[data-numero="' + l.numero + '"]');
-          return [dc.etablissement || '', dc.classe, l.numero, s ? s.textContent.trim() : '', l.nom, l.code, besoinsLocaux(dc.classe, l.numero).join(', ')];
+          var g = s ? s.closest('tr').querySelector('.badge-groupe') : null;
+          return [dc.etablissement || '', dc.classe, g ? g.textContent : '', l.numero, s ? s.textContent.trim() : '', l.nom, l.code, besoinsLocaux(dc.classe, l.numero).join(', ')];
         }));
     });
 

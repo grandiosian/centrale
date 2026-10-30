@@ -271,6 +271,38 @@ function creer_tables(PDO $pdo): void
     ajouter_colonne($pdo, 'classes', 'etablissement_id', 'INTEGER REFERENCES etablissements(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'etablissements', 'code', "TEXT NOT NULL DEFAULT ''");   // 3 lettres, dans les codes élèves
     ajouter_colonne($pdo, 'eleves', 'surnom', "TEXT NOT NULL DEFAULT ''");          // identifiant : 4C-LHA-<surnom>
+    // Groupes d'une classe (demi-groupes GR1 / GR2…) : un élève appartient à un groupe au plus
+    $pdo->exec('CREATE TABLE IF NOT EXISTS groupes (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        classe_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        nom       TEXT NOT NULL,
+        ordre     INTEGER NOT NULL DEFAULT 0
+    )');
+    ajouter_colonne($pdo, 'eleves', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
+    ajouter_colonne($pdo, 'cours', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
+    ajouter_colonne($pdo, 'seances_modifiees', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
+    // Plans de classe : un placement par classe ENTIÈRE (groupe 0) ou par groupe
+    $cols = array_column($pdo->query('PRAGMA table_info(placements)')->fetchAll(), 'name');
+    if (!in_array('groupe_id', $cols, true)) {
+        $pdo->exec('BEGIN IMMEDIATE');   // une seule requête fait la migration
+        $cols = array_column($pdo->query('PRAGMA table_info(placements)')->fetchAll(), 'name');
+        if (in_array('groupe_id', $cols, true)) {
+            $pdo->exec('COMMIT');
+            return;
+        }
+        $pdo->exec('CREATE TABLE placements_v2 (
+            classe_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+            groupe_id INTEGER NOT NULL DEFAULT 0,
+            salle_id  INTEGER NOT NULL REFERENCES salles(id) ON DELETE CASCADE,
+            place     TEXT NOT NULL,
+            eleve_id  INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+            PRIMARY KEY (classe_id, groupe_id, salle_id, place)
+        )');
+        $pdo->exec('INSERT INTO placements_v2 (classe_id, groupe_id, salle_id, place, eleve_id) SELECT classe_id, 0, salle_id, place, eleve_id FROM placements');
+        $pdo->exec('DROP TABLE placements');
+        $pdo->exec('ALTER TABLE placements_v2 RENAME TO placements');
+        $pdo->exec('COMMIT');
+    }
 }
 
 /** Ajoute une colonne à une table existante (mise à jour d'une base créée par une version précédente). */
@@ -967,6 +999,49 @@ function identite_eleve(int $eleve_id): array
         'surnom'            => $surnom,
         'surnom_modifiable' => reglage('surnom_modifiable', '1') === '1',
     ];
+}
+
+/* ---------- Groupes ---------- */
+
+function groupes_de(int $classe_id): array
+{
+    $st = db()->prepare('SELECT g.*, (SELECT COUNT(*) FROM eleves e WHERE e.groupe_id = g.id) AS nb FROM groupes g WHERE g.classe_id = ? ORDER BY g.ordre, g.id');
+    $st->execute([$classe_id]);
+    return $st->fetchAll();
+}
+
+function groupe_par_id(int $id): ?array
+{
+    $st = db()->prepare('SELECT * FROM groupes WHERE id = ?');
+    $st->execute([$id]);
+    return $st->fetch() ?: null;
+}
+
+/** Choix « classe ou groupe » des formulaires : « 12 » (classe entière) ou « 12:5 » (groupe 5 de la classe 12). */
+function options_classes_groupes(array $classes, string $choisi = ''): string
+{
+    $html = '<option value="">—</option>';
+    foreach ($classes as $cid => $nom) {
+        $html .= '<option value="' . (int) $cid . '"' . ($choisi === (string) $cid ? ' selected' : '') . '>' . h($nom) . '</option>';
+        foreach (groupes_de((int) $cid) as $g) {
+            $v = $cid . ':' . $g['id'];
+            $html .= '<option value="' . h($v) . '"' . ($choisi === $v ? ' selected' : '') . '>' . h($nom . ' · ' . $g['nom']) . '</option>';
+        }
+    }
+    return $html;
+}
+
+/** « 12:5 » → [12, 5] ; « 12 » → [12, null]. Le groupe doit appartenir à la classe. */
+function lire_classe_groupe(string $valeur): array
+{
+    [$cid, $gid] = array_map('intval', explode(':', $valeur . ':'));
+    if ($gid) {
+        $g = groupe_par_id($gid);
+        if (!$g || (int) $g['classe_id'] !== $cid) {
+            $gid = 0;
+        }
+    }
+    return [$cid, $gid ?: null];
 }
 
 function etablissement_par_id(int $id): ?array

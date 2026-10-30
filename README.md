@@ -311,7 +311,15 @@ Adresse : **https://technoversailles.alwaysdata.net/admin/**. Elle n'apparaît p
 - **Réinitialiser tous les codes et télécharger la liste** (bouton rouge en haut du tableau de bord) :
   - Tous les élèves de tous les établissements reçoivent un nouveau code, après une confirmation. Le travail des élèves est conservé.
   - La liste globale est téléchargée et toutes les fiches sont prêtes à imprimer.
-- **Liste globale** (« Télécharger la liste ») : un seul fichier pour tous les établissements et toutes les classes, avec les colonnes Établissement ; Classe ; Numéro ; Identifiant ; Nom ; Code ; Besoins.
+- **Liste globale** (« Télécharger la liste ») : un seul fichier pour tous les établissements et toutes les classes, avec les colonnes Établissement ; Classe ; Groupe ; Numéro ; Identifiant ; Nom ; Code ; Besoins.
+- **Groupes** (section « Groupes » de la page de la classe) :
+  - « Diviser la classe en deux groupes » crée GR1 et GR2. Vous pouvez renommer ou ajouter des groupes.
+  - Chaque élève est dans un seul groupe. Le bouton « Répartir par ordre alphabétique » propose une répartition moitié / moitié, à vérifier puis enregistrer.
+  - **Emploi du temps** : un cours peut être pour la classe entière ou pour un groupe (« 4C · GR1 »).
+  - **Plans de classe** : un plan par groupe, indépendant de celui de la classe entière. Un élève qui change de groupe quitte le plan de son ancien groupe.
+  - **Suivi** : un filtre par groupe est disponible.
+  - **Liste globale** : une colonne « Groupe » est ajoutée.
+  - Supprimer un groupe retire le groupe à ses élèves, et ses cours deviennent ceux de la classe entière.
 - **Renommer une classe** (bouton à côté du titre de la classe) :
   - Les codes déjà distribués restent valables : ils gardent l'ancien préfixe. Les nouveaux codes prennent le nouveau nom.
   - Les ateliers et parcours réservés à cette classe sont mis à jour.

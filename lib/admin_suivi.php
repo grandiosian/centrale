@@ -209,6 +209,18 @@ function page_suivi(): void
                     <?php endforeach; ?>
                 </select>
             </label>
+            <?php $groupes_suivi = $classe_id ? groupes_de($classe_id) : []; $groupe_id = (int) ($_GET['groupe'] ?? 0);
+                  if (!in_array($groupe_id, array_map(fn($g) => (int) $g['id'], $groupes_suivi), true)) { $groupe_id = 0; } ?>
+            <?php if ($groupes_suivi): ?>
+                <label>Groupe
+                    <select name="groupe" onchange="this.form.submit()">
+                        <option value="0">Classe entière</option>
+                        <?php foreach ($groupes_suivi as $g): ?>
+                            <option value="<?= (int) $g['id'] ?>" <?= (int) $g['id'] === $groupe_id ? 'selected' : '' ?>><?= h($g['nom']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            <?php endif; ?>
             <label>Afficher
                 <select name="vue" onchange="this.form.submit()">
                     <?php if ($tous_parcours): ?><optgroup label="Parcours">
@@ -260,9 +272,9 @@ function page_suivi(): void
             }
         }
 
-        $st = $pdo->prepare("SELECT id, etiquette, actif FROM eleves WHERE classe_id = ?
+        $st = $pdo->prepare("SELECT id, etiquette, actif FROM eleves WHERE classe_id = ?" . ($groupe_id ? ' AND groupe_id = ?' : '') . "
             ORDER BY CASE WHEN etiquette GLOB '[0-9]*' THEN CAST(etiquette AS INTEGER) ELSE 9999 END, etiquette");
-        $st->execute([$classe_id]);
+        $st->execute($groupe_id ? [$classe_id, $groupe_id] : [$classe_id]);
         $eleves = $st->fetchAll();
         $prog = progression_eleves(array_map(fn($e) => (int) $e['id'], $eleves));
 

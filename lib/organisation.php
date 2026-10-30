@@ -245,14 +245,14 @@ function semaine_emploi_du_temps(array $etab, string $lundi): array
         $salles[(int) $s['id']] = $s['nom'];
     }
 
-    $st = $pdo->prepare('SELECT co.*, cl.nom AS classe FROM cours co JOIN classes cl ON cl.id = co.classe_id
-                         WHERE cl.etablissement_id = ?');
+    $st = $pdo->prepare('SELECT co.*, cl.nom || COALESCE(\' · \' || g.nom, \'\') AS classe FROM cours co JOIN classes cl ON cl.id = co.classe_id
+                         LEFT JOIN groupes g ON g.id = co.groupe_id WHERE cl.etablissement_id = ?');
     $st->execute([$eid]);
     $cours = $st->fetchAll();
 
     // Modifications concernant cette semaine (par date d'origine ou par date effective)
-    $st = $pdo->prepare('SELECT m.*, cl.nom AS classe FROM seances_modifiees m JOIN classes cl ON cl.id = m.classe_id
-                         WHERE cl.etablissement_id = ? AND ((m.date_origine BETWEEN ? AND ?) OR (m.date BETWEEN ? AND ?))');
+    $st = $pdo->prepare('SELECT m.*, cl.nom || COALESCE(\' · \' || g.nom, \'\') AS classe FROM seances_modifiees m JOIN classes cl ON cl.id = m.classe_id
+                         LEFT JOIN groupes g ON g.id = m.groupe_id WHERE cl.etablissement_id = ? AND ((m.date_origine BETWEEN ? AND ?) OR (m.date BETWEEN ? AND ?))');
     $st->execute([$eid, $lundi, $dimanche, $lundi, $dimanche]);
     $modifs = $st->fetchAll();
     $par_origine = [];
@@ -282,6 +282,7 @@ function semaine_emploi_du_temps(array $etab, string $lundi): array
             $seances[] = [
                 'cle' => 'c' . $c['id'] . '_' . $d, 'cours_id' => (int) $c['id'], 'modif_id' => $m ? (int) $m['id'] : null,
                 'statut' => $m ? 'annule' : 'normal', 'date' => $d, 'jour' => $j, 'classe_id' => (int) $c['classe_id'],
+                'groupe_id' => $c['groupe_id'] !== null ? (int) $c['groupe_id'] : null,
                 'classe' => $c['classe'], 'creneau_id' => (int) $c['creneau_id'], 'duree' => max(1, (int) $c['duree']),
                 'salle_id' => $c['salle_id'] !== null ? (int) $c['salle_id'] : null,
                 'salle' => $c['salle_id'] !== null ? ($salles[(int) $c['salle_id']] ?? '') : '',
@@ -297,6 +298,7 @@ function semaine_emploi_du_temps(array $etab, string $lundi): array
         $seances[] = [
             'cle' => 'm' . $m['id'], 'cours_id' => $m['cours_id'] !== null ? (int) $m['cours_id'] : null, 'modif_id' => (int) $m['id'],
             'statut' => $m['statut'], 'date' => $m['date'], 'jour' => jour_semaine($m['date']), 'classe_id' => (int) $m['classe_id'],
+            'groupe_id' => $m['groupe_id'] !== null ? (int) $m['groupe_id'] : null,
             'classe' => $m['classe'], 'creneau_id' => (int) $m['creneau_id'], 'duree' => max(1, (int) $m['duree']),
             'salle_id' => $sid, 'salle' => $sid !== null ? ($salles[$sid] ?? '') : '',
             'intitule' => $m['intitule'], 'note' => $m['note'], 'date_origine' => $m['date_origine'],

@@ -174,32 +174,35 @@ function action_organisation(string $action): bool
         case 'enregistrer_placement':
             $cid = (int) ($p['classe_id'] ?? 0);
             $sid = (int) ($p['salle_id'] ?? 0);
+            $gid = (int) ($p['groupe_id'] ?? 0);
+            $g = $gid ? groupe_par_id($gid) : null;
+            $gid = $g && (int) $g['classe_id'] === $cid ? $gid : 0;
             $carte = json_decode((string) ($p['placement'] ?? ''), true);
             if (!is_array($carte)) {
                 flash('Placement illisible.', 'err');
                 rediriger($retour);
             }
-            $st = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ?');
-            $st->execute([$cid]);
+            $st = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ?' . ($gid ? ' AND groupe_id = ?' : ''));
+            $st->execute($gid ? [$cid, $gid] : [$cid]);
             $eleves = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
             $st = $pdo->prepare('SELECT * FROM salles WHERE id = ?');
             $st->execute([$sid]);
             $salle = $st->fetch();
             $places = $salle ? array_column(array_filter(plan_de($salle)['objets'], fn($o) => in_array($o['type'], TYPES_PLACES, true)), 'id') : [];
             $pdo->beginTransaction();
-            $pdo->prepare('DELETE FROM placements WHERE classe_id = ? AND salle_id = ?')->execute([$cid, $sid]);
-            $ins = $pdo->prepare('INSERT INTO placements (classe_id, salle_id, place, eleve_id) VALUES (?, ?, ?, ?)');
+            $pdo->prepare('DELETE FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?')->execute([$cid, $gid, $sid]);
+            $ins = $pdo->prepare('INSERT INTO placements (classe_id, groupe_id, salle_id, place, eleve_id) VALUES (?, ?, ?, ?, ?)');
             $deja = [];
             foreach ($carte as $place => $eleve) {
                 $eleve = (int) $eleve;
                 if (in_array((string) $place, $places, true) && in_array($eleve, $eleves, true) && !isset($deja[$eleve])) {
-                    $ins->execute([$cid, $sid, (string) $place, $eleve]);
+                    $ins->execute([$cid, $gid, $sid, (string) $place, $eleve]);
                     $deja[$eleve] = true;
                 }
             }
             $pdo->commit();
             flash('Plan de classe enregistré (' . count($deja) . ' élèves placés).');
-            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid);
+            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
 
         case 'classe_etablissement':
             $cid = (int) ($p['classe_id'] ?? 0);
@@ -216,11 +219,11 @@ function action_organisation(string $action): bool
                 rediriger($retour);
             }
             if ($id) {
-                $pdo->prepare('UPDATE cours SET classe_id = ?, jour = ?, creneau_id = ?, duree = ?, semaine = ?, salle_id = ?, intitule = ?, debut = ?, fin = ? WHERE id = ?')
+                $pdo->prepare('UPDATE cours SET classe_id = ?, jour = ?, creneau_id = ?, duree = ?, semaine = ?, salle_id = ?, intitule = ?, debut = ?, fin = ?, groupe_id = ? WHERE id = ?')
                     ->execute([...array_values($c), $id]);
                 flash('Cours modifié pour toutes les semaines.');
             } else {
-                $pdo->prepare('INSERT INTO cours (classe_id, jour, creneau_id, duree, semaine, salle_id, intitule, debut, fin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                $pdo->prepare('INSERT INTO cours (classe_id, jour, creneau_id, duree, semaine, salle_id, intitule, debut, fin, groupe_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                     ->execute(array_values($c));
                 flash('Cours ajouté à l’emploi du temps.');
             }
@@ -266,25 +269,25 @@ function action_organisation(string $action): bool
                     ->execute([$date, $creneau, $duree, $salle, $note, $intitule, $modif_id]);
             } elseif ($cours_id) {
                 $date_origine = (string) ($p['date_origine'] ?? '');
-                $st = $pdo->prepare('SELECT classe_id, intitule FROM cours WHERE id = ?');
+                $st = $pdo->prepare('SELECT classe_id, intitule, groupe_id FROM cours WHERE id = ?');
                 $st->execute([$cours_id]);
                 $c = $st->fetch();
                 if (!$c || !date_valide($date_origine)) {
                     rediriger($retour);
                 }
                 $pdo->prepare('DELETE FROM seances_modifiees WHERE cours_id = ? AND date_origine = ?')->execute([$cours_id, $date_origine]);
-                $pdo->prepare("INSERT INTO seances_modifiees (cours_id, classe_id, date_origine, statut, date, creneau_id, duree, salle_id, intitule, note)
-                               VALUES (?, ?, ?, 'modifie', ?, ?, ?, ?, ?, ?)")
-                    ->execute([$cours_id, $c['classe_id'], $date_origine, $date, $creneau, $duree, $salle, $intitule ?: $c['intitule'], $note]);
+                $pdo->prepare("INSERT INTO seances_modifiees (cours_id, classe_id, date_origine, statut, date, creneau_id, duree, salle_id, intitule, note, groupe_id)
+                               VALUES (?, ?, ?, 'modifie', ?, ?, ?, ?, ?, ?, ?)")
+                    ->execute([$cours_id, $c['classe_id'], $date_origine, $date, $creneau, $duree, $salle, $intitule ?: $c['intitule'], $note, $c['groupe_id']]);
             } else {
-                $cid = (int) ($p['classe_id'] ?? 0);
+                [$cid, $gid] = lire_classe_groupe((string) ($p['classe_id'] ?? ''));
                 if (!classe_par_id($cid)) {
                     flash('Choisissez une classe.', 'err');
                     rediriger($retour);
                 }
-                $pdo->prepare("INSERT INTO seances_modifiees (cours_id, classe_id, statut, date, creneau_id, duree, salle_id, intitule, note)
-                               VALUES (NULL, ?, 'ajoute', ?, ?, ?, ?, ?, ?)")
-                    ->execute([$cid, $date, $creneau, $duree, $salle, $intitule, $note]);
+                $pdo->prepare("INSERT INTO seances_modifiees (cours_id, classe_id, statut, date, creneau_id, duree, salle_id, intitule, note, groupe_id)
+                               VALUES (NULL, ?, 'ajoute', ?, ?, ?, ?, ?, ?, ?)")
+                    ->execute([$cid, $date, $creneau, $duree, $salle, $intitule, $note, $gid]);
             }
             flash('Séance du ' . date_lisible($date) . ' enregistrée.');
             rediriger(preg_replace('/&semaine=[0-9-]+/', '', $retour) . '&semaine=' . lundi_de($date));
@@ -300,7 +303,8 @@ function action_organisation(string $action): bool
 /** Valide un cours récurrent envoyé par formulaire. Renvoie les champs, ou un message d'erreur. */
 function lire_cours(array $p): array|string
 {
-    $classe = classe_par_id((int) ($p['classe_id'] ?? 0));
+    [$cid, $gid] = lire_classe_groupe((string) ($p['classe_id'] ?? ''));
+    $classe = classe_par_id($cid);
     if (!$classe || !$classe['etablissement_id']) {
         return 'Choisissez une classe rattachée à un établissement.';
     }
@@ -328,6 +332,7 @@ function lire_cours(array $p): array|string
         'intitule'   => mb_substr(trim((string) ($p['intitule'] ?? '')), 0, 60),
         'debut'      => $debut,
         'fin'        => $fin,
+        'groupe_id'  => $gid,
     ];
 }
 
@@ -671,7 +676,7 @@ function panneau_seance(array $s, array $e, array $creneaux, array $salles, stri
             <?= $s['note'] ? ' · 📝 ' . h($s['note']) : '' ?></p>
         <div class="ligne-actions">
             <a class="btn petit secondaire" href="./?p=classe&id=<?= (int) $s['classe_id'] ?>">Page de la classe</a>
-            <?php if ($s['salle_id']): ?><a class="btn petit secondaire" href="./?p=placement&classe=<?= (int) $s['classe_id'] ?>&salle=<?= (int) $s['salle_id'] ?>">Plan de classe</a><?php endif; ?>
+            <?php if ($s['salle_id']): ?><a class="btn petit secondaire" href="./?p=placement&classe=<?= (int) $s['classe_id'] ?>&salle=<?= (int) $s['salle_id'] ?><?= !empty($s['groupe_id']) ? '&groupe=' . (int) $s['groupe_id'] : '' ?>">Plan de classe</a><?php endif; ?>
             <?php if ($s['statut'] === 'normal'): ?>
                 <form method="post" class="en-ligne">
                     <?= csrf() ?>
@@ -715,14 +720,14 @@ function panneau_seance(array $s, array $e, array $creneaux, array $salles, stri
 function section_cours_types(array $e, array $creneaux, array $salles, array $classes, string $base): void
 {
     $pdo = db();
-    $st = $pdo->prepare('SELECT co.*, cl.nom AS classe, cr.libelle AS creneau, cr.debut AS heure, s.nom AS salle
+    $st = $pdo->prepare('SELECT co.*, cl.nom || COALESCE(\' · \' || g.nom, \'\') AS classe, cr.libelle AS creneau, cr.debut AS heure, s.nom AS salle
                          FROM cours co JOIN classes cl ON cl.id = co.classe_id JOIN creneaux cr ON cr.id = co.creneau_id
-                         LEFT JOIN salles s ON s.id = co.salle_id
+                         LEFT JOIN salles s ON s.id = co.salle_id LEFT JOIN groupes g ON g.id = co.groupe_id
                          WHERE cl.etablissement_id = ? ORDER BY co.jour, cr.ordre, cl.nom');
     $st->execute([$e['id']]);
     $cours = $st->fetchAll();
     $modifier = (int) ($_GET['cours'] ?? 0);
-    $courant = ['id' => 0, 'classe_id' => '', 'jour' => 1, 'creneau_id' => '', 'duree' => 1, 'semaine' => '', 'salle_id' => '', 'intitule' => 'Technologie', 'debut' => '', 'fin' => ''];
+    $courant = ['id' => 0, 'classe_id' => '', 'groupe_id' => null, 'jour' => 1, 'creneau_id' => '', 'duree' => 1, 'semaine' => '', 'salle_id' => '', 'intitule' => 'Technologie', 'debut' => '', 'fin' => ''];
     foreach ($cours as $c) {
         if ((int) $c['id'] === $modifier) {
             $courant = $c;
@@ -769,7 +774,7 @@ function section_cours_types(array $e, array $creneaux, array $salles, array $cl
                 <input type="hidden" name="action" value="enregistrer_cours">
                 <input type="hidden" name="cours_id" value="<?= (int) $courant['id'] ?>">
                 <input type="hidden" name="retour" value="<?= h($base . '#cours') ?>">
-                <label>Classe<select name="classe_id" required><?= options_html($classes, $courant['classe_id'], '—') ?></select></label>
+                <label>Classe ou groupe<select name="classe_id" required><?= options_classes_groupes($classes, (string) $courant['classe_id'] . (!empty($courant['groupe_id']) ? ':' . $courant['groupe_id'] : '')) ?></select></label>
                 <label>Jour<select name="jour"><?= options_html($jours, $courant['jour']) ?></select></label>
                 <label>Créneau<select name="creneau_id" required><?= options_html($lib_creneaux, $courant['creneau_id'], '—') ?></select></label>
                 <label>Durée<select name="duree"><?= options_html([1 => '1 créneau', 2 => '2 créneaux', 3 => '3 créneaux', 4 => '4 créneaux'], $courant['duree']) ?></select></label>
@@ -787,7 +792,7 @@ function section_cours_types(array $e, array $creneaux, array $salles, array $cl
                     <?= csrf() ?>
                     <input type="hidden" name="action" value="seance_ajouter">
                     <input type="hidden" name="retour" value="<?= h($base) ?>">
-                    <label>Classe<select name="classe_id" required><?= options_html($classes, '', '—') ?></select></label>
+                    <label>Classe ou groupe<select name="classe_id" required><?= options_classes_groupes($classes) ?></select></label>
                     <label>Date<input type="date" name="date" required></label>
                     <label>Créneau<select name="creneau_id" required><?= options_html($lib_creneaux, '', '—') ?></select></label>
                     <label>Durée<select name="duree"><?= options_html([1 => '1 créneau', 2 => '2 créneaux', 3 => '3 créneaux', 4 => '4 créneaux'], 1) ?></select></label>
@@ -830,7 +835,7 @@ function section_aujourdhui(): void
                             <?php if ($s['note'] && $s['statut'] !== 'annule'): ?><br><span class="discret">📝 <?= h($s['note']) ?></span><?php endif; ?></td>
                         <td><?= h($s['salle'] ?: '—') ?> <span class="discret">· <?= h($s['etablissement']) ?></span></td>
                         <td class="actions">
-                            <?php if ($s['salle_id'] && $s['statut'] !== 'annule'): ?><a class="btn petit secondaire" href="./?p=placement&classe=<?= (int) $s['classe_id'] ?>&salle=<?= (int) $s['salle_id'] ?>">Plan de classe</a><?php endif; ?>
+                            <?php if ($s['salle_id'] && $s['statut'] !== 'annule'): ?><a class="btn petit secondaire" href="./?p=placement&classe=<?= (int) $s['classe_id'] ?>&salle=<?= (int) $s['salle_id'] ?><?= !empty($s['groupe_id']) ? '&groupe=' . (int) $s['groupe_id'] : '' ?>">Plan de classe</a><?php endif; ?>
                             <a class="btn petit secondaire" href="./?p=edt&etab=<?= (int) $s['etablissement_id'] ?>&semaine=<?= lundi_de($date) ?>&seance=<?= h($s['cle']) ?>#panneau">Modifier</a>
                         </td>
                     </tr>
@@ -848,7 +853,7 @@ function section_organisation_classe(array $classe): void
     $etabs = db()->query('SELECT id, nom FROM etablissements ORDER BY nom')->fetchAll();
     $salles = [];
     if ($classe['etablissement_id']) {
-        $st = db()->prepare('SELECT s.id, s.nom, (SELECT COUNT(*) FROM placements p WHERE p.salle_id = s.id AND p.classe_id = ?) AS places
+        $st = db()->prepare('SELECT s.id, s.nom, (SELECT COUNT(*) FROM placements p WHERE p.salle_id = s.id AND p.classe_id = ? AND p.groupe_id = 0) AS places
                              FROM salles s WHERE s.etablissement_id = ? ORDER BY s.nom');
         $st->execute([$classe['id'], $classe['etablissement_id']]);
         $salles = $st->fetchAll();
@@ -870,6 +875,9 @@ function section_organisation_classe(array $classe): void
             <p style="margin-top:12px">
                 <?php foreach ($salles as $s): ?>
                     <a class="btn petit secondaire" href="./?p=placement&classe=<?= (int) $classe['id'] ?>&salle=<?= (int) $s['id'] ?>">Plan en <?= h($s['nom']) ?><?= $s['places'] ? ' (' . (int) $s['places'] . ' placés)' : '' ?></a>
+                    <?php foreach (groupes_de((int) $classe['id']) as $g): ?>
+                        <a class="btn petit secondaire" href="./?p=placement&classe=<?= (int) $classe['id'] ?>&salle=<?= (int) $s['id'] ?>&groupe=<?= (int) $g['id'] ?>"><?= h($g['nom']) ?> en <?= h($s['nom']) ?></a>
+                    <?php endforeach; ?>
                 <?php endforeach; ?>
             </p>
         <?php elseif ($classe['etablissement_id']): ?>
@@ -950,21 +958,30 @@ function page_salle(int $id): void
     pied();
 }
 
-function page_placement(int $classe_id, int $salle_id): void
+function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
 {
     $classe = classe_par_id($classe_id);
+    $groupes = groupes_de($classe_id);
+    $groupe = null;
+    foreach ($groupes as $g) {
+        if ((int) $g['id'] === $groupe_id) {
+            $groupe = $g;
+        }
+    }
+    $groupe_id = $groupe ? $groupe_id : 0;
+    $titre = ($classe['nom'] ?? '') . ($groupe ? ' · ' . $groupe['nom'] : '');
     $st = db()->prepare('SELECT * FROM salles WHERE id = ?');
     $st->execute([$salle_id]);
     $salle = $st->fetch();
     if (!$classe || !$salle) {
         rediriger('./');
     }
-    $st = db()->prepare("SELECT id, etiquette, actif FROM eleves WHERE classe_id = ?
+    $st = db()->prepare("SELECT id, etiquette, actif FROM eleves WHERE classe_id = ?" . ($groupe_id ? ' AND groupe_id = ?' : '') . "
         ORDER BY CASE WHEN etiquette GLOB '[0-9]*' THEN CAST(etiquette AS INTEGER) ELSE 9999 END, etiquette");
-    $st->execute([$classe_id]);
+    $st->execute($groupe_id ? [$classe_id, $groupe_id] : [$classe_id]);
     $eleves = $st->fetchAll();
-    $st = db()->prepare('SELECT place, eleve_id FROM placements WHERE classe_id = ? AND salle_id = ?');
-    $st->execute([$classe_id, $salle_id]);
+    $st = db()->prepare('SELECT place, eleve_id FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?');
+    $st->execute([$classe_id, $groupe_id, $salle_id]);
     $placement = array_map('intval', array_column($st->fetchAll(), 'eleve_id', 'place'));
     $autres = db()->prepare('SELECT id, nom FROM salles WHERE etablissement_id = ? AND id <> ? ORDER BY nom');
     $autres->execute([$salle['etablissement_id'], $salle_id]);
@@ -974,18 +991,26 @@ function page_placement(int $classe_id, int $salle_id): void
         'eleves' => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif']], $eleves),
         'placement' => (object) $placement,
     ];
-    entete('Plan de classe ' . $classe['nom']);
+    entete('Plan de classe ' . $titre);
     barre('classes');
     ?>
     <main class="large">
         <p class="fil"><a href="./?p=classe&id=<?= $classe_id ?>#organisation">← Classe <?= h($classe['nom']) ?></a></p>
         <div class="titre-section">
-            <h1>Plan de classe · <?= h($classe['nom']) ?> en <?= h($salle['nom']) ?></h1>
+            <h1>Plan de classe · <?= h($titre) ?> en <?= h($salle['nom']) ?></h1>
             <div class="ligne-actions">
-                <?php foreach ($autres->fetchAll() as $a): ?><a class="btn petit secondaire" href="./?p=placement&classe=<?= $classe_id ?>&salle=<?= (int) $a['id'] ?>"><?= h($a['nom']) ?></a><?php endforeach; ?>
+                <?php foreach ($autres->fetchAll() as $a): ?><a class="btn petit secondaire" href="./?p=placement&classe=<?= $classe_id ?>&salle=<?= (int) $a['id'] ?><?= $groupe_id ? '&groupe=' . $groupe_id : '' ?>"><?= h($a['nom']) ?></a><?php endforeach; ?>
                 <a class="btn petit secondaire" href="./?p=salle&id=<?= $salle_id ?>">Modifier la salle</a>
             </div>
         </div>
+        <?php if ($groupes): ?>
+            <nav class="choix-groupe" aria-label="Classe entière ou groupe">
+                <a class="btn petit <?= $groupe_id ? 'secondaire' : '' ?>" href="./?p=placement&classe=<?= $classe_id ?>&salle=<?= $salle_id ?>">Classe entière</a>
+                <?php foreach ($groupes as $g): ?>
+                    <a class="btn petit <?= (int) $g['id'] === $groupe_id ? '' : 'secondaire' ?>" href="./?p=placement&classe=<?= $classe_id ?>&salle=<?= $salle_id ?>&groupe=<?= (int) $g['id'] ?>"><?= h($g['nom']) ?> (<?= (int) $g['nb'] ?>)</a>
+                <?php endforeach; ?>
+            </nav>
+        <?php endif; ?>
         <?php messages(); ?>
         <?php liste_locale(); ?>
         <form method="post" id="form-placement">
@@ -993,6 +1018,7 @@ function page_placement(int $classe_id, int $salle_id): void
             <input type="hidden" name="action" value="enregistrer_placement">
             <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
             <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
+            <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
             <input type="hidden" name="placement" id="champ-placement">
             <div class="editeur">
                 <aside class="palette carte">
@@ -1013,7 +1039,7 @@ function page_placement(int $classe_id, int $salle_id): void
                 </div>
             </div>
         </form>
-        <div class="impression-titre">Plan de classe · <?= h($classe['nom']) ?> · salle <?= h($salle['nom']) ?> · <?= h(date_lisible(aujourd_hui())) ?></div>
+        <div class="impression-titre">Plan de classe · <?= h($titre) ?> · salle <?= h($salle['nom']) ?> · <?= h(date_lisible(aujourd_hui())) ?></div>
         <script type="application/json" id="donnees-plan"><?= json_encode($donnees, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
         <script src="plan.js?v=<?= @filemtime(__DIR__ . '/../public/admin/plan.js') ?: 1 ?>"></script>
         <script>PlanSalle.placement();</script>
