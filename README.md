@@ -284,6 +284,8 @@ Onglet **Fichiers** :
 
 ## 7. Espace enseignant
 
+Adresse : **https://technoversailles.alwaysdata.net/admin/**. Elle n'apparaît pas sur la page des élèves, qui ne montre que la connexion par code.
+
 - **Importer depuis Pronote** (bouton sur la page Classes) :
   - Source : un export CSV de la liste des élèves de Pronote, ou un copier-coller de la liste (Ctrl+A, Ctrl+C).
   - Encodage et séparateur : UTF-8 ou Windows-1252, séparateur tabulation, « ; » ou « , ». Une ligne de titre au-dessus des en-têtes est acceptée.
