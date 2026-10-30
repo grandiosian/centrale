@@ -295,6 +295,9 @@
           });
           window.CentraleNoms.ajouter(r.classe, paires);   // les noms restent sur cet ordinateur
           if (analyse.avecBesoins) window.CentraleNoms.ajouterBesoins(r.classe, besoins);   // PAP, PAI… aussi
+          var copie = {};
+          r.codes.forEach(function (x) { copie[x.numero] = x.code; });
+          window.CentraleNoms.ajouterCodes(r.classe, copie);   // copie locale des codes, pour réimprimer plus tard
           if (debut === 0) bilan.push({ classe: r.classe, id: r.classe_id, creee: r.creee, n: 0 });
           bilan[bilan.length - 1].n += r.codes.length;
         }

@@ -12,6 +12,7 @@
   var CLE_ATTENTE = 'centrale-noms-attente'; // noms tapés juste avant une génération de codes
   var CLE_BESOINS = 'centrale-besoins';     // { "5A": { "07": ["PAP", "PAI"], … } } — PPS, PAP, PAI, PPRE
   var TYPES_BESOINS = ['PPS', 'PAP', 'PAI', 'PPRE'];
+  var CLE_CODES = 'centrale-codes';         // { "5A": { "07": "5A-abcdefg-hjkm-npqrs" } } — copie locale pour réimprimer
 
   /* ---------- Stockage local ---------- */
 
@@ -67,6 +68,37 @@
     });
     return span;
   }
+  function lireCle(cle) {
+    try { return JSON.parse(localStorage.getItem(cle)) || {}; } catch (e) { return {}; }
+  }
+  function ecrireCle(cle, carte) {
+    try { localStorage.setItem(cle, JSON.stringify(carte)); } catch (e) { /* stockage bloqué */ }
+  }
+  function ajouterCodes(classe, paires) {
+    var carte = lireCle(CLE_CODES);
+    carte[classe] = Object.assign(carte[classe] || {}, paires);
+    ecrireCle(CLE_CODES, carte);
+  }
+  function codesLocaux(classe) { return Object.assign({}, lireCle(CLE_CODES)[classe] || {}); }
+
+  /** Classes renommées sur le serveur : on déplace les noms, PAP… et codes gardés ici vers le nouveau nom. */
+  function appliquerRenommages() {
+    var bloc = document.getElementById('json-renommages');
+    if (!bloc) return;
+    var liste = [];
+    try { liste = JSON.parse(bloc.textContent) || []; } catch (e) { return; }
+    [CLE_NOMS, CLE_BESOINS, CLE_CODES].forEach(function (cle) {
+      var carte = lireCle(cle), change = false;
+      liste.forEach(function (r) {
+        if (!carte[r.ancien] || r.ancien === r.nouveau) return;
+        carte[r.nouveau] = Object.assign({}, carte[r.ancien], carte[r.nouveau] || {});
+        delete carte[r.ancien];
+        change = true;
+      });
+      if (change) ecrireCle(cle, carte);
+    });
+  }
+
   function compter(carte) {
     return Object.keys(carte).reduce(function (n, c) { return n + Object.keys(carte[c]).length; }, 0);
   }
@@ -102,6 +134,8 @@
     typesBesoins: typesBesoins,
     pastilles: pastilles,
     ajouterBesoins: function (classe, paires) { ajouterBesoins(classe, paires); afficherNoms(); },
+    ajouterCodes: ajouterCodes,
+    codes: codesLocaux,
     lireCSV: function (texte) { return lireCSV(texte); },
     telechargerCSV: function (nom, entete, lignes) { telechargerCSV(nom, entete, lignes); },
   };
@@ -154,11 +188,12 @@
     var iClasse = entete.findIndex(function (h) { return h === 'classe'; });
     var iNum = entete.findIndex(function (h) { return h === 'numero' || h === 'n°' || h === 'no' || h === 'num'; });
     var iNom = entete.findIndex(function (h) { return h === 'nom' || h === 'eleve' || h === 'nom prenom' || h === 'prenom nom'; });
+    var iCode = entete.findIndex(function (h) { return h === 'code' || h === 'code eleve' || h === 'code de connexion'; });
     var iBesoins = entete.findIndex(function (h) { return /^besoins|accompagnement|^pap|^amenagements?$/.test(h); });
     if (iClasse < 0 || iNum < 0 || iNom < 0) {
       throw new Error('Colonnes attendues : Classe ; Numéro ; Nom (le fichier téléchargé lors de la création des codes convient).');
     }
-    var carte = lire(), n = 0, besoins = {};
+    var carte = lire(), n = 0, besoins = {}, codes = {};
     lignes.slice(1).forEach(function (l) {
       var classe = (l[iClasse] || '').trim(), num = (l[iNum] || '').trim(), nom = (l[iNom] || '').trim();
       if (!classe || !num || !nom) return;
@@ -166,10 +201,13 @@
       carte[classe] = carte[classe] || {};
       carte[classe][num] = nom;
       if (iBesoins >= 0) (besoins[classe] = besoins[classe] || {})[num] = typesBesoins(l[iBesoins]);
+      if (iCode >= 0 && /^[A-Za-z0-9]+-[a-z]{7}-[a-z]{4}-[a-z]{5}$/i.test((l[iCode] || '').trim())) (codes[classe] = codes[classe] || {})[num] = l[iCode].trim();
       n++;
     });
     ecrire(carte);
     Object.keys(besoins).forEach(function (c) { ajouterBesoins(c, besoins[c]); });
+    Object.keys(codes).forEach(function (c) { ajouterCodes(c, codes[c]); });
+    appliquerRenommages();   // fichier ancien : classes renommées depuis
     return n;
   }
 
@@ -190,6 +228,8 @@
 
   /* ---------- Barre « liste locale » ---------- */
 
+  appliquerRenommages();   // avant tout le reste : classes renommées depuis la dernière visite
+
   document.querySelectorAll('.charger-liste').forEach(function (input) {
     input.addEventListener('change', function () {
       var f = input.files[0];
@@ -198,6 +238,7 @@
         try {
           var n = importerCSV(texte);
           afficherNoms();
+          document.dispatchEvent(new Event('centrale-codes'));
           afficherMessage(n + ' nom' + (n > 1 ? 's' : '') + ' chargé' + (n > 1 ? 's' : '') + ' sur cet ordinateur.');
         } catch (e) { afficherMessage(e.message, true); }
         input.value = '';
@@ -207,8 +248,8 @@
 
   document.querySelectorAll('.oublier-liste').forEach(function (b) {
     b.addEventListener('click', function () {
-      if (!confirmerEnLigne(b, "Effacer les noms de ce navigateur ? Gardez bien votre fichier CSV : c'est la seule copie.", b.parentNode)) return;
-      try { localStorage.removeItem(CLE_NOMS); localStorage.removeItem(CLE_BESOINS); } catch (e) { /* rien */ }
+      if (!confirmerEnLigne(b, "Effacer les noms, PAP… et codes de ce navigateur ? Gardez bien votre fichier CSV : c'est la seule copie.", b.parentNode)) return;
+      try { [CLE_NOMS, CLE_BESOINS, CLE_CODES].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) { /* rien */ }
       afficherNoms();
     });
   });
@@ -256,6 +297,9 @@
       info.codes.forEach(function (c, i) { paires[c.numero] = attente.noms[i]; });
       ajouter(info.classe, paires);
     }
+    var copie = {};
+    info.codes.forEach(function (c) { copie[c.numero] = c.code; });
+    ajouterCodes(info.classe, copie);   // copie locale : pour réimprimer les fiches plus tard
     var boutonCSV = document.getElementById('telecharger-codes');
     if (boutonCSV) {
       boutonCSV.addEventListener('click', function () {
@@ -314,6 +358,82 @@
       if (!confirmerEnLigne(b, f.dataset.confirmer, f)) ev.preventDefault();
     });
   });
+
+  /* ---------- Codes de la classe : réimprimer / retélécharger depuis la copie locale ---------- */
+
+  var blocCodes = document.getElementById('json-codes-classe');
+  if (blocCodes) {
+    var dc = JSON.parse(blocCodes.textContent);
+    var valides = [];   // numéros dont le code local correspond encore au serveur
+
+    var empreinte = async function (code) {
+      var octets = new TextEncoder().encode(code.replace(/\s+/g, '').toLowerCase());
+      var h = await crypto.subtle.digest('SHA-256', octets);
+      return Array.prototype.map.call(new Uint8Array(h), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    };
+
+    var verifierCodes = async function () {
+      var locaux = codesLocaux(dc.classe), empreintes = {};
+      var nums = Object.keys(locaux);
+      try {
+        for (var i = 0; i < nums.length; i++) empreintes[nums[i]] = await empreinte(locaux[nums[i]]);
+        var f = new FormData();
+        f.append('csrf', dc.csrf); f.append('action', 'verifier_codes'); f.append('classe_id', dc.classe_id);
+        f.append('empreintes', JSON.stringify(empreintes));
+        var r = await (await fetch('./', { method: 'POST', body: f, credentials: 'same-origin' })).json();
+        valides = r.valides || [];
+      } catch (e) { valides = []; }
+      var total = dc.eleves.length, n = dc.eleves.filter(function (e) { return valides.indexOf(e.numero) >= 0; }).length;
+      var perimes = nums.filter(function (x) { return valides.indexOf(x) < 0; }).length;
+      document.getElementById('etat-codes').textContent = 'Codes connus sur cet ordinateur : ' + n + ' / ' + total
+        + (perimes ? ' · ' + perimes + ' code(s) gardé(s) ici ne sont plus valables (changés depuis)' : '')
+        + (n < total ? ". Pour les autres, chargez votre fichier de codes (CSV) avec « Charger mon fichier de noms », ou créez-leur un nouveau code." : '.');
+      document.getElementById('codes-imprimer').disabled = !n;
+      document.getElementById('codes-csv').disabled = !n;
+      var manquants = dc.eleves.filter(function (e) { return valides.indexOf(e.numero) < 0; });
+      var form = document.getElementById('form-codes-manquants');
+      form.hidden = !manquants.length || manquants.length === total;
+      form.querySelector('[name=eleves]').value = manquants.map(function (e) { return e.id; }).join(',');
+      form.querySelector('button').textContent = 'Nouveaux codes pour les ' + manquants.length + ' élève(s) sans code ici';
+    };
+
+    var lignesCodes = function () {
+      var locaux = codesLocaux(dc.classe);
+      return dc.eleves.filter(function (e) { return valides.indexOf(e.numero) >= 0; }).map(function (e) {
+        return { numero: e.numero, nom: nomLocal(dc.classe, e.numero), code: locaux[e.numero] };
+      });
+    };
+
+    document.getElementById('codes-csv').addEventListener('click', function () {
+      telechargerCSV('codes_' + dc.prefixe + '_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'],
+        lignesCodes().map(function (l) { return [dc.classe, l.numero, l.nom, l.code, besoinsLocaux(dc.classe, l.numero).join(', ')]; }));
+    });
+
+    document.getElementById('codes-imprimer').addEventListener('click', function () {
+      var zone = document.getElementById('fiches-classe');
+      zone.innerHTML = '';
+      lignesCodes().forEach(function (l) {
+        var f = document.createElement('div');
+        f.className = 'fiche';
+        f.innerHTML = '<div class="fiche-haut"><span></span><span></span></div><div class="fiche-code"></div><div class="fiche-bas"></div>';
+        f.querySelector('.fiche-haut span:first-child').textContent = 'Technologie · ' + dc.classe + ' · n° ' + l.numero;
+        f.querySelector('.fiche-haut span:last-child').textContent = l.nom;
+        f.querySelector('.fiche-code').textContent = l.code;
+        f.querySelector('.fiche-bas').textContent = 'Mon code personnel, à ne pas partager.' + (dc.lien ? ' ' + dc.lien : '');
+        zone.appendChild(f);
+      });
+      // N'imprimer que ces fiches (pas celles d'une génération affichée plus haut)
+      var autres = Array.prototype.filter.call(document.querySelectorAll('.fiches'), function (x) { return x !== zone; });
+      autres.forEach(function (x) { x.classList.add('hors-impression'); });
+      window.addEventListener('afterprint', function () {
+        autres.forEach(function (x) { x.classList.remove('hors-impression'); });
+      }, { once: true });
+      window.print();
+    });
+
+    document.addEventListener('centrale-codes', verifierCodes);
+    verifierCodes();
+  }
 
   afficherNoms();
 })();

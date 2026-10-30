@@ -189,8 +189,52 @@ if ($action !== null) {
                 flash('Cette classe existe déjà.', 'err');
                 rediriger('./');
             }
+            $nouvelle = (int) $pdo->lastInsertId();
+            oublier_renommage($nom);
             flash("Classe « $nom » créée. Générez maintenant les codes des élèves.");
-            rediriger('./?p=classe&id=' . $pdo->lastInsertId());
+            rediriger('./?p=classe&id=' . $nouvelle);
+
+        case 'renommer_classe':
+            $nom = trim(preg_replace('/\s+/u', ' ', (string) ($_POST['nom'] ?? '')) ?? '');
+            if (!preg_match('/^[\p{L}0-9 _-]{1,20}$/u', $nom)) {
+                flash('Nom de classe invalide (1 à 20 caractères : lettres, chiffres, espaces, - ou _).', 'err');
+                rediriger($retour_classe);
+            }
+            $ancien = classe_par_id($classe_id)['nom'] ?? '';
+            $erreur = renommer_classe($classe_id, $nom);
+            if ($erreur) {
+                flash($erreur, 'err');
+            } elseif ($ancien !== $nom) {
+                flash("Classe « $ancien » renommée en « $nom ». Les codes déjà distribués fonctionnent toujours ; les noms gardés sur cet ordinateur suivent.");
+            }
+            rediriger($retour_classe);
+
+        case 'regenerer_classe':
+            $choix = (string) ($_POST['eleves'] ?? '');
+            $ids = $choix === 'tous' ? null : array_values(array_filter(array_map('intval', explode(',', $choix))));
+            if ($ids === []) {
+                rediriger($retour_classe);
+            }
+            $codes = regenerer_codes($classe_id, $ids);
+            $_SESSION['nouveaux'] = ['classe_id' => $classe_id, 'codes' => $codes];
+            flash(count($codes) . ' nouveau(x) code(s). Les anciens codes de ces élèves ne fonctionnent plus.');
+            rediriger($retour_classe . '#nouveaux');
+
+        case 'verifier_codes':
+            // Le navigateur envoie l'EMPREINTE des codes qu'il connaît (jamais les codes) ; on répond lesquels sont à jour.
+            header('Content-Type: application/json; charset=utf-8');
+            $st = $pdo->prepare('SELECT etiquette, code_hash FROM eleves WHERE classe_id = ?');
+            $st->execute([$classe_id]);
+            $hashes = array_column($st->fetchAll(), 'code_hash', 'etiquette');
+            $recus = json_decode((string) ($_POST['empreintes'] ?? '{}'), true) ?: [];
+            $valides = [];
+            foreach ($recus as $num => $empreinte) {
+                if (isset($hashes[$num]) && is_string($empreinte) && hash_equals($hashes[$num], $empreinte)) {
+                    $valides[] = (string) $num;
+                }
+            }
+            echo json_encode(['ok' => true, 'valides' => $valides]);
+            exit;
 
         case 'supprimer_classe':
             supprimer_eleves('classe_id = ?', [$classe_id]);
@@ -721,7 +765,20 @@ function page_classe(int $id): void
     ?>
     <main>
         <p class="fil"><a href="./">← Toutes les classes</a></p>
-        <h1>Classe <?= h($nom) ?></h1>
+        <div class="titre-classe">
+            <h1>Classe <?= h($nom) ?></h1>
+            <details class="renommer">
+                <summary class="btn petit secondaire">Renommer</summary>
+                <form method="post" class="en-ligne">
+                    <?= csrf() ?>
+                    <input type="hidden" name="action" value="renommer_classe">
+                    <input type="hidden" name="classe_id" value="<?= $id ?>">
+                    <input name="nom" value="<?= h($nom) ?>" maxlength="20" required pattern="[\p{L}0-9 _\-]{1,20}" aria-label="Nouveau nom de la classe">
+                    <button>Enregistrer</button>
+                </form>
+                <p class="aide">Les codes déjà distribués restent valables (ils gardent l'ancien préfixe). Les nouveaux codes prendront le nouveau nom.</p>
+            </details>
+        </div>
         <?php messages(); ?>
         <?php liste_locale(); ?>
 
@@ -809,6 +866,39 @@ function page_classe(int $id): void
                 </table></div>
             <?php else: ?>
                 <p class="vide">Aucun élève. Générez des codes ci-dessous.</p>
+            <?php endif; ?>
+
+            <?php if ($eleves): ?>
+                <section class="carte" id="codes-classe">
+                    <h3>Codes de connexion</h3>
+                    <p class="aide">Le serveur ne garde pas les codes (seulement une empreinte) : il ne peut pas les réafficher.
+                        Cet ordinateur en garde une copie quand ils sont créés ici, ou quand vous chargez votre fichier de codes (CSV).</p>
+                    <p class="etat-codes" id="etat-codes">Codes connus sur cet ordinateur : vérification…</p>
+                    <div class="ligne-actions">
+                        <button type="button" id="codes-imprimer" disabled>Imprimer les fiches</button>
+                        <button type="button" class="secondaire" id="codes-csv" disabled>Télécharger les codes (CSV)</button>
+                        <form method="post" id="form-codes-manquants" hidden data-confirmer="Les élèves concernés devront utiliser leur nouveau code.">
+                            <?= csrf() ?>
+                            <input type="hidden" name="action" value="regenerer_classe">
+                            <input type="hidden" name="classe_id" value="<?= $id ?>">
+                            <input type="hidden" name="eleves" value="">
+                            <button class="secondaire">Nouveaux codes pour les élèves sans code ici</button>
+                        </form>
+                        <form method="post" data-confirmer="Tous les codes de la classe vont changer : les anciens ne fonctionneront plus. Le travail des élèves est conservé.">
+                            <?= csrf() ?>
+                            <input type="hidden" name="action" value="regenerer_classe">
+                            <input type="hidden" name="classe_id" value="<?= $id ?>">
+                            <input type="hidden" name="eleves" value="tous">
+                            <button class="danger">Nouveaux codes pour toute la classe</button>
+                        </form>
+                    </div>
+                    <div class="fiches" id="fiches-classe" aria-hidden="true"></div>
+                    <script type="application/json" id="json-codes-classe"><?= json_encode([
+                        'classe' => $nom, 'classe_id' => $id, 'prefixe' => prefixe_classe($nom), 'csrf' => $_SESSION['csrf'],
+                        'lien' => reglage('lien_eleves', ''),
+                        'eleves' => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif']], $eleves),
+                    ], $json) ?></script>
+                </section>
             <?php endif; ?>
 
             <form method="post" class="carte" id="form-generer" data-classe="<?= h($nom) ?>">
@@ -1092,5 +1182,10 @@ function entete(string $titre): void
 function pied(): void
 {
     $v = @filemtime(__DIR__ . '/admin.js') ?: 1;
+    // Renommages de classes : chaque ordinateur déplace lui-même ses noms locaux (voir admin.js)
+    if (!empty($_SESSION['admin'])) {
+        echo "\n<script type=\"application/json\" id=\"json-renommages\">"
+            . json_encode(renommages_classes(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';
+    }
     echo "\n<script src=\"admin.js?v=$v\"></script>\n</body>\n</html>\n";
 }

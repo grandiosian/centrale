@@ -687,6 +687,93 @@ function reglage(string $cle, ?string $defaut = null): ?string
     return $v === false ? $defaut : (string) $v;
 }
 
+/**
+ * Renommages de classes : les noms des élèves sont rangés PAR NOM DE CLASSE dans le navigateur de l'enseignant
+ * (et dans ses fichiers CSV). La liste des renommages est envoyée à chaque page pour que chaque ordinateur
+ * déplace lui-même ses noms locaux de l'ancien nom vers le nouveau.
+ */
+function renommages_classes(): array
+{
+    $l = json_decode(reglage('renommages_classes', '[]') ?? '[]', true);
+    return is_array($l) ? $l : [];
+}
+
+/** Un nom de classe réutilisé (nouvelle classe « 5A ») ne doit plus être déplacé vers l'ancien renommage. */
+function oublier_renommage(string $nom): void
+{
+    $l = array_values(array_filter(renommages_classes(), fn($r) => mb_strtolower($r['ancien']) !== mb_strtolower($nom)));
+    definir_reglage('renommages_classes', json_encode($l, JSON_UNESCAPED_UNICODE));
+}
+
+function renommer_classe(int $id, string $nouveau): ?string
+{
+    $pdo = db();
+    $classe = classe_par_id($id);
+    if (!$classe) {
+        return 'Classe introuvable.';
+    }
+    $ancien = $classe['nom'];
+    if ($ancien === $nouveau) {
+        return null;
+    }
+    $st = $pdo->prepare('SELECT COUNT(*) FROM classes WHERE nom = ? COLLATE NOCASE AND id <> ?');
+    $st->execute([$nouveau, $id]);
+    if ($st->fetchColumn()) {
+        return "Une autre classe s'appelle déjà « $nouveau ».";
+    }
+    $pdo->beginTransaction();
+    $pdo->prepare('UPDATE classes SET nom = ? WHERE id = ?')->execute([$nouveau, $id]);
+    // Ateliers et parcours réservés à certaines classes : « 5A,5B » → « 5EME A,5B »
+    foreach (['ateliers', 'parcours'] as $table) {
+        foreach ($pdo->query("SELECT id, classes FROM $table WHERE classes <> ''")->fetchAll() as $r) {
+            $liste = array_map('trim', explode(',', $r['classes']));
+            $change = false;
+            foreach ($liste as $i => $c) {
+                if (mb_strtolower($c) === mb_strtolower($ancien)) {
+                    $liste[$i] = $nouveau;
+                    $change = true;
+                }
+            }
+            if ($change) {
+                $pdo->prepare("UPDATE $table SET classes = ? WHERE id = ?")->execute([implode(',', $liste), $r['id']]);
+            }
+        }
+    }
+    $l = array_values(array_filter(renommages_classes(), fn($r) => mb_strtolower($r['ancien']) !== mb_strtolower($nouveau)));
+    $l[] = ['ancien' => $ancien, 'nouveau' => $nouveau, 'le' => time()];
+    definir_reglage('renommages_classes', json_encode(array_slice($l, -300), JSON_UNESCAPED_UNICODE));
+    $pdo->commit();
+    return null;
+}
+
+/** Nouveaux codes pour plusieurs élèves d'une classe (les anciens ne fonctionnent plus). */
+function regenerer_codes(int $classe_id, ?array $ids): array
+{
+    $pdo = db();
+    $classe = classe_par_id($classe_id);
+    if (!$classe) {
+        return [];
+    }
+    $st = $pdo->prepare('SELECT id, etiquette FROM eleves WHERE classe_id = ?
+        ORDER BY CASE WHEN etiquette GLOB \'[0-9]*\' THEN CAST(etiquette AS INTEGER) ELSE 9999 END, etiquette');
+    $st->execute([$classe_id]);
+    $codes = [];
+    $maj = $pdo->prepare('UPDATE eleves SET code_hash = ? WHERE id = ?');
+    $sessions = $pdo->prepare('DELETE FROM sessions WHERE eleve_id = ?');
+    $pdo->beginTransaction();
+    foreach ($st->fetchAll() as $e) {
+        if ($ids !== null && !in_array((int) $e['id'], $ids, true)) {
+            continue;
+        }
+        $code = generer_code($classe['nom']);
+        $maj->execute([hash_code($code), $e['id']]);
+        $sessions->execute([$e['id']]);
+        $codes[] = ['numero' => $e['etiquette'], 'code' => $code];
+    }
+    $pdo->commit();
+    return $codes;
+}
+
 function definir_reglage(string $cle, string $valeur): void
 {
     db()->prepare('INSERT INTO reglages (cle, valeur) VALUES (?, ?)

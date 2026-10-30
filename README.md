@@ -295,6 +295,14 @@ Onglet **Fichiers** :
     - Ces informations restent sur votre ordinateur et dans votre fichier de noms (colonne « Besoins »). Elles ne sont jamais envoyées au serveur.
     - Elles apparaissent en pastilles à côté des noms (classe, suivi, plan de classe) et sont masquées à l'impression.
     - Réimporter le fichier les met à jour.
+- **Renommer une classe** (bouton à côté du titre de la classe) :
+  - Les codes déjà distribués restent valables : ils gardent l'ancien préfixe. Les nouveaux codes prennent le nouveau nom.
+  - Les ateliers et parcours réservés à cette classe sont mis à jour.
+  - Chaque ordinateur range lui-même ses noms, PAP… et codes sous le nouveau nom à la prochaine visite. Un ancien fichier CSV chargé plus tard est lui aussi rangé sous le nouveau nom.
+- **Codes de connexion** (page de la classe) : le serveur ne garde qu'une empreinte des codes et ne peut donc pas les réafficher.
+  - Votre navigateur garde une copie des codes créés ou importés sur cet ordinateur. Charger un fichier de codes (CSV) avec « Charger mon fichier de noms » restaure aussi cette copie.
+  - Avec cette copie, vous pouvez **réimprimer les fiches** ou **retélécharger le CSV** à tout moment. Les codes gardés ici sont vérifiés auprès du serveur par leur empreinte.
+  - Si des codes manquent ou ne sont plus valables : « Nouveaux codes pour les élèves sans code ici » ou « Nouveaux codes pour toute la classe ». Le travail des élèves est conservé.
 - **Tableau de bord** : classes, nombre d'élèves, espace utilisé, ressources des ateliers, réglages (sites autorisés, quotas).
 - **Classe** : codes, élèves (numéro, nom affiché localement, dernière connexion, espace), **export ZIP** de tout le travail, **effacer le travail** (fin d'année : les codes restent valables), dépôts Nuage facultatifs.
 - **Travail d'un élève** : données et fichiers par atelier, téléchargement, historique avec restauration.

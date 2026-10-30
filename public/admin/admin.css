@@ -284,3 +284,16 @@ td.actions form[data-confirmer] .question-confirmation { position: absolute; rig
 .badge-besoin.besoin-ppre { background: #eef5e9; color: #3b6b22; border-color: #cfe2c2; }
 .marque-besoin { fill: #d9822b; stroke: #fff; stroke-width: 1; }
 @media print { .besoins-local, .badge-besoin, .marque-besoin { display: none !important; } }
+
+/* Renommer une classe, codes de la classe */
+.titre-classe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.titre-classe h1 { margin-right: 4px; }
+.renommer summary { list-style: none; display: inline-block; cursor: pointer; }
+.renommer summary::-webkit-details-marker { display: none; }
+.renommer[open] { flex-basis: 100%; }
+.renommer form { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.renommer form input { max-width: 240px; }
+.etat-codes { font-weight: 600; }
+#codes-classe .ligne-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+#codes-classe .ligne-actions form { margin: 0; }
+@media print { .fiches.hors-impression { display: none !important; } }

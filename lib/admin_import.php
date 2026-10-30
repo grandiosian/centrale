@@ -41,6 +41,7 @@ function action_import(string $action): bool
             ->execute([$nom, time(), $eid ?: null]);
         $classe = classe_par_id((int) $pdo->lastInsertId());
         $creee = true;
+        oublier_renommage($nom);
     } elseif ($eid && !$classe['etablissement_id']) {
         $pdo->prepare('UPDATE classes SET etablissement_id = ? WHERE id = ?')->execute([$eid, $classe['id']]);
     }
