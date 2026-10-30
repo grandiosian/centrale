@@ -13,7 +13,7 @@ window.PlanSalle = (function () {
 
   var TYPES = {
     table:     { nom: 'Table', l: 2, h: 1 },
-    poste:     { nom: 'Poste informatique', l: 1, h: 1, place: true },
+    poste:     { nom: 'Ordinateur', l: 1, h: 1 },
     place:     { nom: 'Place élève', l: 1, h: 1, place: true },
     paillasse: { nom: 'Paillasse / établi', l: 4, h: 1 },
     bureau:    { nom: 'Bureau du professeur', l: 2, h: 1 },
@@ -28,6 +28,30 @@ window.PlanSalle = (function () {
     Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); });
     if (parent) parent.appendChild(e);
     return e;
+  }
+
+  /**
+   * Confirmation sans fenêtre du navigateur (certains navigateurs intégrés ne les affichent pas) :
+   * le premier clic transforme le bouton en « Confirmer ? », le second clic (dans les 5 s) valide.
+   */
+  function confirmerEnLigne(bouton, texte) {
+    if (bouton.dataset.confirme === '1') {
+      clearTimeout(bouton._minuteur);
+      bouton.dataset.confirme = '';
+      bouton.textContent = bouton.dataset.texte;
+      bouton.classList.remove('a-confirmer');
+      return true;
+    }
+    bouton.dataset.texte = bouton.textContent;
+    bouton.dataset.confirme = '1';
+    bouton.textContent = texte;
+    bouton.classList.add('a-confirmer');
+    bouton._minuteur = setTimeout(function () {
+      bouton.dataset.confirme = '';
+      bouton.textContent = bouton.dataset.texte;
+      bouton.classList.remove('a-confirmer');
+    }, 5000);
+    return false;
   }
 
   function lireDonnees() {
@@ -80,7 +104,7 @@ window.PlanSalle = (function () {
         var e = { 0: [w * 0.2, 4, w * 0.6, 6], 90: [w - 10, h * 0.2, 6, h * 0.6], 180: [w * 0.2, h - 10, w * 0.6, 6], 270: [4, h * 0.2, 6, h * 0.6] }[o.r || 0];
         el('rect', { x: e[0], y: e[1], width: e[2], height: e[3], rx: 1.5, class: 'ecran' }, g);
       }
-      var texte = estPlace(o) ? nums[o.id] : (o.label || (['table', 'paillasse'].indexOf(o.type) >= 0 ? '' : TYPES[o.type].nom.split(' ')[0]));
+      var texte = estPlace(o) ? nums[o.id] : (o.label || (['table', 'paillasse', 'poste'].indexOf(o.type) >= 0 ? '' : TYPES[o.type].nom.split(' ')[0]));
       if (texte) {
         var t = el('text', { x: w / 2, y: h / 2, class: 'etiquette' + (estPlace(o) ? ' numero-place' : '') }, g);
         t.textContent = texte;
@@ -172,7 +196,9 @@ window.PlanSalle = (function () {
         },
       });
       var nb = plan.objets.filter(estPlace).length;
-      document.getElementById('compte-places').textContent = nb + ' place' + (nb > 1 ? 's' : '') + ' élève' + (nb > 1 ? 's' : '') + ' · ' + plan.objets.length + ' objet' + (plan.objets.length > 1 ? 's' : '');
+      var nbo = plan.objets.filter(function (o) { return o.type === 'poste'; }).length;
+      document.getElementById('compte-places').textContent = nb + ' place' + (nb > 1 ? 's' : '') + ' élève' + (nb > 1 ? 's' : '')
+        + (nbo ? ' · ' + nbo + ' ordinateur' + (nbo > 1 ? 's' : '') : '') + ' · ' + plan.objets.length + ' objet' + (plan.objets.length > 1 ? 's' : '');
       return groupes;
     }
 
@@ -233,12 +259,13 @@ window.PlanSalle = (function () {
     champH.addEventListener('change', changerTaille);
 
     // Disposition rapide : tableau, bureau, rangées de tables avec leurs places
-    document.getElementById('r-generer').onclick = function () {
-      if (plan.objets.length && !confirm('Remplacer le plan actuel par une disposition en rangées ?')) return;
+    var boutonGenerer = document.getElementById('r-generer');
+    boutonGenerer.onclick = function () {
+      if (plan.objets.length && !confirmerEnLigne(boutonGenerer, 'Confirmer : remplacer le plan ?')) return;
       var R = +document.getElementById('r-rangees').value || 4;
       var T = +document.getElementById('r-tables').value || 3;
       var P = +document.getElementById('r-places').value || 2;
-      var postes = document.getElementById('r-postes').checked;
+      var postes = parseFloat(document.getElementById('r-postes').value) || 0;   // 0, 1 ou 0,5 ordinateur par place
       var largeur = Math.max(plan.largeur, T * P + (T + 1) * 1);
       var hauteur = Math.max(plan.hauteur, 3 + R * 3);
       var objets = [];
@@ -252,7 +279,14 @@ window.PlanSalle = (function () {
           var x = gauche + t * (P + 1);
           objets.push({ id: nouvelId(), type: 'table', x: x, y: y, l: P, h: 1, r: 0, label: '' });
           for (var p = 0; p < P; p++) {
-            objets.push({ id: nouvelId(), type: postes ? 'poste' : 'place', x: x + p, y: postes ? y : y + 1, l: 1, h: 1, r: 0, label: '' });
+            // la place de l'élève, devant la table
+            objets.push({ id: nouvelId(), type: 'place', x: x + p, y: y + 1, l: 1, h: 1, r: 0, label: '' });
+          }
+          // les ordinateurs, posés sur la table
+          var nbOrdis = Math.round(P * postes);
+          for (var k = 0; k < nbOrdis; k++) {
+            var largeurOrdi = P / nbOrdis;
+            objets.push({ id: nouvelId(), type: 'poste', x: arrondi(x + k * largeurOrdi + (largeurOrdi - 1) / 2), y: y, l: 1, h: 1, r: 0, label: '' });
           }
         }
       }
@@ -338,11 +372,13 @@ window.PlanSalle = (function () {
       var nbPlaces = plan.objets.filter(estPlace).length;
       var nbPlaces2 = Object.keys(carte).length;
       document.getElementById('compte-places').textContent = nbPlaces2 + ' élève' + (nbPlaces2 > 1 ? 's' : '') + ' placé' + (nbPlaces2 > 1 ? 's' : '')
-        + ' sur ' + d.eleves.length + ' · ' + nbPlaces + ' places dans la salle';
+        + ' sur ' + d.eleves.length + ' · ' + nbPlaces + ' places élèves dans la salle'
+        + (document.getElementById('compte-places').dataset.alerte ? ' · ⚠ ' + document.getElementById('compte-places').dataset.alerte : '');
     }
 
-    document.getElementById('p-vider').onclick = function () {
-      if (confirm('Retirer tous les élèves de leur place ?')) { carte = {}; choisi = null; rendre(); }
+    var boutonVider = document.getElementById('p-vider');
+    boutonVider.onclick = function () {
+      if (confirmerEnLigne(boutonVider, 'Confirmer : tout vider ?')) { carte = {}; choisi = null; rendre(); }
     };
     document.getElementById('p-aleatoire').onclick = function () {
       var places = plan.objets.filter(estPlace).map(function (o) { return o.id; });
@@ -350,7 +386,9 @@ window.PlanSalle = (function () {
       for (var i = places.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = places[i]; places[i] = places[j]; places[j] = t; }
       carte = {};
       eleves.forEach(function (id, i) { if (places[i]) carte[places[i]] = id; });
-      if (eleves.length > places.length) alert('Il manque ' + (eleves.length - places.length) + ' place(s) dans la salle.');
+      if (eleves.length > places.length) {
+        document.getElementById('compte-places').dataset.alerte = 'Il manque ' + (eleves.length - places.length) + ' place(s) dans la salle.';
+      }
       choisi = null;
       rendre();
     };

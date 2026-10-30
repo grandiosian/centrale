@@ -118,6 +118,12 @@ function action_organisation(string $action): bool
         /* ----- Salles ----- */
         case 'ajouter_salle':
             $nom = mb_substr(trim((string) ($p['nom'] ?? '')), 0, 40);
+            $st = $pdo->prepare('SELECT COUNT(*) FROM salles WHERE etablissement_id = ? AND nom = ? COLLATE NOCASE');
+            $st->execute([$eid, $nom]);
+            if ($nom !== '' && $st->fetchColumn()) {
+                flash("Une salle « $nom » existe déjà dans cet établissement.", 'err');
+                rediriger('./?p=etablissements&id=' . $eid . '#salles');
+            }
             if ($nom !== '') {
                 $pdo->prepare('INSERT INTO salles (etablissement_id, nom, plan) VALUES (?, ?, ?)')
                     ->execute([$eid, $nom, json_encode(['largeur' => 16, 'hauteur' => 11, 'objets' => []])]);
@@ -469,7 +475,8 @@ function section_salles(array $e): void
                     $nb = count(array_filter($plan['objets'], fn($o) => in_array($o['type'], TYPES_PLACES, true))); ?>
                     <div class="carte classe">
                         <strong><?= h($s['nom']) ?></strong>
-                        <span><?= $nb ?> place<?= $nb > 1 ? 's' : '' ?> élève<?= $nb > 1 ? 's' : '' ?></span>
+                        <?php $nbo = count(array_filter($plan['objets'], fn($o) => $o['type'] === 'poste')); ?>
+                        <span><?= $nb ?> place<?= $nb > 1 ? 's' : '' ?> élève<?= $nb > 1 ? 's' : '' ?><?= $nbo ? ' · ' . $nbo . ' ordinateur' . ($nbo > 1 ? 's' : '') : '' ?></span>
                         <div class="ligne-actions" style="margin-top:8px">
                             <a class="btn petit" href="./?p=salle&id=<?= (int) $s['id'] ?>">Dessiner le plan</a>
                             <?= bouton('supprimer_salle', 'Supprimer', ['etablissement_id' => $e['id'], 'salle_id' => $s['id']], 'danger',
@@ -892,7 +899,8 @@ function page_salle(int $id): void
                             <label>Tables/rangée<input type="number" id="r-tables" min="1" max="8" value="3"></label>
                             <label>Places/table<input type="number" id="r-places" min="1" max="4" value="2"></label>
                         </div>
-                        <label class="case"><input type="checkbox" id="r-postes"> Avec ordinateurs</label>
+                        <label>Ordinateurs<select id="r-postes">
+                            <option value="0">Aucun</option><option value="1">Un par place</option><option value="0.5">Un pour deux places</option></select></label>
                         <button type="button" class="secondaire petit" id="r-generer">Générer (remplace le plan)</button>
                     </details>
                 </aside>

@@ -52,6 +52,19 @@
   // Accès aux noms locaux pour les autres scripts de l'espace enseignant (plan de classe)
   window.CentraleNoms = { nomLocal: nomLocal };
 
+  /** Message affiché dans la page (à la place d'alert(), que certains navigateurs intégrés n'affichent pas). */
+  function afficherMessage(texte, erreur) {
+    var m = document.createElement('p');
+    m.className = 'message ' + (erreur ? 'erreur' : 'succes');
+    m.setAttribute('role', 'status');
+    m.textContent = texte;
+    var main = document.querySelector('main');
+    var ref = main && (main.querySelector('.liste-locale') || main.firstElementChild);
+    if (ref) ref.parentNode.insertBefore(m, ref.nextSibling); else document.body.prepend(m);
+    m.scrollIntoView({ block: 'nearest' });
+    setTimeout(function () { m.remove(); }, 8000);
+  }
+
   /* ---------- CSV ---------- */
 
   function sansAccents(s) {
@@ -128,8 +141,8 @@
         try {
           var n = importerCSV(texte);
           afficherNoms();
-          alert(n + ' nom' + (n > 1 ? 's' : '') + ' chargé' + (n > 1 ? 's' : '') + ' sur cet ordinateur.');
-        } catch (e) { alert(e.message); }
+          afficherMessage(n + ' nom' + (n > 1 ? 's' : '') + ' chargé' + (n > 1 ? 's' : '') + ' sur cet ordinateur.');
+        } catch (e) { afficherMessage(e.message, true); }
         input.value = '';
       });
     });
@@ -137,7 +150,7 @@
 
   document.querySelectorAll('.oublier-liste').forEach(function (b) {
     b.addEventListener('click', function () {
-      if (!confirm("Effacer les noms de ce navigateur ? (Gardez bien votre fichier CSV : c'est la seule copie.)")) return;
+      if (!confirmerEnLigne(b, "Effacer les noms de ce navigateur ? Gardez bien votre fichier CSV : c'est la seule copie.", b.parentNode)) return;
       try { localStorage.removeItem(CLE_NOMS); } catch (e) { /* rien */ }
       afficherNoms();
     });
@@ -149,7 +162,7 @@
       Object.keys(carte).sort().forEach(function (c) {
         Object.keys(carte[c]).sort().forEach(function (num) { lignes.push([c, num, carte[c][num]]); });
       });
-      if (!lignes.length) { alert('Aucun nom chargé sur cet ordinateur.'); return; }
+      if (!lignes.length) { afficherMessage('Aucun nom chargé sur cet ordinateur.', true); return; }
       telechargerCSV('correspondance_eleves_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom'], lignes);
     });
   });
@@ -162,7 +175,7 @@
       var zone = document.getElementById('noms-locaux');
       var noms = zone.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
       if (noms.length) {
-        if (noms.length > 60) { alert('60 élèves maximum à la fois.'); ev.preventDefault(); return; }
+        if (noms.length > 60) { afficherMessage('60 élèves maximum à la fois.', true); ev.preventDefault(); return; }
         formGen.querySelector('[name=nombre]').value = noms.length;
         try {
           sessionStorage.setItem(CLE_ATTENTE, JSON.stringify({ classe: formGen.dataset.classe, noms: noms }));
@@ -214,9 +227,34 @@
 
   /* ---------- Confirmations ---------- */
 
+  // Confirmation sans fenêtre du navigateur (le navigateur intégré de Claude, par exemple, ne les affiche pas) :
+  // le 1er clic transforme le bouton en « Confirmer ? » et affiche la question, le 2e clic (dans les 6 s) valide.
+  function confirmerEnLigne(bouton, question, porteur) {
+    if (bouton.dataset.confirme === '1') return true;
+    bouton.dataset.texte = bouton.textContent;
+    bouton.dataset.confirme = '1';
+    bouton.textContent = 'Confirmer ?';
+    bouton.classList.add('a-confirmer');
+    var info = null;
+    if (question && porteur) {
+      info = document.createElement('div');
+      info.className = 'question-confirmation';
+      info.textContent = question;
+      porteur.appendChild(info);
+    }
+    setTimeout(function () {
+      bouton.dataset.confirme = '';
+      bouton.textContent = bouton.dataset.texte;
+      bouton.classList.remove('a-confirmer');
+      if (info) info.remove();
+    }, 6000);
+    return false;
+  }
+
   document.querySelectorAll('form[data-confirmer]').forEach(function (f) {
     f.addEventListener('submit', function (ev) {
-      if (!confirm(f.dataset.confirmer)) ev.preventDefault();
+      var b = ev.submitter || f.querySelector('button');
+      if (!confirmerEnLigne(b, f.dataset.confirmer, f)) ev.preventDefault();
     });
   });
 

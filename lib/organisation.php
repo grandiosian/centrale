@@ -364,7 +364,7 @@ function lire_grille(string $texte): array
 /* ---------- Plans de salle ---------- */
 
 const TYPES_PLAN = ['table', 'poste', 'place', 'tableau', 'bureau', 'porte', 'fenetre', 'armoire', 'paillasse'];
-const TYPES_PLACES = ['poste', 'place'];
+const TYPES_PLACES = ['place'];   // seules les places élèves comptent (un ordinateur est un équipement)
 
 /** Nettoie un plan envoyé par l'éditeur. */
 function plan_propre(string $json): ?array
