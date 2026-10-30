@@ -258,10 +258,14 @@
     b.addEventListener('click', function () {
       var carte = lire(), lignes = [];
       Object.keys(carte).sort().forEach(function (c) {
-        Object.keys(carte[c]).sort().forEach(function (num) { lignes.push([c, num, carte[c][num], besoinsLocaux(c, num).join(', ')]); });
+        var codes = codesLocaux(c);
+        Object.keys(carte[c]).sort().forEach(function (num) {
+          lignes.push([c, num, carte[c][num], codes[num] || '', besoinsLocaux(c, num).join(', ')]);
+        });
       });
       if (!lignes.length) { afficherMessage('Aucun nom chargé sur cet ordinateur.', true); return; }
-      telechargerCSV('correspondance_eleves_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom', 'Besoins (PAP, PPS, PAI, PPRE)'], lignes);
+      // Un seul fichier « désanonymiseur » à jour : noms, codes et PAP / PPS / PAI de toutes les classes
+      telechargerCSV('correspondance_eleves_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'], lignes);
     });
   });
 

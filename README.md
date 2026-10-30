@@ -300,6 +300,7 @@ Onglet **Fichiers** :
   - Les ateliers et parcours réservés à cette classe sont mis à jour.
   - Chaque ordinateur range lui-même ses noms, PAP… et codes sous le nouveau nom à la prochaine visite. Un ancien fichier CSV chargé plus tard est lui aussi rangé sous le nouveau nom.
 - **Codes de connexion** (page de la classe) : le serveur ne garde qu'une empreinte des codes et ne peut donc pas les réafficher.
+  - « Télécharger la liste » produit un seul fichier à jour pour toutes les classes : noms, codes et PAP / PPS / PAI. Rechargé ailleurs, il restaure tout.
   - Votre navigateur garde une copie des codes créés ou importés sur cet ordinateur. Charger un fichier de codes (CSV) avec « Charger mon fichier de noms » restaure aussi cette copie.
   - Avec cette copie, vous pouvez **réimprimer les fiches** ou **retélécharger le CSV** à tout moment. Les codes gardés ici sont vérifiés auprès du serveur par leur empreinte.
   - Si des codes manquent ou ne sont plus valables : « Nouveaux codes pour les élèves sans code ici » ou « Nouveaux codes pour toute la classe ». Le travail des élèves est conservé.
