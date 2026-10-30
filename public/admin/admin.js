@@ -10,6 +10,8 @@
 
   var CLE_NOMS = 'centrale-noms';           // { "5A": { "07": "Léa D.", … }, … }
   var CLE_ATTENTE = 'centrale-noms-attente'; // noms tapés juste avant une génération de codes
+  var CLE_BESOINS = 'centrale-besoins';     // { "5A": { "07": ["PAP", "PAI"], … } } — PPS, PAP, PAI, PPRE
+  var TYPES_BESOINS = ['PPS', 'PAP', 'PAI', 'PPRE'];
 
   /* ---------- Stockage local ---------- */
 
@@ -27,6 +29,44 @@
   function nomLocal(classe, numero) {
     return (lire()[classe] || {})[numero] || '';
   }
+  function lireBesoins() {
+    try { return JSON.parse(localStorage.getItem(CLE_BESOINS)) || {}; } catch (e) { return {}; }
+  }
+  function ecrireBesoins(carte) {
+    try { localStorage.setItem(CLE_BESOINS, JSON.stringify(carte)); } catch (e) { /* stockage bloqué */ }
+  }
+  /** Garde seulement le TYPE de projet (jamais le détail, ex. la nature d'une allergie) : « PAI (allergie), PAP » → ["PAP", "PAI"]. */
+  function typesBesoins(texte) {
+    var t = Array.isArray(texte) ? texte.join(' ') : String(texte || '');
+    return TYPES_BESOINS.filter(function (type) {
+      return new RegExp('(^|[^A-Za-z0-9@.])' + type + '(?=$|[^A-Za-z0-9@])', 'i').test(t);
+    });
+  }
+  function ajouterBesoins(classe, paires) {       // paires : { numero: ["PAP"] } ; [] = aucun
+    var carte = lireBesoins();
+    carte[classe] = carte[classe] || {};
+    Object.keys(paires).forEach(function (num) {
+      var b = typesBesoins(paires[num]);
+      if (b.length) carte[classe][num] = b; else delete carte[classe][num];
+    });
+    if (!Object.keys(carte[classe]).length) delete carte[classe];
+    ecrireBesoins(carte);
+  }
+  function besoinsLocaux(classe, numero) {
+    return (lireBesoins()[classe] || {})[numero] || [];
+  }
+  /** Pastilles « PAP », « PAI »… (masquées à l'impression : les fiches et plans peuvent être affichés en classe). */
+  function pastilles(liste) {
+    var span = document.createElement('span');
+    span.className = 'besoins-local';
+    liste.forEach(function (b) {
+      var x = document.createElement('span');
+      x.className = 'badge-besoin besoin-' + b.toLowerCase();
+      x.textContent = b;
+      span.appendChild(x);
+    });
+    return span;
+  }
   function compter(carte) {
     return Object.keys(carte).reduce(function (n, c) { return n + Object.keys(carte[c]).length; }, 0);
   }
@@ -38,6 +78,10 @@
       var nom = nomLocal(el.dataset.classe, el.dataset.numero);
       el.textContent = nom || (el.dataset.vide || '—');
       el.classList.toggle('inconnu', !nom);
+      var suivant = el.nextElementSibling;
+      if (suivant && suivant.classList.contains('besoins-local')) suivant.remove();
+      var b = besoinsLocaux(el.dataset.classe, el.dataset.numero);
+      if (b.length) el.after(pastilles(b));
     });
     var n = compter(lire());
     document.querySelectorAll('.etat-liste').forEach(function (el) {
@@ -54,6 +98,10 @@
     nomLocal: nomLocal,
     ajouter: function (classe, paires) { ajouter(classe, paires); afficherNoms(); },
     carte: function (classe) { return Object.assign({}, lire()[classe] || {}); },
+    besoins: besoinsLocaux,
+    typesBesoins: typesBesoins,
+    pastilles: pastilles,
+    ajouterBesoins: function (classe, paires) { ajouterBesoins(classe, paires); afficherNoms(); },
     lireCSV: function (texte) { return lireCSV(texte); },
     telechargerCSV: function (nom, entete, lignes) { telechargerCSV(nom, entete, lignes); },
   };
@@ -106,19 +154,22 @@
     var iClasse = entete.findIndex(function (h) { return h === 'classe'; });
     var iNum = entete.findIndex(function (h) { return h === 'numero' || h === 'n°' || h === 'no' || h === 'num'; });
     var iNom = entete.findIndex(function (h) { return h === 'nom' || h === 'eleve' || h === 'nom prenom' || h === 'prenom nom'; });
+    var iBesoins = entete.findIndex(function (h) { return /^besoins|accompagnement|^pap|^amenagements?$/.test(h); });
     if (iClasse < 0 || iNum < 0 || iNom < 0) {
       throw new Error('Colonnes attendues : Classe ; Numéro ; Nom (le fichier téléchargé lors de la création des codes convient).');
     }
-    var carte = lire(), n = 0;
+    var carte = lire(), n = 0, besoins = {};
     lignes.slice(1).forEach(function (l) {
       var classe = (l[iClasse] || '').trim(), num = (l[iNum] || '').trim(), nom = (l[iNom] || '').trim();
       if (!classe || !num || !nom) return;
       if (/^\d$/.test(num)) num = '0' + num;
       carte[classe] = carte[classe] || {};
       carte[classe][num] = nom;
+      if (iBesoins >= 0) (besoins[classe] = besoins[classe] || {})[num] = typesBesoins(l[iBesoins]);
       n++;
     });
     ecrire(carte);
+    Object.keys(besoins).forEach(function (c) { ajouterBesoins(c, besoins[c]); });
     return n;
   }
 
@@ -157,7 +208,7 @@
   document.querySelectorAll('.oublier-liste').forEach(function (b) {
     b.addEventListener('click', function () {
       if (!confirmerEnLigne(b, "Effacer les noms de ce navigateur ? Gardez bien votre fichier CSV : c'est la seule copie.", b.parentNode)) return;
-      try { localStorage.removeItem(CLE_NOMS); } catch (e) { /* rien */ }
+      try { localStorage.removeItem(CLE_NOMS); localStorage.removeItem(CLE_BESOINS); } catch (e) { /* rien */ }
       afficherNoms();
     });
   });
@@ -166,10 +217,10 @@
     b.addEventListener('click', function () {
       var carte = lire(), lignes = [];
       Object.keys(carte).sort().forEach(function (c) {
-        Object.keys(carte[c]).sort().forEach(function (num) { lignes.push([c, num, carte[c][num]]); });
+        Object.keys(carte[c]).sort().forEach(function (num) { lignes.push([c, num, carte[c][num], besoinsLocaux(c, num).join(', ')]); });
       });
       if (!lignes.length) { afficherMessage('Aucun nom chargé sur cet ordinateur.', true); return; }
-      telechargerCSV('correspondance_eleves_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom'], lignes);
+      telechargerCSV('correspondance_eleves_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom', 'Besoins (PAP, PPS, PAI, PPRE)'], lignes);
     });
   });
 
@@ -285,7 +336,9 @@
           if (td.classList.contains('st-commence')) return td.textContent.trim() || 'en cours';
           return '';
         }
-        return td.textContent.trim();
+        var copie = td.cloneNode(true);
+        copie.querySelectorAll('.besoins-local').forEach(function (x) { x.remove(); });
+        return copie.textContent.trim();
       }));
     });
     var csv = '﻿' + lignes.map(function (l) {

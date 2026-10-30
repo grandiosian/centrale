@@ -339,6 +339,11 @@ window.PlanSalle = (function () {
             var e = eleve(id);
             var n = el('text', { x: w / 2, y: h + 13, class: 'nom-eleve' }, g);
             n.textContent = e ? nom(e) : '?';
+            var bes = e && window.CentraleNoms && window.CentraleNoms.besoins ? window.CentraleNoms.besoins(d.classe, e.numero) : [];
+            if (bes.length) {   // petit repère sur la place (masqué à l'impression)
+              var m = el('circle', { cx: w - 5, cy: 5, r: 4.5, class: 'marque-besoin' }, g);
+              el('title', {}, m).textContent = bes.join(', ');
+            }
           }
           g.addEventListener('click', function () {
             if (choisi) { poser(o.id, choisi); choisi = null; }
@@ -364,6 +369,8 @@ window.PlanSalle = (function () {
         li.innerHTML = '<span class="numero"></span><span class="nom"></span><span class="ou"></span>';
         li.querySelector('.numero').textContent = e.numero;
         li.querySelector('.nom').textContent = nom(e);
+        var b = window.CentraleNoms && window.CentraleNoms.besoins ? window.CentraleNoms.besoins(d.classe, e.numero) : [];
+        if (b.length) li.querySelector('.nom').after(window.CentraleNoms.pastilles(b));
         li.querySelector('.ou').textContent = p ? 'place ' + nums[p] : '';
         li.onclick = function () { choisi = choisi === e.id ? null : e.id; rendre(); };
         li.addEventListener('dragstart', function (ev) { ev.dataTransfer.setData('text/plain', String(e.id)); });

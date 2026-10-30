@@ -291,6 +291,10 @@ Onglet **Fichiers** :
   - Lecture du fichier : elle se fait **dans le navigateur**. Pour chaque classe, le serveur ne reçoit que le nom de la classe et le nombre d'élèves. Il crée la classe si besoin et renvoie les codes.
   - Après l'import : les noms sont enregistrés sur cet ordinateur. Les fiches sont prêtes à imprimer, et un fichier `codes_import_DATE.csv` (classe, numéro, nom, code) est téléchargé : rangez-le dans un dossier privé de votre Nuage.
   - Réimport : un élève déjà présent (même classe, même nom sur cet ordinateur) n'est pas recréé. On peut donc réimporter après l'arrivée d'un nouvel élève.
+  - **PAP, PPS, PAI, PPRE** : ajoutez la colonne « Projets d'accompagnement » à la liste Pronote avant l'export. Seul le type de projet est gardé, jamais le détail (par exemple la nature d'une allergie).
+    - Ces informations restent sur votre ordinateur et dans votre fichier de noms (colonne « Besoins »). Elles ne sont jamais envoyées au serveur.
+    - Elles apparaissent en pastilles à côté des noms (classe, suivi, plan de classe) et sont masquées à l'impression.
+    - Réimporter le fichier les met à jour.
 - **Tableau de bord** : classes, nombre d'élèves, espace utilisé, ressources des ateliers, réglages (sites autorisés, quotas).
 - **Classe** : codes, élèves (numéro, nom affiché localement, dernière connexion, espace), **export ZIP** de tout le travail, **effacer le travail** (fin d'année : les codes restent valables), dépôts Nuage facultatifs.
 - **Travail d'un élève** : données et fichiers par atelier, téléchargement, historique avec restauration.

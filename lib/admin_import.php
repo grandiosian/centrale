@@ -87,6 +87,9 @@ function page_import(): void
             </ol>
             <p class="discret">Colonnes reconnues : « Élèves » (NOM Prénom) ou « Nom » + « Prénom », « Classe de rattachement » (ou « Classe »)
                 et « Sortie » : un élève dont la date de sortie est passée n'est pas créé.
+                <br><strong>PAP, PPS, PAI, PPRE</strong> : ajoutez la colonne « Projets d'accompagnement » dans la liste Pronote avant l'export.
+                Seul le type de projet est gardé (jamais le détail), uniquement sur cet ordinateur et dans votre fichier de noms : rien n'est envoyé au serveur.
+                Réimporter le fichier met à jour les PAP / PPS / PAI des élèves déjà créés.
                 Les autres colonnes (date de naissance, adresse e-mail, tuteur, options, régime…) sont ignorées et ne quittent pas votre ordinateur.</p>
         </details>
 
@@ -123,7 +126,7 @@ MARTIN Noah	5A"></textarea>
             <h2>Aperçu</h2>
             <p class="aide" id="imp-resume"></p>
             <div class="defile"><table>
-                <thead><tr><th><input type="checkbox" id="imp-tout" checked aria-label="Tout cocher"></th><th>Classe</th><th>Élèves dans le fichier</th><th>À créer</th><th>Déjà présents</th><th>Remarque</th></tr></thead>
+                <thead><tr><th><input type="checkbox" id="imp-tout" checked aria-label="Tout cocher"></th><th>Classe</th><th>Élèves dans le fichier</th><th>À créer</th><th>Déjà présents</th><th>PAP / PPS / PAI</th><th>Remarque</th></tr></thead>
                 <tbody id="imp-classes"></tbody>
             </table></div>
             <div class="ligne-actions" style="margin-top:12px">

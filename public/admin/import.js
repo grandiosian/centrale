@@ -77,6 +77,13 @@
     Object.keys(ENTETES).forEach(function (k) {
       col[k] = n.findIndex(function (h) { return ENTETES[k].indexOf(h) >= 0; });
     });
+    // PAP, PPS, PAI, PPRE : colonne « Projets d'accompagnement » (ou « PAP », « PAI »…) ; la colonne sans titre
+    // de l'export Pronote (pictogramme) est aussi examinée. Seul le TYPE de projet est gardé.
+    col.besoins = [];
+    n.forEach(function (h, i) {
+      var type = ['pap', 'pps', 'pai', 'ppre'].indexOf(h) >= 0 ? h.toUpperCase() : null;
+      if (type || h === '' || /accompagnement|amenagement|besoins|dispositif|\b(pap|pps|pai|ppre)\b/.test(h)) col.besoins.push({ i: i, type: type });
+    });
     // « Nom » seul + « Prénom » : colonnes séparées ; sinon « Élève » = NOM Prénom
     if (col.nom >= 0 && col.prenom < 0 && col.complet < 0) { col.complet = col.nom; col.nom = -1; }
     return col;
@@ -109,7 +116,25 @@
     return (prenom + ' ' + (nom ? nom[0] + '.' : '')).trim();
   }
 
-  function afficherErreur(msg) {
+  function besoinsDe(ligne, col) {
+    var types = [];
+    col.besoins.forEach(function (c) {
+      var v = (ligne[c.i] || '').trim();
+      if (c.type) { if (v && !/^(non|n|0|-|faux)$/i.test(v)) types.push(c.type); }
+      else types = types.concat(window.CentraleNoms.typesBesoins(v));
+    });
+    return window.CentraleNoms.typesBesoins(types);   // sans doublon, dans l'ordre PPS, PAP, PAI, PPRE
+  }
+
+  function resumeBesoins(eleves) {
+    var n = {};
+    eleves.forEach(function (e) { e.besoins.forEach(function (b) { n[b] = (n[b] || 0) + 1; }); });
+    return ['PPS', 'PAP', 'PAI', 'PPRE'].filter(function (b) { return n[b]; }).map(function (b) { return n[b] + ' ' + b; }).join(' · ');
+  }
+
+  function afficherErreur(msg, info) {
+    $('imp-erreur').classList.toggle('erreur', !info);
+    $('imp-erreur').classList.toggle('succes', !!info);
     $('imp-erreur').textContent = msg || '';
     $('imp-erreur').hidden = !msg;
   }
@@ -157,6 +182,7 @@
       var classe = (col.classe >= 0 ? nomClasse(l[col.classe]) : '') || classeDefaut;
       if (!classe) { sansClasse++; return; }
       trouves++;
+      e.besoins = besoinsDe(l, col);
       (parClasse[classe] = parClasse[classe] || []).push(e);
     });
     if (!trouves) {
@@ -175,29 +201,37 @@
       var existante = D.classes.find(function (c) { return c.nom.toLowerCase() === nom.toLowerCase(); });
       var nomServeur = existante ? existante.nom : nom;
       var deja = window.CentraleNoms ? window.CentraleNoms.carte(nomServeur) : {};
-      var connus = Object.keys(deja).map(function (k) { return sansAccents(deja[k]); });
-      var nouveaux = noms.filter(function (n) { return connus.indexOf(sansAccents(n)) < 0; });
+      var connus = {};
+      Object.keys(deja).forEach(function (k) { connus[sansAccents(deja[k])] = k; });
+      var liste = noms.map(function (n, i) { return { nom: n, besoins: eleves[i].besoins, numero: connus[sansAccents(n)] }; });
+      var nouveaux = liste.filter(function (x) { return !x.numero; });
       var remarque = '';
       if (existante && existante.nb && !Object.keys(deja).length) {
         remarque = existante.nb + ' élève(s) déjà dans cette classe, mais leurs noms ne sont pas chargés sur cet ordinateur : chargez votre fichier de noms avant, sinon ils seront recréés.';
       }
-      return { nom: nom, existe: !!existante, total: noms.length, nouveaux: nouveaux, deja: noms.length - nouveaux.length, remarque: remarque };
+      return { nom: nom, nomServeur: nomServeur, existe: !!existante, total: noms.length, eleves: liste, nouveaux: nouveaux,
+               deja: noms.length - nouveaux.length, besoins: resumeBesoins(eleves), remarque: remarque };
     });
-    analyse = { classes: classes };
+    var avecBesoins = col.besoins.length > 0;
+    var tousEleves = [].concat.apply([], classes.map(function (c) { return c.eleves; }));
+    analyse = { classes: classes, avecBesoins: avecBesoins };
     $('imp-resume').textContent = trouves + ' élève(s) trouvé(s) dans ' + classes.length + ' classe(s)'
       + (partis ? ' · ' + partis + ' élève(s) sorti(s) de l\'établissement, non créé(s)' : '')
       + (sansClasse ? ' · ' + sansClasse + ' élève(s) sans classe, ignoré(s) (indiquez une classe dans le champ prévu pour les inclure)' : '')
-      + (ignorees ? ' · ' + ignorees + ' ligne(s) vide(s) ignorée(s)' : '') + '.';
+      + (ignorees ? ' · ' + ignorees + ' ligne(s) vide(s) ignorée(s)' : '') + '. '
+      + (resumeBesoins(tousEleves) ? 'PAP / PPS / PAI / PPRE : ' + resumeBesoins(tousEleves) + ' (gardés sur cet ordinateur uniquement).'
+        : (avecBesoins ? 'Aucun PAP, PPS, PAI ni PPRE dans le fichier.' : "Pas de colonne « Projets d'accompagnement » dans le fichier : PAP, PPS, PAI non importés."));
     var corps = $('imp-classes');
     corps.innerHTML = '';
     classes.forEach(function (c, i) {
       var tr = document.createElement('tr');
       tr.innerHTML = '<td><input type="checkbox" checked data-i="' + i + '"></td><td><strong></strong> <span class="discret"></span></td>'
-        + '<td>' + c.total + '</td><td>' + c.nouveaux.length + '</td><td>' + c.deja + '</td><td class="discret"></td>';
+        + '<td>' + c.total + '</td><td>' + c.nouveaux.length + '</td><td>' + c.deja + '</td><td class="col-besoins"></td><td class="discret"></td>';
+      tr.querySelector('.col-besoins').textContent = c.besoins || '—';
       tr.querySelector('strong').textContent = c.nom;
       tr.querySelector('span').textContent = c.existe ? '(existe déjà)' : '(nouvelle)';
       tr.lastChild.textContent = c.remarque || (c.nouveaux.length > 60 ? 'Plus de 60 élèves : créés en plusieurs fois.' : '');
-      if (!c.nouveaux.length) { tr.querySelector('input').checked = false; tr.classList.add('inactif'); }
+      if (!c.nouveaux.length && !(avecBesoins && c.deja)) { tr.querySelector('input').checked = false; tr.classList.add('inactif'); }
       corps.appendChild(tr);
     });
     $('imp-apercu').hidden = false;
@@ -222,9 +256,26 @@
   async function lancer() {
     if (!analyse) return;
     var choix = Array.prototype.filter.call($('imp-classes').querySelectorAll('input[type=checkbox]'), function (c) { return c.checked; })
-      .map(function (c) { return analyse.classes[+c.dataset.i]; })
-      .filter(function (c) { return c.nouveaux.length; });
-    if (!choix.length) { afficherErreur('Aucune classe à créer.'); return; }
+      .map(function (c) { return analyse.classes[+c.dataset.i]; });
+    // Élèves déjà connus sur cet ordinateur : on met seulement à jour leurs PAP / PPS / PAI (rien n'est envoyé)
+    var majBesoins = 0;
+    if (analyse.avecBesoins) {
+      choix.forEach(function (c) {
+        var p = {};
+        c.eleves.forEach(function (x) {
+          if (!x.numero) return;
+          if (window.CentraleNoms.besoins(c.nomServeur, x.numero).join() !== x.besoins.join()) majBesoins++;
+          p[x.numero] = x.besoins;
+        });
+        if (Object.keys(p).length) window.CentraleNoms.ajouterBesoins(c.nomServeur, p);
+      });
+    }
+    choix = choix.filter(function (c) { return c.nouveaux.length; });
+    if (!choix.length) {
+      afficherErreur(majBesoins ? 'Aucun élève à créer. PAP / PPS / PAI mis à jour pour ' + majBesoins + ' élève(s) sur cet ordinateur.'
+        : 'Aucune classe à créer : tous les élèves existent déjà.', true);
+      return;
+    }
     var bouton = $('imp-lancer');
     bouton.disabled = true;
     resultat = [];
@@ -236,12 +287,14 @@
         for (var debut = 0; debut < c.nouveaux.length; debut += 60) {
           var lot = c.nouveaux.slice(debut, debut + 60);
           var r = await envoyer(c.nom, lot.length);
-          var paires = {};
+          var paires = {}, besoins = {};
           r.codes.forEach(function (x, k) {
-            paires[x.numero] = lot[k];
-            resultat.push({ classe: r.classe, prefixe: r.prefixe, numero: x.numero, nom: lot[k], code: x.code });
+            paires[x.numero] = lot[k].nom;
+            besoins[x.numero] = lot[k].besoins;
+            resultat.push({ classe: r.classe, prefixe: r.prefixe, numero: x.numero, nom: lot[k].nom, besoins: lot[k].besoins, code: x.code });
           });
           window.CentraleNoms.ajouter(r.classe, paires);   // les noms restent sur cet ordinateur
+          if (analyse.avecBesoins) window.CentraleNoms.ajouterBesoins(r.classe, besoins);   // PAP, PAI… aussi
           if (debut === 0) bilan.push({ classe: r.classe, id: r.classe_id, creee: r.creee, n: 0 });
           bilan[bilan.length - 1].n += r.codes.length;
         }
@@ -289,8 +342,9 @@
   }
 
   function telechargerCodes() {
-    window.CentraleNoms.telechargerCSV('codes_import_' + new Date().toISOString().slice(0, 10) + '.csv', ['Classe', 'Numéro', 'Nom', 'Code'],
-      resultat.map(function (r) { return [r.classe, r.numero, r.nom, r.code]; }));
+    window.CentraleNoms.telechargerCSV('codes_import_' + new Date().toISOString().slice(0, 10) + '.csv',
+      ['Classe', 'Numéro', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'],
+      resultat.map(function (r) { return [r.classe, r.numero, r.nom, r.code, (r.besoins || []).join(', ')]; }));
   }
 
   $('imp-analyser').onclick = analyser;
