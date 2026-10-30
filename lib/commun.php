@@ -183,6 +183,80 @@ function creer_tables(PDO $pdo): void
             ts       INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_connexions ON connexions (eleve_id, ts);
+
+        -- ===== Organisation : établissements, grilles horaires, salles, emploi du temps =====
+        CREATE TABLE IF NOT EXISTS etablissements (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            nom             TEXT NOT NULL,
+            zone            TEXT NOT NULL DEFAULT '',        -- A, B, C ou vide (vacances scolaires)
+            ab_actif        INTEGER NOT NULL DEFAULT 0,      -- semaines A/B
+            ref_semaine_a   TEXT NOT NULL DEFAULT '',        -- un lundi de semaine A (AAAA-MM-JJ)
+            ab_sans_vacances INTEGER NOT NULL DEFAULT 1,     -- les semaines de vacances ne comptent pas dans l'alternance
+            samedi          INTEGER NOT NULL DEFAULT 0,      -- cours le samedi
+            couleur         TEXT NOT NULL DEFAULT '',
+            cree_le         INTEGER NOT NULL
+        );
+        -- Grille horaire : M1 08:00-08:55, M2…
+        CREATE TABLE IF NOT EXISTS creneaux (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            etablissement_id INTEGER NOT NULL REFERENCES etablissements(id) ON DELETE CASCADE,
+            ordre           INTEGER NOT NULL,
+            libelle         TEXT NOT NULL,
+            debut           TEXT NOT NULL,                   -- HH:MM
+            fin             TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS vacances (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            etablissement_id INTEGER NOT NULL REFERENCES etablissements(id) ON DELETE CASCADE,
+            libelle         TEXT NOT NULL,
+            debut           TEXT NOT NULL,                   -- premier jour sans cours (AAAA-MM-JJ)
+            fin             TEXT NOT NULL,                   -- jour de reprise (exclu)
+            source          TEXT NOT NULL DEFAULT 'manuel'   -- officiel | manuel
+        );
+        -- Salles et leur plan (objets placés : tables, postes, places élèves…)
+        CREATE TABLE IF NOT EXISTS salles (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            etablissement_id INTEGER NOT NULL REFERENCES etablissements(id) ON DELETE CASCADE,
+            nom             TEXT NOT NULL,
+            plan            TEXT NOT NULL DEFAULT ''         -- JSON { largeur, hauteur, objets: [...] }
+        );
+        -- Placement des élèves d'une classe dans une salle : place -> élève
+        CREATE TABLE IF NOT EXISTS placements (
+            classe_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+            salle_id  INTEGER NOT NULL REFERENCES salles(id) ON DELETE CASCADE,
+            place     TEXT NOT NULL,
+            eleve_id  INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+            PRIMARY KEY (classe_id, salle_id, place)
+        );
+        -- Cours récurrents (emploi du temps de la semaine type)
+        CREATE TABLE IF NOT EXISTS cours (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            classe_id       INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+            jour            INTEGER NOT NULL,                -- 1 = lundi … 6 = samedi
+            creneau_id      INTEGER NOT NULL REFERENCES creneaux(id) ON DELETE CASCADE,
+            duree           INTEGER NOT NULL DEFAULT 1,      -- en nombre de créneaux
+            semaine         TEXT NOT NULL DEFAULT '',        -- '' = toutes, 'A' ou 'B'
+            salle_id        INTEGER REFERENCES salles(id) ON DELETE SET NULL,
+            intitule        TEXT NOT NULL DEFAULT '',
+            debut           TEXT NOT NULL DEFAULT '',        -- date de début (vide = toujours)
+            fin             TEXT NOT NULL DEFAULT ''         -- date de fin (vide = toujours)
+        );
+        -- Modifications ponctuelles : cours annulé, modifié (déplacé, autre salle, note) ou ajouté
+        CREATE TABLE IF NOT EXISTS seances_modifiees (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            cours_id        INTEGER REFERENCES cours(id) ON DELETE CASCADE,  -- vide = cours ajouté
+            classe_id       INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+            date_origine    TEXT NOT NULL DEFAULT '',        -- date prévue du cours récurrent
+            statut          TEXT NOT NULL,                   -- annule | modifie | ajoute
+            date            TEXT NOT NULL DEFAULT '',        -- date effective (modifie / ajoute)
+            creneau_id      INTEGER REFERENCES creneaux(id) ON DELETE SET NULL,
+            duree           INTEGER NOT NULL DEFAULT 1,
+            salle_id        INTEGER REFERENCES salles(id) ON DELETE SET NULL,
+            intitule        TEXT NOT NULL DEFAULT '',
+            note            TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_seances_date ON seances_modifiees (date);
+        CREATE INDEX IF NOT EXISTS idx_seances_origine ON seances_modifiees (cours_id, date_origine);
         CREATE TABLE IF NOT EXISTS parcours_etapes (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             parcours_id INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
@@ -194,6 +268,7 @@ function creer_tables(PDO $pdo): void
         );
         SQL);
     ajouter_colonne($pdo, 'ateliers', 'urls_secours', "TEXT NOT NULL DEFAULT ''");
+    ajouter_colonne($pdo, 'classes', 'etablissement_id', 'INTEGER REFERENCES etablissements(id) ON DELETE SET NULL');
 }
 
 /** Ajoute une colonne à une table existante (mise à jour d'une base créée par une version précédente). */

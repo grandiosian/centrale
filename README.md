@@ -241,7 +241,48 @@ Onglet **Suivi** : une classe, et au choix un parcours ou un atelier.
 
 ---
 
-## 5. Espace enseignant
+## 5. Organisation : établissements, emploi du temps, plans de classe
+
+### Établissements
+
+Onglet **Établissements**. Pour chaque établissement, on règle :
+
+- **la grille horaire**, un créneau par ligne, par exemple `M1 08:00 08:55` ;
+- **la zone de vacances** (A, B ou C) et l'**import du calendrier officiel** (data.education.gouv.fr) pour l'année en cours ou la suivante. On peut aussi saisir des périodes à la main, par exemple un pont ;
+- **les semaines A/B**, avec une date de semaine A comme référence. Une option permet de ne pas compter les semaines de vacances dans l'alternance ;
+- les cours du samedi ;
+- **les salles**, avec leur plan, et les classes rattachées. Une classe se rattache aussi depuis sa page.
+
+### Emploi du temps
+
+Onglet **Emploi du temps** : une grille par semaine, par établissement, avec l'indication de la semaine A ou B et les jours de vacances hachurés.
+
+- **La semaine type** regroupe les cours récurrents : classe, jour, créneau, durée en créneaux, toutes les semaines ou seulement A ou B, salle, intitulé, et une période de validité facultative.
+- **Cliquer sur un cours de la grille** permet d'agir sur ce jour-là seulement :
+  - l'**annuler**, avec un motif ;
+  - le **modifier** : autre date, autre créneau, autre salle, ou une note comme « Évaluation » ;
+  - le **rétablir** comme prévu.
+- **Cours ponctuel** : un rattrapage ou une séance en plus.
+- Le **tableau de bord** affiche les cours du jour, avec un accès direct au plan de classe.
+
+### Plans de classe
+
+- **Plan de la salle**, dessiné une seule fois. On y place les tables, les postes informatiques, les places élèves, la paillasse, le bureau, le tableau, la porte et les fenêtres.
+  - On glisse les éléments pour les déplacer. On peut les tourner, les redimensionner, les dupliquer ou leur donner une étiquette, au clavier ou avec la souris.
+  - La **disposition rapide** génère des rangées de tables, avec ou sans ordinateurs.
+- **Placement d'une classe dans une salle** : on clique sur un élève puis sur une place, ou on le glisse. On peut aussi faire un placement aléatoire, vider la salle, ou imprimer.
+  - Les noms affichés viennent de votre ordinateur. Le serveur ne garde que « place → élève n° 07 ».
+
+## 6. Fichiers du serveur
+
+Onglet **Fichiers** :
+
+- l'espace total utilisé ;
+- l'espace par classe (fichiers et données des applications), avec l'export ZIP ;
+- la liste des fichiers des élèves, filtrable par classe, atelier et nom, triable par date, taille ou nom ;
+- le téléchargement ou la suppression de plusieurs fichiers à la fois.
+
+## 7. Espace enseignant
 
 - **Tableau de bord** : classes, nombre d'élèves, espace utilisé, ressources des ateliers, réglages (sites autorisés, quotas).
 - **Classe** : codes, élèves (numéro, nom affiché localement, dernière connexion, espace), **export ZIP** de tout le travail, **effacer le travail** (fin d'année : les codes restent valables), dépôts Nuage facultatifs.
@@ -250,7 +291,7 @@ Onglet **Suivi** : une classe, et au choix un parcours ou un atelier.
 
 ---
 
-## 6. Données et RGPD
+## 8. Données et RGPD
 
 Sur le serveur (en France, chez alwaysdata) :
 
@@ -266,7 +307,7 @@ Les noms restent dans le navigateur de l'enseignant et dans son fichier CSV. Ce 
 
 ---
 
-## 7. Déploiement automatique depuis GitHub
+## 9. Déploiement automatique depuis GitHub
 
 À chaque `push` sur `main`, GitHub copie le code sur alwaysdata (`.github/workflows/deploy.yml`). Le dossier `data/` n'est jamais touché.
 
@@ -278,7 +319,7 @@ Les noms restent dans le navigateur de l'enseignant et dans son fichier CSV. Ce 
 
 ---
 
-## 8. Référence de l'API
+## 10. Référence de l'API
 
 Toutes les requêtes, sauf `login.php`, demandent l'en-tête `X-Jeton` reçu à la connexion.
 

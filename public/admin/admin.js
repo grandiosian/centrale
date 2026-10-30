@@ -46,7 +46,11 @@
         : 'Noms non chargés sur cet ordinateur';
     });
     document.querySelectorAll('.oublier-liste').forEach(function (el) { el.hidden = !n; });
+    document.dispatchEvent(new Event('centrale-noms')); // ex. plan de classe : redessiner avec les noms
   }
+
+  // Accès aux noms locaux pour les autres scripts de l'espace enseignant (plan de classe)
+  window.CentraleNoms = { nomLocal: nomLocal };
 
   /* ---------- CSV ---------- */
 

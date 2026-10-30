@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../lib/commun.php';
 require __DIR__ . '/../../lib/admin_suivi.php';
+require __DIR__ . '/../../lib/admin_organisation.php';
+require __DIR__ . '/../../lib/admin_fichiers.php';
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
@@ -161,7 +163,9 @@ if ($action !== null) {
     $retour_classe = './?p=classe&id=' . $classe_id;
     $retour_eleve = './?p=eleve&id=' . $eleve_id;
 
-    action_suivi($action); // parcours et suivi (redirige si l'action les concerne)
+    action_suivi($action);        // parcours, ateliers, suivi
+    action_organisation($action); // établissements, emploi du temps, salles, plans
+    action_fichiers($action);     // fichiers du serveur
 
     switch ($action) {
         case 'deconnexion':
@@ -467,6 +471,11 @@ match ($page) {
     'suivi'    => page_suivi(),
     'parcours' => page_parcours(),
     'ateliers' => page_ateliers(),
+    'etablissements' => page_etablissements(),
+    'edt'      => page_edt(),
+    'salle'    => page_salle((int) ($_GET['id'] ?? 0)),
+    'placement' => page_placement((int) ($_GET['classe'] ?? 0), (int) ($_GET['salle'] ?? 0)),
+    'fichiers' => page_fichiers(),
     default  => page_accueil(),
 };
 
@@ -544,6 +553,7 @@ function page_accueil(): void
             <div class="stat"><strong><?= count($apps) ?></strong><span>atelier<?= count($apps) > 1 ? 's' : '' ?> actif<?= count($apps) > 1 ? 's' : '' ?></span></div>
         </div>
         <?php liste_locale(); ?>
+        <?php section_aujourdhui(); ?>
 
         <section>
             <div class="titre-section">
@@ -763,6 +773,8 @@ function page_classe(int $id): void
                 <?= bouton('anonymiser', 'Anonymiser la classe', ['classe_id' => $id], '', 'Remplacer les noms par des numéros ? Le fichier de correspondance va être téléchargé.') ?>
             </section>
         <?php endif; ?>
+
+        <?php section_organisation_classe($classe); ?>
 
         <section id="eleves">
             <div class="titre-section">
@@ -1036,8 +1048,9 @@ function messages(): void
 
 function barre(string $actif = 'classes'): void
 {
-    $liens = ['classes' => ['./', 'Classes'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'],
-              'suivi' => ['./?p=suivi', 'Suivi']];
+    $liens = ['classes' => ['./', 'Classes'], 'edt' => ['./?p=edt', 'Emploi du temps'], 'etablissements' => ['./?p=etablissements', 'Établissements'],
+              'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'suivi' => ['./?p=suivi', 'Suivi'],
+              'fichiers' => ['./?p=fichiers', 'Fichiers']];
     ?>
     <header class="barre">
         <nav>
