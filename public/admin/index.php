@@ -2,8 +2,8 @@
 /**
  * Centrale élèves — page d'administration (réservée à l'enseignant).
  *
- * Classes, liens de dépôt Nuage, génération et impression des codes élèves,
- * sites autorisés à utiliser l'API.
+ * Classes, codes élèves (pseudonymes : les noms restent sur l'ordinateur de l'enseignant),
+ * liens de dépôt Nuage, travail sauvegardé des élèves, ressources des ateliers, réglages.
  */
 declare(strict_types=1);
 
@@ -47,10 +47,7 @@ function flash(string $message, string $type = 'ok'): void
 
 function quand(?int $ts): string
 {
-    if (!$ts) {
-        return '—';
-    }
-    return date('d/m/Y H:i', $ts);
+    return $ts ? date('d/m/Y H:i', $ts) : '—';
 }
 
 function id_post(string $champ): int
@@ -58,8 +55,52 @@ function id_post(string $champ): int
     return (int) ($_POST[$champ] ?? 0);
 }
 
+/** Petit formulaire POST d'une ligne (bouton d'action). */
+function bouton(string $action, string $libelle, array $champs = [], string $classe = '', string $confirmer = ''): string
+{
+    $html = '<form method="post"' . ($confirmer !== '' ? ' data-confirmer="' . h($confirmer) . '"' : '') . '>' . csrf()
+        . '<input type="hidden" name="action" value="' . h($action) . '">';
+    foreach ($champs as $n => $v) {
+        $html .= '<input type="hidden" name="' . h($n) . '" value="' . h((string) $v) . '">';
+    }
+    return $html . '<button class="petit ' . h($classe) . '">' . h($libelle) . '</button></form>';
+}
+
+/** Affiche le nom d'un élève : le numéro vient du serveur, le nom est complété par le navigateur. */
+function nom_eleve(string $classe, string $etiquette, string $vide = '—'): string
+{
+    if (!est_pseudonyme($etiquette)) {
+        return '<span class="alerte" title="Nom enregistré sur le serveur (ancienne version) : utilisez « Anonymiser la classe »">'
+            . h($etiquette) . '</span>';
+    }
+    return '<span data-nom-local data-classe="' . h($classe) . '" data-numero="' . h($etiquette) . '" data-vide="' . h($vide) . '">'
+        . h($vide) . '</span>';
+}
+
+function jauge(int $utilise, int $quota): string
+{
+    $pct = $quota > 0 ? min(100, (int) round($utilise * 100 / $quota)) : 0;
+    return '<div class="jauge' . ($pct >= 90 ? ' pleine' : '') . '" title="' . $pct . ' %"><i style="width:' . $pct . '%"></i></div>';
+}
+
+function classe_par_id(int $id): ?array
+{
+    $st = db()->prepare('SELECT * FROM classes WHERE id = ?');
+    $st->execute([$id]);
+    return $st->fetch() ?: null;
+}
+
+function supprimer_eleves(string $condition, array $params): void
+{
+    $st = db()->prepare("SELECT id FROM eleves WHERE $condition");
+    $st->execute($params);
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $id) {
+        effacer_fichiers_eleve((int) $id);
+    }
+}
+
 /* ======================================================================
-   Actions (formulaires envoyés)
+   Accès : installation et connexion
    ====================================================================== */
 
 $action = $_POST['action'] ?? null;
@@ -70,7 +111,6 @@ if ($action !== null && !hash_equals($_SESSION['csrf'], (string) ($_POST['csrf']
 
 $hash_admin = reglage('admin_hash');
 
-// --- Première visite : création du mot de passe administrateur
 if ($hash_admin === null) {
     if ($action === 'installer') {
         $mdp = (string) ($_POST['mdp'] ?? '');
@@ -90,7 +130,6 @@ if ($hash_admin === null) {
     exit;
 }
 
-// --- Connexion
 if (empty($_SESSION['admin'])) {
     if ($action === 'connexion') {
         $cle = 'admin:' . ip_client();
@@ -110,17 +149,24 @@ if (empty($_SESSION['admin'])) {
     exit;
 }
 
-// --- Actions de l'enseignant connecté
+/* ======================================================================
+   Actions de l'enseignant connecté
+   ====================================================================== */
+
 if ($action !== null) {
     $pdo = db();
     $classe_id = id_post('classe_id');
+    $eleve_id = id_post('eleve_id');
     $retour_classe = './?p=classe&id=' . $classe_id;
+    $retour_eleve = './?p=eleve&id=' . $eleve_id;
 
     switch ($action) {
         case 'deconnexion':
             $_SESSION = [];
             session_destroy();
             rediriger('./');
+
+        /* ----- Classes ----- */
 
         case 'creer_classe':
             $nom = trim((string) ($_POST['nom'] ?? ''));
@@ -134,13 +180,46 @@ if ($action !== null) {
                 flash('Cette classe existe déjà.', 'err');
                 rediriger('./');
             }
-            flash("Classe « $nom » créée. Ajoutez son lien de dépôt Nuage puis générez les codes.");
+            flash("Classe « $nom » créée. Générez maintenant les codes des élèves.");
             rediriger('./?p=classe&id=' . $pdo->lastInsertId());
 
         case 'supprimer_classe':
+            supprimer_eleves('classe_id = ?', [$classe_id]);
             $pdo->prepare('DELETE FROM classes WHERE id = ?')->execute([$classe_id]);
-            flash('Classe supprimée, ainsi que ses codes élèves.');
+            flash('Classe supprimée, avec ses codes et tout le travail de ses élèves.');
             rediriger('./');
+
+        case 'vider_travail':
+            supprimer_eleves('classe_id = ?', [$classe_id]);
+            foreach (['donnees', 'donnees_versions', 'fichiers'] as $table) {
+                $pdo->prepare("DELETE FROM $table WHERE eleve_id IN (SELECT id FROM eleves WHERE classe_id = ?)")->execute([$classe_id]);
+            }
+            flash('Travail de la classe effacé. Les codes des élèves fonctionnent toujours.');
+            rediriger($retour_classe);
+
+        case 'anonymiser':
+            $classe = classe_par_id($classe_id);
+            if (!$classe) {
+                rediriger('./');
+            }
+            $st = $pdo->prepare('SELECT id, etiquette FROM eleves WHERE classe_id = ? ORDER BY etiquette COLLATE NOCASE');
+            $st->execute([$classe_id]);
+            $numero = prochain_numero($classe_id);
+            $paires = [];
+            $maj = $pdo->prepare('UPDATE eleves SET etiquette = ? WHERE id = ?');
+            foreach ($st->fetchAll() as $e) {
+                if (est_pseudonyme($e['etiquette'])) {
+                    continue;
+                }
+                $n = sprintf('%02d', $numero++);
+                $maj->execute([$n, $e['id']]);
+                $paires[] = ['numero' => $n, 'nom' => $e['etiquette']];
+            }
+            $_SESSION['anonymisation'] = ['classe_id' => $classe_id, 'paires' => $paires];
+            flash(count($paires) . ' nom(s) retiré(s) du serveur. La correspondance a été téléchargée et gardée sur cet ordinateur.');
+            rediriger($retour_classe);
+
+        /* ----- Dépôts Nuage ----- */
 
         case 'ajouter_depot':
             $app = normaliser_app((string) ($_POST['app'] ?? '*'));
@@ -153,51 +232,36 @@ if ($action !== null) {
             $pdo->prepare('INSERT INTO depots (classe_id, app, url, mdp) VALUES (?, ?, ?, ?)
                            ON CONFLICT (classe_id, app) DO UPDATE SET url = excluded.url, mdp = excluded.mdp')
                 ->execute([$classe_id, $app, $url, $mdp]);
-            flash($app === '*' ? 'Lien de dépôt par défaut enregistré.' : "Lien de dépôt pour l'application « $app » enregistré.");
-            rediriger($retour_classe);
+            flash($app === '*' ? 'Lien de dépôt par défaut enregistré.' : "Lien de dépôt pour l'atelier « $app » enregistré.");
+            rediriger($retour_classe . '#depots');
 
         case 'supprimer_depot':
             $pdo->prepare('DELETE FROM depots WHERE id = ? AND classe_id = ?')->execute([id_post('depot_id'), $classe_id]);
             flash('Lien de dépôt supprimé.');
-            rediriger($retour_classe);
+            rediriger($retour_classe . '#depots');
+
+        /* ----- Élèves et codes ----- */
 
         case 'generer':
-            $st = $pdo->prepare('SELECT nom FROM classes WHERE id = ?');
-            $st->execute([$classe_id]);
-            $nom_classe = $st->fetchColumn();
-            if ($nom_classe === false) {
+            $classe = classe_par_id($classe_id);
+            if (!$classe) {
                 rediriger('./');
             }
-            $etiquettes = [];
-            $lignes = preg_split('/\R/', (string) ($_POST['noms'] ?? '')) ?: [];
-            foreach ($lignes as $l) {
-                $l = trim($l);
-                if ($l !== '') {
-                    $etiquettes[] = mb_substr($l, 0, 60);
-                }
-            }
-            if (!$etiquettes) {
-                $n = max(0, min(60, (int) ($_POST['nombre'] ?? 0)));
-                $deja = (int) $pdo->query('SELECT COUNT(*) FROM eleves WHERE classe_id = ' . (int) $classe_id)->fetchColumn();
-                for ($i = 1; $i <= $n; $i++) {
-                    $etiquettes[] = sprintf('Élève %02d', $deja + $i);
-                }
-            }
-            if (!$etiquettes) {
-                flash('Indiquez des noms (un par ligne) ou un nombre de codes.', 'err');
+            // Seul un NOMBRE arrive ici : les noms sont gardés par le navigateur de l'enseignant.
+            $n = (int) ($_POST['nombre'] ?? 0);
+            if ($n < 1 || $n > 60) {
+                flash('Indiquez entre 1 et 60 élèves.', 'err');
                 rediriger($retour_classe);
             }
-            if (count($etiquettes) > 60) {
-                flash('60 codes maximum à la fois.', 'err');
-                rediriger($retour_classe);
-            }
+            $numero = prochain_numero($classe_id);
             $nouveaux = [];
             $ins = $pdo->prepare('INSERT INTO eleves (classe_id, etiquette, code_hash, cree_le) VALUES (?, ?, ?, ?)');
             $pdo->beginTransaction();
-            foreach ($etiquettes as $etiquette) {
-                $code = generer_code($nom_classe);
+            for ($i = 0; $i < $n; $i++) {
+                $code = generer_code($classe['nom']);
+                $etiquette = sprintf('%02d', $numero + $i);
                 $ins->execute([$classe_id, $etiquette, hash_code($code), time()]);
-                $nouveaux[] = ['eleve' => $etiquette, 'code' => $code];
+                $nouveaux[] = ['numero' => $etiquette, 'code' => $code];
             }
             $pdo->commit();
             $_SESSION['nouveaux'] = ['classe_id' => $classe_id, 'codes' => $nouveaux];
@@ -206,33 +270,101 @@ if ($action !== null) {
         case 'regenerer':
             $st = $pdo->prepare('SELECT e.etiquette, c.nom FROM eleves e JOIN classes c ON c.id = e.classe_id
                                  WHERE e.id = ? AND e.classe_id = ?');
-            $st->execute([id_post('eleve_id'), $classe_id]);
-            $e = $st->fetch();
-            if ($e) {
+            $st->execute([$eleve_id, $classe_id]);
+            if ($e = $st->fetch()) {
                 $code = generer_code($e['nom']);
-                $pdo->prepare('UPDATE eleves SET code_hash = ? WHERE id = ?')->execute([hash_code($code), id_post('eleve_id')]);
-                $_SESSION['nouveaux'] = ['classe_id' => $classe_id, 'codes' => [['eleve' => $e['etiquette'], 'code' => $code]]];
-                flash("Nouveau code pour « {$e['etiquette']} ». L'ancien ne fonctionne plus.");
+                $pdo->prepare('UPDATE eleves SET code_hash = ? WHERE id = ?')->execute([hash_code($code), $eleve_id]);
+                $pdo->prepare('DELETE FROM sessions WHERE eleve_id = ?')->execute([$eleve_id]);
+                $_SESSION['nouveaux'] = ['classe_id' => $classe_id, 'codes' => [['numero' => $e['etiquette'], 'code' => $code]]];
+                flash("Nouveau code pour l'élève {$e['etiquette']}. L'ancien ne fonctionne plus.");
             }
             rediriger($retour_classe . '#nouveaux');
 
         case 'basculer':
-            $pdo->prepare('UPDATE eleves SET actif = 1 - actif WHERE id = ? AND classe_id = ?')
-                ->execute([id_post('eleve_id'), $classe_id]);
-            rediriger($retour_classe . '#eleves');
-
-        case 'renommer':
-            $etiquette = mb_substr(trim((string) ($_POST['etiquette'] ?? '')), 0, 60);
-            if ($etiquette !== '') {
-                $pdo->prepare('UPDATE eleves SET etiquette = ? WHERE id = ? AND classe_id = ?')
-                    ->execute([$etiquette, id_post('eleve_id'), $classe_id]);
-            }
+            $pdo->prepare('UPDATE eleves SET actif = 1 - actif WHERE id = ? AND classe_id = ?')->execute([$eleve_id, $classe_id]);
+            $pdo->prepare('DELETE FROM sessions WHERE eleve_id = ?')->execute([$eleve_id]);
             rediriger($retour_classe . '#eleves');
 
         case 'supprimer_eleve':
-            $pdo->prepare('DELETE FROM eleves WHERE id = ? AND classe_id = ?')->execute([id_post('eleve_id'), $classe_id]);
-            flash('Élève supprimé.');
+            supprimer_eleves('id = ? AND classe_id = ?', [$eleve_id, $classe_id]);
+            $pdo->prepare('DELETE FROM eleves WHERE id = ? AND classe_id = ?')->execute([$eleve_id, $classe_id]);
+            flash('Élève supprimé, avec son travail.');
             rediriger($retour_classe . '#eleves');
+
+        /* ----- Travail d'un élève ----- */
+
+        case 'supprimer_donnee':
+            foreach (['donnees', 'donnees_versions'] as $table) {
+                $pdo->prepare("DELETE FROM $table WHERE eleve_id = ? AND app = ? AND cle = ?")
+                    ->execute([$eleve_id, (string) $_POST['app'], (string) $_POST['cle']]);
+            }
+            flash('Donnée supprimée.');
+            rediriger($retour_eleve);
+
+        case 'restaurer_version':
+            $st = $pdo->prepare('SELECT * FROM donnees_versions WHERE id = ? AND eleve_id = ?');
+            $st->execute([id_post('version_id'), $eleve_id]);
+            if ($v = $st->fetch()) {
+                $pdo->beginTransaction();
+                // La version actuelle est d'abord mise de côté : rien n'est perdu.
+                $pdo->prepare('INSERT INTO donnees_versions (eleve_id, app, cle, valeur, taille, maj)
+                               SELECT eleve_id, app, cle, valeur, taille, maj FROM donnees WHERE eleve_id = ? AND app = ? AND cle = ?')
+                    ->execute([$eleve_id, $v['app'], $v['cle']]);
+                $pdo->prepare('INSERT INTO donnees (eleve_id, app, cle, valeur, taille, maj) VALUES (?, ?, ?, ?, ?, ?)
+                               ON CONFLICT (eleve_id, app, cle) DO UPDATE SET valeur = excluded.valeur,
+                               taille = excluded.taille, maj = excluded.maj')
+                    ->execute([$eleve_id, $v['app'], $v['cle'], $v['valeur'], $v['taille'], time()]);
+                $pdo->commit();
+                flash('Version du ' . quand((int) $v['maj']) . ' restaurée. L\'élève la retrouvera à sa prochaine connexion.');
+            }
+            rediriger($retour_eleve);
+
+        case 'supprimer_fichier':
+            $st = $pdo->prepare('SELECT id, chemin FROM fichiers WHERE id = ? AND eleve_id = ?');
+            $st->execute([id_post('fichier_id'), $eleve_id]);
+            if ($f = $st->fetch()) {
+                $pdo->prepare('DELETE FROM fichiers WHERE id = ?')->execute([$f['id']]);
+                effacer_fichier_stocke($f['chemin']);
+                flash('Fichier supprimé.');
+            }
+            rediriger($retour_eleve);
+
+        /* ----- Ressources des ateliers ----- */
+
+        case 'ajouter_ressource':
+            $app = normaliser_app((string) ($_POST['app'] ?? ''));
+            $envoi = $_FILES['fichier'] ?? null;
+            if ($app === '*') {
+                flash("Indiquez l'identifiant de l'atelier (ex. robot-mbot).", 'err');
+            } elseif (!$envoi || is_array($envoi['error']) || $envoi['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($envoi['tmp_name'])) {
+                flash("L'envoi a échoué (fichier trop gros ? limite du serveur : " . ini_get('upload_max_filesize') . ').', 'err');
+            } else {
+                $nom = nom_fichier_propre((string) $envoi['name']);
+                $type = preg_match('#^[a-z]+/[a-z0-9.+-]+$#i', (string) $envoi['type']) ? (string) $envoi['type'] : 'application/octet-stream';
+                $st = $pdo->prepare('SELECT chemin FROM ressources WHERE app = ? AND nom = ?');
+                $st->execute([$app, $nom]);
+                $ancien = $st->fetchColumn();
+                $chemin = ranger_fichier($envoi['tmp_name'], 'ressources');
+                $pdo->prepare('INSERT INTO ressources (app, nom, type, taille, chemin, maj) VALUES (?, ?, ?, ?, ?, ?)
+                               ON CONFLICT (app, nom) DO UPDATE SET type = excluded.type, taille = excluded.taille,
+                               chemin = excluded.chemin, maj = excluded.maj')
+                    ->execute([$app, $nom, $type, (int) filesize(chemin_stockage($chemin)), $chemin, time()]);
+                effacer_fichier_stocke($ancien ?: null);
+                flash("Ressource « $nom » ajoutée à l'atelier « $app ».");
+            }
+            rediriger('./#ressources');
+
+        case 'supprimer_ressource':
+            $st = $pdo->prepare('SELECT id, chemin FROM ressources WHERE id = ?');
+            $st->execute([id_post('ressource_id')]);
+            if ($r = $st->fetch()) {
+                $pdo->prepare('DELETE FROM ressources WHERE id = ?')->execute([$r['id']]);
+                effacer_fichier_stocke($r['chemin']);
+                flash('Ressource supprimée.');
+            }
+            rediriger('./#ressources');
+
+        /* ----- Réglages ----- */
 
         case 'reglages':
             $propres = [];
@@ -250,6 +382,8 @@ if ($action !== null) {
             }
             definir_reglage('origines', implode("\n", array_unique($propres)));
             definir_reglage('lien_eleves', trim((string) ($_POST['lien_eleves'] ?? '')));
+            definir_reglage('quota_eleve_mo', (string) max(1, min(10000, (int) ($_POST['quota_eleve_mo'] ?? 100))));
+            definir_reglage('fichier_max_mo', (string) max(1, min(1000, (int) ($_POST['fichier_max_mo'] ?? 20))));
             flash($erreurs
                 ? 'Réglages enregistrés. Lignes ignorées (format attendu : https://site.exemple) : ' . implode(', ', $erreurs)
                 : 'Réglages enregistrés.', $erreurs ? 'err' : 'ok');
@@ -271,14 +405,64 @@ if ($action !== null) {
 }
 
 /* ======================================================================
+   Téléchargements (enseignant connecté)
+   ====================================================================== */
+
+$page = (string) ($_GET['p'] ?? '');
+
+if ($page === 'telecharger') {
+    $pdo = db();
+    $id = (int) ($_GET['id'] ?? 0);
+    switch ($_GET['quoi'] ?? '') {
+        case 'fichier':
+            $st = $pdo->prepare('SELECT * FROM fichiers WHERE id = ?');
+            $st->execute([$id]);
+            $f = $st->fetch() ?: null;
+            break;
+        case 'ressource':
+            $st = $pdo->prepare('SELECT * FROM ressources WHERE id = ?');
+            $st->execute([$id]);
+            $f = $st->fetch() ?: null;
+            break;
+        case 'donnee':
+        case 'version':
+            $table = $_GET['quoi'] === 'donnee' ? 'donnees' : 'donnees_versions';
+            $st = $_GET['quoi'] === 'donnee'
+                ? $pdo->prepare('SELECT * FROM donnees WHERE eleve_id = ? AND app = ? AND cle = ?')
+                : $pdo->prepare('SELECT * FROM donnees_versions WHERE id = ?');
+            $st->execute($_GET['quoi'] === 'donnee' ? [$id, (string) ($_GET['app'] ?? ''), (string) ($_GET['cle'] ?? '')] : [$id]);
+            if ($d = $st->fetch()) {
+                $nom = str_replace('/', '_', $d['app'] . '_' . $d['cle']) . '_' . date('Y-m-d_H-i', (int) $d['maj']) . '.json';
+                header('Content-Type: application/json; charset=utf-8');
+                header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9._-]/', '_', $nom) . '"');
+                echo json_encode(json_decode($d['valeur']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+            $f = null;
+            break;
+        default:
+            $f = null;
+    }
+    if (!$f) {
+        http_response_code(404);
+        exit('Introuvable.');
+    }
+    servir_fichier($f['chemin'], $f['nom'], $f['type']);
+}
+
+if ($page === 'export') {
+    exporter_classe((int) ($_GET['id'] ?? 0));
+}
+
+/* ======================================================================
    Pages
    ====================================================================== */
 
-if (($_GET['p'] ?? '') === 'classe') {
-    page_classe((int) ($_GET['id'] ?? 0));
-} else {
-    page_accueil();
-}
+match ($page) {
+    'classe' => page_classe((int) ($_GET['id'] ?? 0)),
+    'eleve'  => page_eleve((int) ($_GET['id'] ?? 0)),
+    default  => page_accueil(),
+};
 
 /* ---------------------------------------------------------------------- */
 
@@ -289,7 +473,7 @@ function page_installation(): void
     <main class="etroit">
         <h1>Centrale élèves</h1>
         <p class="sous">Première utilisation : choisissez le mot de passe administrateur.
-            Il protège la gestion des classes et des codes. Au moins 10 caractères.</p>
+            Il protège la gestion des classes, des codes et du travail des élèves. Au moins 10 caractères.</p>
         <?php messages(); ?>
         <form method="post" class="carte">
             <?= csrf() ?>
@@ -324,13 +508,22 @@ function page_connexion(): void
 
 function page_accueil(): void
 {
-    $classes = db()->query('SELECT c.id, c.nom,
+    $pdo = db();
+    $classes = $pdo->query('SELECT c.id, c.nom,
             (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id) AS nb_eleves,
             (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id AND e.derniere_connexion IS NOT NULL) AS nb_venus,
-            (SELECT COUNT(*) FROM depots d WHERE d.classe_id = c.id) AS nb_depots,
-            (SELECT MAX(derniere_connexion) FROM eleves e WHERE e.classe_id = c.id) AS activite
+            (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id AND e.etiquette NOT GLOB \'[0-9][0-9]*\') AS nb_noms,
+            (SELECT MAX(derniere_connexion) FROM eleves e WHERE e.classe_id = c.id) AS activite,
+            (SELECT COALESCE(SUM(taille), 0) FROM donnees d JOIN eleves e ON e.id = d.eleve_id WHERE e.classe_id = c.id)
+          + (SELECT COALESCE(SUM(taille), 0) FROM donnees_versions d JOIN eleves e ON e.id = d.eleve_id WHERE e.classe_id = c.id)
+          + (SELECT COALESCE(SUM(taille), 0) FROM fichiers f JOIN eleves e ON e.id = f.eleve_id WHERE e.classe_id = c.id) AS espace
         FROM classes c ORDER BY c.nom')->fetchAll();
-    $api = url_base() . '/api/login.php';
+    $nb_eleves = array_sum(array_column($classes, 'nb_eleves'));
+    $disque = taille_dossier_data();
+    $ressources = $pdo->query('SELECT * FROM ressources ORDER BY app, nom')->fetchAll();
+    $apps = $pdo->query("SELECT app FROM donnees UNION SELECT app FROM fichiers UNION SELECT app FROM ressources
+                         UNION SELECT app FROM depots WHERE app <> '*' ORDER BY app")->fetchAll(PDO::FETCH_COLUMN);
+    $api = url_base() . '/api/';
     $client = url_base() . '/js/centrale-client.js';
 
     entete('Tableau de bord');
@@ -338,6 +531,14 @@ function page_accueil(): void
     ?>
     <main>
         <?php messages(); ?>
+        <div class="stats">
+            <div class="stat"><strong><?= count($classes) ?></strong><span>classe<?= count($classes) > 1 ? 's' : '' ?></span></div>
+            <div class="stat"><strong><?= $nb_eleves ?></strong><span>élève<?= $nb_eleves > 1 ? 's' : '' ?></span></div>
+            <div class="stat"><strong><?= format_taille($disque) ?></strong><span>espace utilisé sur le serveur</span></div>
+            <div class="stat"><strong><?= count($apps) ?></strong><span>atelier<?= count($apps) > 1 ? 's' : '' ?> actif<?= count($apps) > 1 ? 's' : '' ?></span></div>
+        </div>
+        <?php liste_locale(); ?>
+
         <section>
             <div class="titre-section">
                 <h2>Classes</h2>
@@ -356,10 +557,11 @@ function page_accueil(): void
                         <a class="carte classe" href="./?p=classe&id=<?= (int) $c['id'] ?>">
                             <strong><?= h($c['nom']) ?></strong>
                             <span><?= (int) $c['nb_eleves'] ?> élève<?= $c['nb_eleves'] > 1 ? 's' : '' ?>
-                                · <?= (int) $c['nb_venus'] ?> déjà connecté<?= $c['nb_venus'] > 1 ? 's' : '' ?></span>
-                            <span class="<?= $c['nb_depots'] ? '' : 'alerte' ?>">
-                                <?= $c['nb_depots'] ? (int) $c['nb_depots'] . ' lien' . ($c['nb_depots'] > 1 ? 's' : '') . ' de dépôt' : 'Aucun lien de dépôt' ?>
-                            </span>
+                                · <?= (int) $c['nb_venus'] ?> connecté<?= $c['nb_venus'] > 1 ? 's' : '' ?></span>
+                            <span><?= format_taille((int) $c['espace']) ?> de travail</span>
+                            <?php if ($c['nb_noms']): ?>
+                                <span class="alerte"><?= (int) $c['nb_noms'] ?> nom<?= $c['nb_noms'] > 1 ? 's' : '' ?> sur le serveur</span>
+                            <?php endif; ?>
                             <span class="discret">Dernière activité : <?= quand($c['activite'] ? (int) $c['activite'] : null) ?></span>
                         </a>
                     <?php endforeach; ?>
@@ -367,15 +569,52 @@ function page_accueil(): void
             <?php endif; ?>
         </section>
 
+        <section id="ressources">
+            <h2>Ressources des ateliers</h2>
+            <p class="aide">Fichiers que vous mettez à disposition des élèves d'un atelier (modèles, consignes, images…).
+                Ils les chargent avec <code>Centrale.chargerRessource("nom.ext")</code>.</p>
+            <?php if ($ressources): ?>
+                <div class="defile"><table>
+                    <thead><tr><th>Atelier</th><th>Fichier</th><th>Taille</th><th>Mis à jour</th><th></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($ressources as $r): ?>
+                        <tr>
+                            <td><code><?= h($r['app']) ?></code></td>
+                            <td><a href="./?p=telecharger&quoi=ressource&id=<?= (int) $r['id'] ?>"><?= h($r['nom']) ?></a></td>
+                            <td><?= format_taille((int) $r['taille']) ?></td>
+                            <td><?= quand((int) $r['maj']) ?></td>
+                            <td class="actions"><?= bouton('supprimer_ressource', 'Supprimer', ['ressource_id' => $r['id']], 'danger', 'Supprimer cette ressource ?') ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table></div>
+            <?php endif; ?>
+            <form method="post" enctype="multipart/form-data" class="carte formulaire-ressource">
+                <?= csrf() ?>
+                <input type="hidden" name="action" value="ajouter_ressource">
+                <label>Atelier<input name="app" required maxlength="40" placeholder="robot-mbot" list="liste-apps"></label>
+                <label>Fichier<input type="file" name="fichier" required></label>
+                <button>Ajouter</button>
+                <datalist id="liste-apps"><?php foreach ($apps as $a): ?><option value="<?= h($a) ?>"><?php endforeach; ?></datalist>
+            </form>
+        </section>
+
         <section>
             <h2>Brancher une application</h2>
-            <p>Dans chaque application élève, ajoutez ces deux lignes (l'identifiant <code>app</code> est libre :
-                il sert à donner un dossier de dépôt différent par application si vous le souhaitez).</p>
+            <p>Dans chaque application, ajoutez ces lignes. L'identifiant <code>app</code> désigne l'atelier :
+                il range séparément les données de chaque application.</p>
             <pre class="code"><?= h('<script src="' . $client . '"></script>
 <script>
-  Centrale.init({ api: "' . $api . '", app: "mon-app" });
+  Centrale.init({ api: "' . $api . '", app: "robot-mbot" });
+
+  Centrale.afficherConnexion(document.getElementById("connexion"), {
+    onConnecte: async () => {
+      const projet = await Centrale.charger("projet", { blocs: [] });   // reprend le travail
+      // … puis à chaque modification :
+      Centrale.sauver("projet", projet);                                // sauvegarde auto
+    }
+  });
 </script>') ?></pre>
-            <p class="discret">Adresse de l'API : <code><?= h($api) ?></code></p>
         </section>
 
         <section id="reglages">
@@ -392,6 +631,16 @@ function page_accueil(): void
                     <label>Adresse de vos applications (imprimée sur les fiches élèves)
                         <input name="lien_eleves" value="<?= h(reglage('lien_eleves', '')) ?>" placeholder="https://monpseudo.github.io/techno">
                     </label>
+                    <div class="deux-colonnes">
+                        <label>Espace par élève (Mo)
+                            <span class="aide"><?= $nb_eleves ?> élèves × ce quota ≤ espace de l'hébergement</span>
+                            <input type="number" name="quota_eleve_mo" min="1" max="10000" value="<?= (int) reglage('quota_eleve_mo', '100') ?>">
+                        </label>
+                        <label>Taille max. d'un fichier (Mo)
+                            <span class="aide">Plafond du serveur : <?= h((string) ini_get('upload_max_filesize')) ?></span>
+                            <input type="number" name="fichier_max_mo" min="1" max="1000" value="<?= (int) reglage('fichier_max_mo', '20') ?>">
+                        </label>
+                    </div>
                     <button>Enregistrer</button>
                 </form>
                 <form method="post" class="carte">
@@ -411,155 +660,123 @@ function page_accueil(): void
 
 function page_classe(int $id): void
 {
-    $st = db()->prepare('SELECT * FROM classes WHERE id = ?');
-    $st->execute([$id]);
-    $classe = $st->fetch();
+    $classe = classe_par_id($id);
     if (!$classe) {
         rediriger('./');
     }
-    $st = db()->prepare("SELECT * FROM depots WHERE classe_id = ? ORDER BY CASE WHEN app = '*' THEN 0 ELSE 1 END, app");
+    $pdo = db();
+    $st = $pdo->prepare("SELECT * FROM depots WHERE classe_id = ? ORDER BY CASE WHEN app = '*' THEN 0 ELSE 1 END, app");
     $st->execute([$id]);
     $depots = $st->fetchAll();
-    $st = db()->prepare('SELECT * FROM eleves WHERE classe_id = ? ORDER BY etiquette COLLATE NOCASE');
+    $st = $pdo->prepare('SELECT e.*,
+            (SELECT COALESCE(SUM(taille), 0) FROM donnees WHERE eleve_id = e.id)
+          + (SELECT COALESCE(SUM(taille), 0) FROM donnees_versions WHERE eleve_id = e.id)
+          + (SELECT COALESCE(SUM(taille), 0) FROM fichiers WHERE eleve_id = e.id) AS espace
+        FROM eleves e WHERE e.classe_id = ?
+        ORDER BY CASE WHEN e.etiquette GLOB \'[0-9]*\' THEN CAST(e.etiquette AS INTEGER) ELSE 9999 END, e.etiquette');
     $st->execute([$id]);
     $eleves = $st->fetchAll();
+    $avec_noms = array_filter($eleves, fn($e) => !est_pseudonyme($e['etiquette']));
+    $quota = quota_eleve_octets();
+    $nom = $classe['nom'];
 
     $nouveaux = null;
     if (!empty($_SESSION['nouveaux']) && (int) $_SESSION['nouveaux']['classe_id'] === $id) {
         $nouveaux = $_SESSION['nouveaux']['codes'];
     }
     unset($_SESSION['nouveaux']); // les codes ne s'affichent qu'une fois
+    $anonymisation = null;
+    if (!empty($_SESSION['anonymisation']) && (int) $_SESSION['anonymisation']['classe_id'] === $id) {
+        $anonymisation = $_SESSION['anonymisation']['paires'];
+    }
+    unset($_SESSION['anonymisation']);
 
-    entete('Classe ' . $classe['nom']);
+    $json = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP;
+
+    entete('Classe ' . $nom);
     barre();
     ?>
     <main>
         <p class="fil"><a href="./">← Toutes les classes</a></p>
-        <h1>Classe <?= h($classe['nom']) ?></h1>
+        <h1>Classe <?= h($nom) ?></h1>
         <?php messages(); ?>
+        <?php liste_locale(); ?>
+
+        <?php if ($anonymisation): ?>
+            <script type="application/json" id="json-anonymisation"><?= json_encode(['classe' => $nom, 'prefixe' => prefixe_classe($nom), 'paires' => $anonymisation], $json) ?></script>
+            <p class="alerte-bloc">Le fichier de correspondance (numéro ↔ nom) vient d'être téléchargé.
+                Rangez-le dans un dossier privé de votre Nuage : c'est la seule copie hors de ce navigateur.
+                <button type="button" class="petit secondaire" id="telecharger-anonymisation">Le télécharger à nouveau</button></p>
+        <?php endif; ?>
 
         <?php if ($nouveaux): ?>
+            <script type="application/json" id="json-nouveaux"><?= json_encode(['classe' => $nom, 'prefixe' => prefixe_classe($nom), 'codes' => $nouveaux], $json) ?></script>
             <section id="nouveaux" class="nouveaux">
                 <div class="titre-section">
                     <h2>Codes générés</h2>
                     <div class="boutons">
                         <button type="button" onclick="window.print()">Imprimer les fiches</button>
-                        <button type="button" class="secondaire" id="telecharger-csv">Télécharger (CSV)</button>
+                        <button type="button" class="secondaire" id="telecharger-codes">Télécharger (CSV)</button>
                     </div>
                 </div>
-                <p class="alerte-bloc">Ces codes ne seront <strong>plus jamais affichés</strong> (seule leur empreinte est enregistrée).
-                    Imprimez-les ou téléchargez-les maintenant. En cas de perte, utilisez « Nouveau code » sur la ligne de l'élève.</p>
+                <p class="alerte-bloc">Ces codes ne seront <strong>plus jamais affichés</strong>. Téléchargez le CSV maintenant :
+                    il contient aussi les noms, qui ne sont <strong>pas</strong> sur le serveur. Rangez-le dans un dossier privé de votre Nuage.</p>
                 <div class="defile"><table>
-                    <thead><tr><th>Élève</th><th>Code</th></tr></thead>
+                    <thead><tr><th>N°</th><th>Nom (sur cet ordinateur)</th><th>Code</th></tr></thead>
                     <tbody>
                     <?php foreach ($nouveaux as $n): ?>
-                        <tr><td><?= h($n['eleve']) ?></td><td><code class="code-eleve"><?= h($n['code']) ?></code></td></tr>
+                        <tr>
+                            <td class="numero"><?= h($n['numero']) ?></td>
+                            <td><?= nom_eleve($nom, $n['numero']) ?></td>
+                            <td><code class="code-eleve"><?= h($n['code']) ?></code></td>
+                        </tr>
                     <?php endforeach; ?>
                     </tbody>
                 </table></div>
                 <div class="fiches" aria-hidden="true">
                     <?php foreach ($nouveaux as $n): ?>
                         <div class="fiche">
-                            <div class="fiche-haut"><span>Technologie · <?= h($classe['nom']) ?></span><span><?= h($n['eleve']) ?></span></div>
+                            <div class="fiche-haut"><span>Technologie · <?= h($nom) ?> · n° <?= h($n['numero']) ?></span><?= nom_eleve($nom, $n['numero'], '') ?></div>
                             <div class="fiche-code"><?= h($n['code']) ?></div>
                             <div class="fiche-bas">Mon code personnel, à ne pas partager.
                                 <?php if (reglage('lien_eleves')): ?><br><?= h(reglage('lien_eleves')) ?><?php endif; ?></div>
                         </div>
                     <?php endforeach; ?>
                 </div>
-                <script>
-                    document.getElementById('telecharger-csv').addEventListener('click', () => {
-                        const lignes = <?= json_encode($nouveaux, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
-                        const csv = '﻿' + ['Classe;Élève;Code']
-                            .concat(lignes.map(l => [<?= json_encode($classe['nom'], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>, l.eleve, l.code]
-                                .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')))
-                            .join('\r\n');
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-                        a.download = 'codes_' + <?= json_encode(prefixe_classe($classe['nom'])) ?> + '_' + new Date().toISOString().slice(0, 10) + '.csv';
-                        a.click();
-                        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-                    });
-                </script>
             </section>
         <?php endif; ?>
 
-        <section id="depots">
-            <h2>Liens de dépôt Nuage</h2>
-            <p class="aide">Dans Nuage : créez un dossier, puis Partager → Lien de partage → « Dépôt de fichiers »,
-                ajoutez un mot de passe et copiez le lien. L'application <code>*</code> sert pour toutes les applications
-                qui n'ont pas leur propre lien.</p>
-            <?php if ($depots): ?>
-                <div class="defile"><table>
-                    <thead><tr><th>Application</th><th>Lien</th><th>Mot de passe</th><th></th></tr></thead>
-                    <tbody>
-                    <?php foreach ($depots as $d): ?>
-                        <tr>
-                            <td><code><?= h($d['app']) ?></code><?= $d['app'] === '*' ? ' <span class="discret">(par défaut)</span>' : '' ?></td>
-                            <td class="lien"><a href="<?= h($d['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($d['url']) ?></a></td>
-                            <td><?= $d['mdp'] !== '' ? '<code>' . h($d['mdp']) . '</code>' : '<span class="discret">aucun</span>' ?></td>
-                            <td class="actions">
-                                <form method="post" onsubmit="return confirm('Supprimer ce lien de dépôt ?')">
-                                    <?= csrf() ?>
-                                    <input type="hidden" name="action" value="supprimer_depot">
-                                    <input type="hidden" name="classe_id" value="<?= $id ?>">
-                                    <input type="hidden" name="depot_id" value="<?= (int) $d['id'] ?>">
-                                    <button class="petit danger">Supprimer</button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table></div>
-            <?php else: ?>
-                <p class="vide alerte">Aucun lien : les élèves pourront se connecter mais n'auront pas d'adresse de dépôt.</p>
-            <?php endif; ?>
-            <form method="post" class="carte formulaire-depot">
-                <?= csrf() ?>
-                <input type="hidden" name="action" value="ajouter_depot">
-                <input type="hidden" name="classe_id" value="<?= $id ?>">
-                <label>Application<input name="app" value="*" maxlength="40" required>
-                    <span class="aide">* = toutes</span></label>
-                <label class="large">Lien de dépôt Nuage<input name="url" type="url" required placeholder="https://nuage03.apps.education.fr/s/…"></label>
-                <label>Mot de passe du lien<input name="mdp" maxlength="100" autocomplete="off" placeholder="facultatif"></label>
-                <button>Ajouter / remplacer</button>
-            </form>
-        </section>
+        <?php if ($avec_noms): ?>
+            <section class="carte">
+                <h3>Des noms d'élèves sont encore enregistrés sur le serveur</h3>
+                <p><?= count($avec_noms) ?> élève(s) de cette classe ont un nom enregistré en ligne. « Anonymiser » les remplace par
+                    des numéros et télécharge la correspondance sur votre ordinateur. Les codes ne changent pas.</p>
+                <?= bouton('anonymiser', 'Anonymiser la classe', ['classe_id' => $id], '', 'Remplacer les noms par des numéros ? Le fichier de correspondance va être téléchargé.') ?>
+            </section>
+        <?php endif; ?>
 
         <section id="eleves">
-            <h2>Élèves (<?= count($eleves) ?>)</h2>
+            <div class="titre-section">
+                <h2>Élèves (<?= count($eleves) ?>)</h2>
+                <?php if ($eleves): ?>
+                    <a class="btn secondaire" href="./?p=export&id=<?= $id ?>">Exporter tout le travail (ZIP)</a>
+                <?php endif; ?>
+            </div>
             <?php if ($eleves): ?>
                 <div class="defile"><table>
-                    <thead><tr><th>Élève</th><th>Dernière connexion</th><th>État</th><th></th></tr></thead>
+                    <thead><tr><th>N°</th><th>Nom (sur cet ordinateur)</th><th>Dernière connexion</th><th>Espace</th><th></th></tr></thead>
                     <tbody>
-                    <?php foreach ($eleves as $e): ?>
+                    <?php foreach ($eleves as $e): $ch = ['classe_id' => $id, 'eleve_id' => $e['id']]; ?>
                         <tr class="<?= $e['actif'] ? '' : 'inactif' ?>">
-                            <td>
-                                <form method="post" class="renommer">
-                                    <?= csrf() ?>
-                                    <input type="hidden" name="action" value="renommer">
-                                    <input type="hidden" name="classe_id" value="<?= $id ?>">
-                                    <input type="hidden" name="eleve_id" value="<?= (int) $e['id'] ?>">
-                                    <input name="etiquette" value="<?= h($e['etiquette']) ?>" maxlength="60" aria-label="Nom affiché"
-                                           onchange="this.form.submit()">
-                                </form>
-                            </td>
+                            <td class="numero"><?= est_pseudonyme($e['etiquette']) ? h($e['etiquette']) : '?' ?></td>
+                            <td><?= nom_eleve($nom, $e['etiquette']) ?><?= $e['actif'] ? '' : ' <span class="discret">(désactivé)</span>' ?></td>
                             <td><?= quand($e['derniere_connexion'] ? (int) $e['derniere_connexion'] : null) ?></td>
-                            <td><?= $e['actif'] ? 'Actif' : 'Désactivé' ?></td>
+                            <td><?= format_taille((int) $e['espace']) ?><?= jauge((int) $e['espace'], $quota) ?></td>
                             <td class="actions">
-                                <?php foreach ([
-                                    ['regenerer', 'Nouveau code', '', "L'ancien code de cet élève ne fonctionnera plus. Continuer ?"],
-                                    ['basculer', $e['actif'] ? 'Désactiver' : 'Réactiver', 'secondaire', ''],
-                                    ['supprimer_eleve', 'Supprimer', 'danger', 'Supprimer définitivement cet élève ?'],
-                                ] as [$act, $libelle, $classe_btn, $confirmation]): ?>
-                                    <form method="post" <?= $confirmation ? 'onsubmit="return confirm(' . h(json_encode($confirmation)) . ')"' : '' ?>>
-                                        <?= csrf() ?>
-                                        <input type="hidden" name="action" value="<?= $act ?>">
-                                        <input type="hidden" name="classe_id" value="<?= $id ?>">
-                                        <input type="hidden" name="eleve_id" value="<?= (int) $e['id'] ?>">
-                                        <button class="petit <?= $classe_btn ?>"><?= $libelle ?></button>
-                                    </form>
-                                <?php endforeach; ?>
+                                <a class="btn petit" href="./?p=eleve&id=<?= (int) $e['id'] ?>">Travail</a>
+                                <?= bouton('regenerer', 'Nouveau code', $ch, 'secondaire', "L'ancien code de cet élève ne fonctionnera plus. Continuer ?") ?>
+                                <?= bouton('basculer', $e['actif'] ? 'Désactiver' : 'Réactiver', $ch, 'secondaire') ?>
+                                <?= bouton('supprimer_eleve', 'Supprimer', $ch, 'danger', 'Supprimer définitivement cet élève et tout son travail ?') ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -569,18 +786,19 @@ function page_classe(int $id): void
                 <p class="vide">Aucun élève. Générez des codes ci-dessous.</p>
             <?php endif; ?>
 
-            <form method="post" class="carte">
+            <form method="post" class="carte" id="form-generer" data-classe="<?= h($nom) ?>">
                 <?= csrf() ?>
                 <input type="hidden" name="action" value="generer">
                 <input type="hidden" name="classe_id" value="<?= $id ?>">
                 <h3>Générer des codes</h3>
                 <div class="deux-colonnes">
                     <label>Noms des élèves, un par ligne
-                        <span class="aide">Prénom et initiale suffisent (ex. « Léa D. »). Ce nom sert à nommer les fichiers déposés.</span>
-                        <textarea name="noms" rows="6" placeholder="Léa D.&#10;Noah M.&#10;…"></textarea>
+                        <span class="aide">Ils restent sur cet ordinateur : le serveur ne reçoit que leur nombre et attribue
+                            des numéros (01, 02…). Ils apparaîtront sur les fiches et dans le CSV.</span>
+                        <textarea id="noms-locaux" rows="6" placeholder="Léa D.&#10;Noah M.&#10;…"></textarea>
                     </label>
-                    <label>… ou un nombre de codes anonymes
-                        <span class="aide">Ils s'appelleront « Élève 01 », « Élève 02 »… Vous pourrez les renommer ensuite.</span>
+                    <label>… ou seulement un nombre d'élèves
+                        <span class="aide">Les fiches porteront juste le numéro.</span>
                         <input type="number" name="nombre" min="1" max="60" placeholder="ex. 28">
                     </label>
                 </div>
@@ -588,20 +806,214 @@ function page_classe(int $id): void
             </form>
         </section>
 
-        <section class="zone-danger">
-            <form method="post" onsubmit="return confirm('Supprimer la classe <?= h(addslashes($classe['nom'])) ?> et tous ses codes ? Cette action est définitive.')">
+        <section id="depots">
+            <h2>Dépôts Nuage (facultatif)</h2>
+            <p class="aide">Le travail est sauvegardé sur ce serveur. Un lien de dépôt Nuage reste utile pour faire rendre
+                un fichier en dehors des applications. Dans Nuage : Partager → Lien de partage → « Dépôt de fichiers ».</p>
+            <?php if ($depots): ?>
+                <div class="defile"><table>
+                    <thead><tr><th>Atelier</th><th>Lien</th><th>Mot de passe</th><th></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($depots as $d): ?>
+                        <tr>
+                            <td><code><?= h($d['app']) ?></code><?= $d['app'] === '*' ? ' <span class="discret">(tous)</span>' : '' ?></td>
+                            <td class="lien"><a href="<?= h($d['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($d['url']) ?></a></td>
+                            <td><?= $d['mdp'] !== '' ? '<code>' . h($d['mdp']) . '</code>' : '<span class="discret">aucun</span>' ?></td>
+                            <td class="actions"><?= bouton('supprimer_depot', 'Supprimer', ['classe_id' => $id, 'depot_id' => $d['id']], 'danger', 'Supprimer ce lien de dépôt ?') ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table></div>
+            <?php endif; ?>
+            <form method="post" class="carte formulaire-depot">
                 <?= csrf() ?>
-                <input type="hidden" name="action" value="supprimer_classe">
+                <input type="hidden" name="action" value="ajouter_depot">
                 <input type="hidden" name="classe_id" value="<?= $id ?>">
-                <button class="danger">Supprimer la classe</button>
+                <label>Atelier<input name="app" value="*" maxlength="40" required><span class="aide">* = tous</span></label>
+                <label class="large">Lien de dépôt Nuage<input name="url" type="url" required placeholder="https://nuage03.apps.education.fr/s/…"></label>
+                <label>Mot de passe du lien<input name="mdp" maxlength="100" autocomplete="off" placeholder="facultatif"></label>
+                <button>Ajouter / remplacer</button>
             </form>
+        </section>
+
+        <section class="zone-danger ligne-actions">
+            <?= bouton('vider_travail', 'Effacer le travail de la classe', ['classe_id' => $id], 'danger',
+                "Effacer toutes les données et tous les fichiers des élèves de {$nom} ? Pensez à exporter le ZIP avant. Les codes restent valables.") ?>
+            <?= bouton('supprimer_classe', 'Supprimer la classe', ['classe_id' => $id], 'danger',
+                "Supprimer la classe {$nom}, ses codes et tout le travail de ses élèves ? Cette action est définitive.") ?>
         </section>
     </main>
     <?php
     pied();
 }
 
+function page_eleve(int $id): void
+{
+    $pdo = db();
+    $st = $pdo->prepare('SELECT e.*, c.nom AS classe FROM eleves e JOIN classes c ON c.id = e.classe_id WHERE e.id = ?');
+    $st->execute([$id]);
+    $eleve = $st->fetch();
+    if (!$eleve) {
+        rediriger('./');
+    }
+    $st = $pdo->prepare('SELECT app, cle, taille, maj FROM donnees WHERE eleve_id = ? ORDER BY app, cle');
+    $st->execute([$id]);
+    $donnees = $st->fetchAll();
+    $st = $pdo->prepare('SELECT id, app, cle, taille, maj FROM donnees_versions WHERE eleve_id = ? ORDER BY maj DESC');
+    $st->execute([$id]);
+    $versions = [];
+    foreach ($st->fetchAll() as $v) {
+        $versions[$v['app'] . "\0" . $v['cle']][] = $v;
+    }
+    $st = $pdo->prepare('SELECT * FROM fichiers WHERE eleve_id = ? ORDER BY app, nom');
+    $st->execute([$id]);
+    $fichiers = $st->fetchAll();
+
+    $par_app = [];
+    foreach ($donnees as $d) {
+        $par_app[$d['app']]['donnees'][] = $d;
+    }
+    foreach ($fichiers as $f) {
+        $par_app[$f['app']]['fichiers'][] = $f;
+    }
+    ksort($par_app);
+    $usage = usage_eleve($id);
+    $quota = quota_eleve_octets();
+    $titre = $eleve['classe'] . ' · ' . $eleve['etiquette'];
+
+    entete('Élève ' . $titre);
+    barre();
+    ?>
+    <main>
+        <p class="fil"><a href="./?p=classe&id=<?= (int) $eleve['classe_id'] ?>">← Classe <?= h($eleve['classe']) ?></a></p>
+        <h1><?= h($eleve['classe']) ?> · n° <?= h($eleve['etiquette']) ?> — <?= nom_eleve($eleve['classe'], $eleve['etiquette'], 'nom non chargé') ?></h1>
+        <p class="sous">Dernière connexion : <?= quand($eleve['derniere_connexion'] ? (int) $eleve['derniere_connexion'] : null) ?>
+            · Espace : <?= format_taille($usage) ?> sur <?= format_taille($quota) ?></p>
+        <?= jauge($usage, $quota) ?>
+        <?php messages(); ?>
+
+        <?php if (!$par_app): ?>
+            <p class="vide" style="margin-top:24px">Aucun travail enregistré pour l'instant.</p>
+        <?php endif; ?>
+
+        <?php foreach ($par_app as $app => $contenu): ?>
+            <section class="groupe-app">
+                <h2>Atelier <code><?= h($app) ?></code></h2>
+                <?php if (!empty($contenu['donnees'])): ?>
+                    <div class="defile"><table>
+                        <thead><tr><th>Donnée</th><th>Taille</th><th>Sauvegardée le</th><th>Historique</th><th></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($contenu['donnees'] as $d): $vs = $versions[$d['app'] . "\0" . $d['cle']] ?? []; ?>
+                            <tr>
+                                <td><a href="./?p=telecharger&quoi=donnee&id=<?= $id ?>&app=<?= rawurlencode($d['app']) ?>&cle=<?= rawurlencode($d['cle']) ?>"><code><?= h($d['cle']) ?></code></a></td>
+                                <td><?= format_taille((int) $d['taille']) ?></td>
+                                <td><?= quand((int) $d['maj']) ?></td>
+                                <td>
+                                    <?php if ($vs): ?>
+                                        <details class="versions">
+                                            <summary><?= count($vs) ?> version<?= count($vs) > 1 ? 's' : '' ?> précédente<?= count($vs) > 1 ? 's' : '' ?></summary>
+                                            <ul>
+                                            <?php foreach ($vs as $v): ?>
+                                                <li><a href="./?p=telecharger&quoi=version&id=<?= (int) $v['id'] ?>"><?= quand((int) $v['maj']) ?></a>
+                                                    (<?= format_taille((int) $v['taille']) ?>)
+                                                    <?= bouton('restaurer_version', 'Restaurer', ['eleve_id' => $id, 'version_id' => $v['id']], 'secondaire',
+                                                        'Remplacer la version actuelle par celle du ' . quand((int) $v['maj']) . ' ? (La version actuelle sera gardée dans l\'historique.)') ?></li>
+                                            <?php endforeach; ?>
+                                            </ul>
+                                        </details>
+                                    <?php else: ?><span class="discret">—</span><?php endif; ?>
+                                </td>
+                                <td class="actions"><?= bouton('supprimer_donnee', 'Supprimer', ['eleve_id' => $id, 'app' => $d['app'], 'cle' => $d['cle']], 'danger', 'Supprimer cette donnée et son historique ?') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table></div>
+                <?php endif; ?>
+                <?php if (!empty($contenu['fichiers'])): ?>
+                    <div class="defile" style="margin-top:12px"><table>
+                        <thead><tr><th>Fichier</th><th>Taille</th><th>Envoyé le</th><th></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($contenu['fichiers'] as $f): ?>
+                            <tr>
+                                <td><a href="./?p=telecharger&quoi=fichier&id=<?= (int) $f['id'] ?>"><?= h($f['nom']) ?></a></td>
+                                <td><?= format_taille((int) $f['taille']) ?></td>
+                                <td><?= quand((int) $f['maj']) ?></td>
+                                <td class="actions"><?= bouton('supprimer_fichier', 'Supprimer', ['eleve_id' => $id, 'fichier_id' => $f['id']], 'danger', 'Supprimer ce fichier ?') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table></div>
+                <?php endif; ?>
+            </section>
+        <?php endforeach; ?>
+    </main>
+    <?php
+    pied();
+}
+
+/** ZIP de tout le travail d'une classe : <classe>-<numéro>/<atelier>/donnees|fichiers/… */
+function exporter_classe(int $id): never
+{
+    $classe = classe_par_id($id);
+    if (!$classe || !class_exists('ZipArchive')) {
+        http_response_code(404);
+        exit('Export impossible.');
+    }
+    $pdo = db();
+    $dossier_tmp = DOSSIER_DATA . '/tmp';
+    if (!is_dir($dossier_tmp)) {
+        mkdir($dossier_tmp, 0700, true);
+    }
+    $chemin_zip = $dossier_tmp . '/export_' . bin2hex(random_bytes(6)) . '.zip';
+    $zip = new ZipArchive();
+    $zip->open($chemin_zip, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+
+    $st = $pdo->prepare('SELECT id, etiquette FROM eleves WHERE classe_id = ?');
+    $st->execute([$id]);
+    $prefixe = prefixe_classe($classe['nom']);
+    foreach ($st->fetchAll() as $e) {
+        $dossier = $prefixe . '-' . preg_replace('/[^A-Za-z0-9_-]/', '_', $e['etiquette']);
+        $sd = $pdo->prepare('SELECT app, cle, valeur FROM donnees WHERE eleve_id = ?');
+        $sd->execute([$e['id']]);
+        foreach ($sd->fetchAll() as $d) {
+            $zip->addFromString("$dossier/{$d['app']}/donnees/{$d['cle']}.json",
+                (string) json_encode(json_decode($d['valeur']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+        $sf = $pdo->prepare('SELECT app, nom, chemin FROM fichiers WHERE eleve_id = ?');
+        $sf->execute([$e['id']]);
+        foreach ($sf->fetchAll() as $f) {
+            if (is_file(chemin_stockage($f['chemin']))) {
+                $zip->addFile(chemin_stockage($f['chemin']), "$dossier/{$f['app']}/fichiers/{$f['nom']}");
+            }
+        }
+    }
+    if ($zip->numFiles === 0) {
+        $zip->addFromString('LISEZMOI.txt', "Aucun travail enregistré pour la classe {$classe['nom']}.\n");
+    }
+    $zip->close();
+
+    header('Content-Type: application/zip');
+    header('Content-Length: ' . filesize($chemin_zip));
+    header('Content-Disposition: attachment; filename="travail_' . $prefixe . '_' . date('Y-m-d') . '.zip"');
+    readfile($chemin_zip);
+    unlink($chemin_zip);
+    exit;
+}
+
 /* ---------------------------------------------------------------------- */
+
+function liste_locale(): void
+{
+    ?>
+    <div class="liste-locale">
+        <span class="etat-liste">Noms non chargés sur cet ordinateur</span>
+        <label class="bouton-fichier">Charger mon fichier de noms (CSV)<input type="file" accept=".csv,text/csv" class="charger-liste"></label>
+        <button type="button" class="lien-bouton exporter-liste">Télécharger la liste</button>
+        <button type="button" class="lien-bouton oublier-liste" hidden>Oublier sur cet ordinateur</button>
+        <span class="discret">Les noms ne sont jamais envoyés au serveur.</span>
+    </div>
+    <?php
+}
 
 function messages(): void
 {
@@ -627,6 +1039,7 @@ function barre(): void
 
 function entete(string $titre): void
 {
+    $v = @filemtime(__DIR__ . '/admin.css') ?: 1;
     ?>
 <!doctype html>
 <html lang="fr">
@@ -635,103 +1048,7 @@ function entete(string $titre): void
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title><?= h($titre) ?> · Centrale élèves</title>
-<style>
-:root {
-    --fond: #f6f5f2; --surface: #fff; --texte: #1d1f24; --doux: #62666f; --bord: #dedbd3;
-    --accent: #1f5f8b; --accent-texte: #fff; --danger: #a8321f; --ok-fond: #e6f2ea; --ok: #1f6b3a;
-    --err-fond: #fbe9e6; --alerte: #9a5b00; --code-fond: #efece6;
-    color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-    :root {
-        --fond: #16181c; --surface: #1f2228; --texte: #e8e6e1; --doux: #a2a5ad; --bord: #343841;
-        --accent: #6aa9d6; --accent-texte: #0d1520; --danger: #f08a77; --ok-fond: #1b3324; --ok: #8fd3a5;
-        --err-fond: #3a1f1b; --alerte: #f0b35a; --code-fond: #2a2e35;
-        color-scheme: dark;
-    }
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--fond); color: var(--texte);
-       font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
-main.etroit { max-width: 420px; padding-top: 12vh; }
-h1 { font-size: 1.8rem; margin: 0 0 4px; letter-spacing: -0.01em; }
-h2 { font-size: 1.2rem; margin: 0 0 12px; }
-h3 { font-size: 1rem; margin: 0 0 12px; }
-section { margin-top: 36px; }
-a { color: var(--accent); }
-code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .9em;
-       background: var(--code-fond); padding: 1px 5px; border-radius: 4px; }
-pre.code { background: var(--code-fond); padding: 14px; border-radius: 8px; overflow-x: auto; font-size: .85rem; }
-.sous, .discret, .aide { color: var(--doux); }
-.aide { display: block; font-size: .85rem; font-weight: 400; margin: 2px 0 6px; }
-.discret { font-size: .9rem; }
-.barre { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
-         background: var(--surface); border-bottom: 1px solid var(--bord); }
-.marque { font-weight: 700; text-decoration: none; color: var(--texte); }
-.carte { background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; padding: 16px; margin-top: 12px; }
-label { display: block; font-weight: 600; font-size: .92rem; margin-bottom: 12px; }
-input, textarea { display: block; width: 100%; margin-top: 4px; padding: 9px 10px; font: inherit; color: var(--texte);
-                  background: var(--fond); border: 1px solid var(--bord); border-radius: 6px; }
-input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-button { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 6px; border: 1px solid var(--accent);
-         background: var(--accent); color: var(--accent-texte); cursor: pointer; }
-button.secondaire { background: transparent; color: var(--accent); }
-button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
-button.petit { padding: 4px 10px; font-size: .85rem; }
-button.lien-bouton { background: none; border: none; color: var(--accent); padding: 0; font-weight: 500; }
-.titre-section { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.titre-section h2 { margin: 0; }
-.en-ligne { display: flex; gap: 8px; }
-.en-ligne input { margin: 0; width: 140px; }
-.boutons { display: flex; gap: 8px; flex-wrap: wrap; }
-.grille-classes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.carte.classe { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: var(--texte); margin: 0;
-                transition: border-color .15s; }
-.carte.classe:hover { border-color: var(--accent); }
-.carte.classe strong { font-size: 1.4rem; }
-.alerte { color: var(--alerte); }
-.deux-colonnes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-.deux-colonnes .carte { margin-top: 0; }
-.defile { overflow-x: auto; background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; }
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--bord); vertical-align: middle; }
-th { font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; color: var(--doux); font-weight: 600; }
-tbody tr:last-child td { border-bottom: none; }
-td.lien { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-td.actions { white-space: nowrap; text-align: right; }
-td.actions form { display: inline; }
-tr.inactif td { opacity: .55; }
-form.renommer input { margin: 0; padding: 4px 6px; background: transparent; border-color: transparent; font-weight: 500; }
-form.renommer input:hover, form.renommer input:focus { border-color: var(--bord); background: var(--fond); }
-.formulaire-depot { display: grid; grid-template-columns: 140px 1fr 180px auto; gap: 12px; align-items: end; }
-.formulaire-depot label { margin: 0; }
-@media (max-width: 720px) { .formulaire-depot { grid-template-columns: 1fr; } }
-.message { padding: 10px 14px; border-radius: 8px; margin: 12px 0; }
-.message.succes { background: var(--ok-fond); color: var(--ok); }
-.message.erreur { background: var(--err-fond); color: var(--danger); }
-.alerte-bloc { background: var(--err-fond); padding: 10px 14px; border-radius: 8px; }
-.nouveaux { border: 2px solid var(--accent); border-radius: 12px; padding: 16px; background: var(--surface); }
-.nouveaux .defile { border: none; }
-.code-eleve { font-size: 1rem; letter-spacing: .03em; }
-.fil { margin: 0 0 8px; }
-.vide { color: var(--doux); font-style: italic; }
-.zone-danger { border-top: 1px solid var(--bord); padding-top: 24px; }
-.fiches { display: none; }
-
-@media print {
-    @page { margin: 10mm; }
-    body { background: #fff; color: #000; }
-    body * { visibility: hidden; }
-    .fiches, .fiches * { visibility: visible; }
-    .fiches { display: grid; grid-template-columns: 1fr 1fr; gap: 0; position: absolute; left: 0; top: 0; width: 100%; }
-    .fiche { border: 1px dashed #888; padding: 5mm 6mm; break-inside: avoid; font-family: system-ui, sans-serif; }
-    .fiche-haut { display: flex; justify-content: space-between; font-size: 10pt; color: #333; }
-    .fiche-haut span:last-child { font-weight: 700; color: #000; }
-    .fiche-code { font: 600 15pt ui-monospace, Menlo, Consolas, monospace; margin: 3mm 0; letter-spacing: .03em; }
-    .fiche-bas { font-size: 8.5pt; color: #444; }
-}
-</style>
+<link rel="stylesheet" href="admin.css?v=<?= $v ?>">
 </head>
 <body>
     <?php
@@ -739,5 +1056,6 @@ form.renommer input:hover, form.renommer input:focus { border-color: var(--bord)
 
 function pied(): void
 {
-    echo "\n</body>\n</html>\n";
+    $v = @filemtime(__DIR__ . '/admin.js') ?: 1;
+    echo "\n<script src=\"admin.js?v=$v\"></script>\n</body>\n</html>\n";
 }

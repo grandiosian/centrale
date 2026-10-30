@@ -7,7 +7,9 @@
  *   "app" est facultatif : il permet de donner un dossier de dépôt différent par application.
  *
  * Réponse si le code est bon (200) :
- *   { "ok": true, "classe": "5A", "eleve": "Léa D.", "app": "robot-mbot",
+ *   { "ok": true, "classe": "5A", "eleve": "07", "app": "robot-mbot",
+ *     "jeton": "…", "expire": 1793370000,          ← à renvoyer dans l'en-tête X-Jeton
+ *     "espace": { "utilise": 12345, "quota": 104857600 },
  *     "depot": { "url": "https://nuage03.apps.education.fr/s/xxxx", "mot_de_passe": "…" } }
  *
  * Réponse sinon : { "ok": false, "erreur": "…" } avec le statut 400, 401, 403 ou 429.
@@ -53,12 +55,17 @@ db()->prepare('UPDATE eleves SET derniere_connexion = ? WHERE id = ?')
     ->execute([time(), $eleve['id']]);
 
 $depot = depot_pour((int) $eleve['classe_id'], $app);
+[$jeton, $expire] = creer_session((int) $eleve['id']);
+$usage = usage_eleve((int) $eleve['id']);
 
 envoyer_json(200, [
     'ok'     => true,
     'classe' => $eleve['classe'],
     'eleve'  => $eleve['etiquette'],
     'app'    => $app,
+    'jeton'  => $jeton,
+    'expire' => $expire,
+    'espace' => ['utilise' => $usage, 'quota' => quota_eleve_octets()],
     'depot'  => $depot ? [
         'url'          => $depot['url'],
         'mot_de_passe' => $depot['mdp'] !== '' ? $depot['mdp'] : null,

@@ -1,19 +1,19 @@
 # Centrale élèves
 
-Petit serveur qui centralise la connexion des élèves pour toutes vos applications de technologie.
+Serveur unique pour toutes les applications de technologie :
 
-- Chaque élève a un **code personnel** du type `5A-dfgdfkj-orei-flgdf`.
-- Une application envoie ce code à la Centrale. Si le code est bon, la Centrale répond avec la **classe**, le **nom de l'élève** et l'**adresse du dossier de dépôt Nuage** de sa classe.
-- Les fichiers des élèves sont déposés dans **Nuage** (apps.education.fr), jamais sur le serveur.
+- **Connexion** des élèves par un code personnel du type `5A-dfgdfkj-orei-flgdf`.
+- **Sauvegarde et chargement automatiques** du travail de chaque élève, par atelier : l'élève retrouve son travail sur n'importe quel ordinateur.
+- **Pseudonymisation** : le serveur ne connaît que « 5A · élève 07 ». Les noms restent sur l'ordinateur de l'enseignant.
+- **Espace enseignant** : codes, travail de chaque élève, historique, export ZIP, ressources par atelier, quotas.
 
 ```
-Application élève (GitHub, Forge, alwaysdata…)
-        │  code 5A-dfgdfkj-orei-flgdf
-        ▼
-Centrale (alwaysdata)  ──►  { classe: "5A", eleve: "Léa D.", depot: { url: "https://nuage…/s/…" } }
-        │
-        ▼
-L'élève dépose son fichier dans le dossier Nuage de sa classe
+Application (GitHub, Forge, alwaysdata…)
+   │  1. code 5A-dfgdfkj-orei-flgdf  ──►  jeton de session
+   │  2. Centrale.charger("projet")   ◄──  travail enregistré
+   │  3. Centrale.sauver("projet", …) ──►  enregistré (toutes les 3 s au plus)
+   ▼
+Centrale (alwaysdata, en France)  ─ ─ ►  export ZIP / dépôt Nuage en secours
 ```
 
 ## Contenu
@@ -21,163 +21,158 @@ L'élève dépose son fichier dans le dossier Nuage de sa classe
 | Dossier | Rôle |
 |---|---|
 | `public/` | Racine du site web (seul dossier visible depuis internet) |
-| `public/admin/` | Espace enseignant : classes, liens Nuage, codes élèves |
-| `public/api/login.php` | Point d'entrée appelé par les applications |
-| `public/js/centrale-client.js` | Module à inclure dans chaque application élève |
-| `public/apps/exemple/` | Application d'exemple (compte rendu + dépôt) |
+| `public/admin/` | Espace enseignant |
+| `public/api/` | Points d'entrée appelés par les applications |
+| `public/js/centrale-client.js` | Module à inclure dans chaque application |
+| `public/apps/exemple/` | Application d'exemple : carnet de bord avec sauvegarde auto et fichiers |
 | `lib/` | Code PHP commun (non accessible depuis internet) |
-| `data/` | Base SQLite, créée automatiquement (non accessible, jamais envoyée sur GitHub) |
+| `data/` | Base SQLite et fichiers des élèves, créés automatiquement (non accessibles, jamais envoyés sur GitHub) |
 
 ---
 
 ## 1. Installation sur alwaysdata
 
-### Envoyer les fichiers
+1. **Site** : dans l'administration alwaysdata, **Web → Sites**, modifiez le site :
+   - Type : **PHP** (8.1 ou plus récent)
+   - Répertoire racine : **`/www/centrale/public`** (il doit bien se terminer par `/public`)
+2. **Code** : déploiement automatique depuis GitHub (partie 6), ou dans le terminal SSH :
+   `cd ~/www && git clone https://github.com/VOTREPSEUDO/centrale.git centrale`
+3. Ouvrez `https://VOTRECOMPTE.alwaysdata.net/admin/` et choisissez le mot de passe administrateur.
 
-**Méthode simple (FileZilla)** : connectez-vous en SFTP à `ssh-VOTRECOMPTE.alwaysdata.net` avec vos identifiants alwaysdata, puis copiez tout le dossier `centrale-eleves` dans `www/centrale`.
+Vérification : `https://VOTRECOMPTE.alwaysdata.net/api/` affiche `{"ok":true,…}`.
 
-**Méthode automatique (GitHub)** : voir la partie 5 plus bas.
+**Espace disque** : comptez *nombre d'élèves × quota par élève* (réglable dans l'espace enseignant, 100 Mo par défaut). Avec l'offre alwaysdata « Small » (50 Go) et 300 élèves, un quota de 100 à 150 Mo convient. Le tableau de bord affiche l'espace réellement utilisé.
 
-### Configurer le site
-
-Dans l'administration alwaysdata : **Web → Sites**, modifiez le site existant (ou ajoutez-en un) :
-
-- **Adresse** : `VOTRECOMPTE.alwaysdata.net`
-- **Type** : PHP (version 8.1 ou plus récente)
-- **Répertoire racine** : `/www/centrale/public`
-
-⚠️ Le répertoire racine doit bien se terminer par `/public` : c'est ce qui rend `lib/` et `data/` invisibles depuis internet.
-
-### Créer le mot de passe administrateur
-
-Ouvrez `https://VOTRECOMPTE.alwaysdata.net/admin/`. À la première visite, la page vous demande de choisir un mot de passe (10 caractères minimum).
-
-Pour vérifier que tout fonctionne, `https://VOTRECOMPTE.alwaysdata.net/api/` doit afficher `{"ok":true,…}`.
+**Taille des fichiers envoyés** : le fichier `public/.user.ini` autorise jusqu'à 64 Mo par envoi. La limite réelle par fichier se règle dans l'espace enseignant (20 Mo par défaut).
 
 ---
 
-## 2. Préparer les dossiers de dépôt dans Nuage
+## 2. Les codes élèves (sans noms sur le serveur)
 
-Pour chaque classe :
+Dans l'espace enseignant, classe par classe :
 
-1. Dans Nuage, créez un dossier (ex. `Techno 5A - Dépôts`).
-2. **Partager → Lien de partage → ⋯ → « Dépôt de fichiers »**.
-3. Ajoutez un **mot de passe** au lien et, si vous voulez, une date d'expiration.
-4. Copiez le lien (`https://nuageXX.apps.education.fr/s/…`).
+1. Collez la liste des élèves (« Léa D. », un par ligne) dans **Générer des codes**.
+   Votre navigateur garde les noms et n'envoie au serveur **que leur nombre**. Le serveur attribue des numéros : 01, 02, 03…
+2. **Imprimez les fiches** (nom + code, à découper) et **téléchargez le CSV** (Classe ; Numéro ; Nom ; Code).
+   Les codes ne seront plus jamais affichés.
+3. Rangez le CSV dans un **dossier privé de votre Nuage**. C'est votre fichier de correspondance.
 
-Les élèves déposent sans compte et sans voir les fichiers des autres.
+Sur un autre ordinateur, ou après avoir vidé le navigateur : **Charger mon fichier de noms (CSV)** affiche à nouveau les noms à côté des numéros. Ils ne sont jamais envoyés au serveur.
 
----
+Code perdu : **Nouveau code** sur la ligne de l'élève (l'ancien cesse de fonctionner).
 
-## 3. Créer les classes et les codes
-
-Dans l'espace enseignant :
-
-1. **Créer la classe** (ex. `5A`). Le nom sert de préfixe aux codes.
-2. **Lien de dépôt Nuage** : collez le lien et son mot de passe. Laissez `*` dans « Application » pour qu'il serve à toutes vos applications.
-   Pour qu'une application ait son propre dossier, ajoutez une ligne avec son identifiant (ex. `robot-mbot`).
-3. **Générer des codes** : collez la liste des élèves (« Léa D. », un par ligne) ou indiquez un nombre.
-4. **Imprimez les fiches** (2 colonnes, à découper) ou téléchargez le CSV **tout de suite** : les codes ne sont plus jamais affichés ensuite.
-
-Code perdu ? Bouton **Nouveau code** sur la ligne de l'élève (l'ancien cesse de fonctionner).
-Élève parti ? **Désactiver** ou **Supprimer**.
+Classes créées avec l'ancienne version (noms enregistrés en ligne) : bouton **Anonymiser la classe**. Les noms sont remplacés par des numéros, et la correspondance est téléchargée.
 
 ---
 
-## 4. Brancher une application
-
-Ajoutez dans la page HTML de l'application :
+## 3. Brancher une application
 
 ```html
 <div id="connexion"></div>
+<div id="etat"></div>
 
 <script src="https://VOTRECOMPTE.alwaysdata.net/js/centrale-client.js"></script>
 <script>
   Centrale.init({
-    api: "https://VOTRECOMPTE.alwaysdata.net/api/login.php",
-    app: "robot-mbot"            // identifiant libre de l'application
+    api: "https://VOTRECOMPTE.alwaysdata.net/api/",
+    app: "robot-mbot",                          // identifiant de l'atelier
+    surDeconnexion: () => location.reload(),    // session expirée
   });
+  Centrale.afficherEtat(document.getElementById("etat"));   // « ✓ Enregistré à 14:32 »
 
   Centrale.afficherConnexion(document.getElementById("connexion"), {
-    onConnecte: (infos) => {
-      // infos.classe        → "5A"
-      // infos.eleve         → "Léa D."
-      // infos.depot.url     → lien de dépôt Nuage
-      // infos.depot.mot_de_passe → mot de passe du lien (ou null)
+    onConnecte: async (infos) => {
+      // infos.classe → "5A", infos.eleve → "07"
+      let projet = await Centrale.charger("projet", { blocs: [] });   // reprend le travail
+      // … à chaque modification :
+      Centrale.sauver("projet", projet);
     }
   });
 </script>
 ```
 
-Puis, dans **Réglages → Sites autorisés**, ajoutez l'adresse du site qui héberge l'application, par exemple :
+Puis ajoutez l'adresse du site de l'application dans **Réglages → Sites autorisés** (par exemple `https://monpseudo.github.io`).
 
-```
-https://monpseudo.github.io
-https://monpseudo.forge.apps.education.fr
-```
-
-(Liste vide = tous les sites sont autorisés, pratique pour les essais.)
-
-### Fonctions disponibles
+### Fonctions
 
 | Fonction | Rôle |
 |---|---|
-| `Centrale.init({ api, app })` | À appeler en premier |
+| `Centrale.init({ api, app, surEtat, surDeconnexion })` | À appeler en premier |
 | `Centrale.afficherConnexion(element, { onConnecte })` | Formulaire « Mon code » prêt à l'emploi |
-| `await Centrale.connexion(code)` | Connexion manuelle (si vous faites votre propre formulaire) |
-| `Centrale.session()` | Infos de l'élève connecté, ou `null` |
-| `Centrale.deconnexion()` | Déconnecte l'élève |
-| `Centrale.nomFichier("sb3")` | Nom standard : `5A_Lea-D_robot-mbot_2026-10-30.sb3` |
-| `Centrale.telecharger(contenu, nom)` | Fait enregistrer un fichier (texte ou Blob) |
-| `Centrale.ouvrirDepot()` | Ouvre le dossier de dépôt Nuage dans un nouvel onglet |
+| `Centrale.afficherEtat(element)` | Indicateur « Enregistré / Hors ligne… » |
+| `await Centrale.charger(cle, defaut)` | Charge une donnée (objet, tableau, texte…) |
+| `Centrale.sauver(cle, valeur)` | Sauvegarde (regroupée : une fois toutes les 3 s au plus) |
+| `await Centrale.supprimer(cle)` / `listeDonnees()` | Efface une donnée / liste les clés |
+| `await Centrale.envoyerFichier(fichier, nom)` | Envoie un fichier (File, Blob ou texte) |
+| `await Centrale.listeFichiers()` | Fichiers de l'élève pour cet atelier |
+| `await Centrale.chargerFichier(nom)` | Récupère un fichier (Blob) |
+| `await Centrale.supprimerFichier(nom)` | Supprime un fichier |
+| `await Centrale.listeRessources()` / `chargerRessource(nom)` | Fichiers déposés par l'enseignant pour l'atelier |
+| `Centrale.session()` | Infos de l'élève connecté (`classe`, `eleve`, `espace`) |
+| `Centrale.deconnexion()` | Envoie ce qui reste à enregistrer, puis déconnecte |
+| `Centrale.nomFichier("sb3")` / `telecharger(contenu, nom)` | Nom standard, enregistrement sur l'ordinateur |
 
-La connexion dure le temps de l'onglet : sur un poste partagé, fermer l'onglet déconnecte l'élève.
+### Ce qui est géré automatiquement
 
-### Pourquoi l'élève dépose-t-il lui-même le fichier ?
-
-Nuage n'accepte pas l'envoi de fichiers depuis un autre site (sécurité du navigateur). Le fonctionnement le plus fiable est donc : l'application **enregistre** le fichier avec un nom standard, puis **ouvre la page de dépôt** où l'élève le glisse.
+- **Coupure réseau** : le travail est gardé dans le navigateur, puis envoyé au retour du réseau, ou à la prochaine connexion de l'élève sur ce poste.
+- **Deux ordinateurs** : si l'élève a avancé ailleurs entre-temps, une ancienne copie n'écrase jamais le travail plus récent. L'onglet concerné affiche « modifié sur un autre ordinateur, recharge la page ».
+- **Historique** : une version est gardée au plus toutes les 10 minutes, les 10 dernières par donnée. L'enseignant peut la restaurer depuis la page **Travail** de l'élève.
+- **Fermeture de l'onglet** : un dernier envoi est tenté ; sinon la copie locale est renvoyée à la prochaine connexion.
+- **Poste partagé** : la connexion dure le temps de l'onglet, et le jeton expire après 12 h.
 
 ---
 
-## 5. Déploiement automatique depuis GitHub
+## 4. Espace enseignant
 
-À chaque `push` sur `main`, GitHub copie le code sur alwaysdata (`.github/workflows/deploy.yml`). Le dossier `data/` n'est jamais écrasé.
+- **Tableau de bord** : classes, nombre d'élèves, espace utilisé, ressources des ateliers, réglages (sites autorisés, quotas).
+- **Classe** : codes, élèves (numéro, nom affiché localement, dernière connexion, espace), **export ZIP** de tout le travail, **effacer le travail** (fin d'année : les codes restent valables), dépôts Nuage facultatifs.
+- **Travail d'un élève** : données et fichiers par atelier, téléchargement, historique avec restauration.
+- **Ressources des ateliers** : déposez des fichiers (modèles 3D, consignes, images) que les élèves d'un atelier peuvent charger.
 
-1. Créez une paire de clés sur votre ordinateur :
-   `ssh-keygen -t ed25519 -f centrale_deploiement -N ""`
-2. Sur alwaysdata (SSH), ajoutez le contenu de `centrale_deploiement.pub` à la fin de `~/.ssh/authorized_keys`.
+---
+
+## 5. Données et RGPD
+
+Sur le serveur (en France, chez alwaysdata) :
+
+- classe et **numéro** de l'élève (aucun nom) ;
+- **empreinte** du code (SHA-256 ; le code n'est jamais stocké) et jetons de session (empreintes) ;
+- date de dernière connexion ;
+- travail sauvegardé par les applications et fichiers envoyés.
+
+Les noms restent dans le navigateur de l'enseignant et dans son fichier CSV. Ce sont des données **pseudonymisées**, ce qui est un bon niveau de protection. Pensez tout de même à mentionner ce traitement au DPO de votre académie et à effacer le travail des classes en fin d'année.
+
+**Sauvegardes** : alwaysdata sauvegarde automatiquement chaque jour. Exportez aussi le ZIP de chaque classe dans votre Nuage de temps en temps, ou au moins en fin de trimestre.
+
+---
+
+## 6. Déploiement automatique depuis GitHub
+
+À chaque `push` sur `main`, GitHub copie le code sur alwaysdata (`.github/workflows/deploy.yml`). Le dossier `data/` n'est jamais touché.
+
+1. `ssh-keygen -t ed25519 -f ~/centrale_deploiement -N ""`
+2. `ssh-copy-id -i ~/centrale_deploiement.pub VOTRECOMPTE@ssh-VOTRECOMPTE.alwaysdata.net`
 3. Sur GitHub, dans **Settings → Secrets and variables → Actions** :
-   - Secret `ALWAYSDATA_COMPTE` : votre nom de compte alwaysdata
-   - Secret `ALWAYSDATA_SSH_KEY` : le contenu de `centrale_deploiement` (clé **privée**)
-   - Variable `DOSSIER_DISTANT` (facultative) : `www/centrale` par défaut
-
-Le dépôt GitHub peut être **public** : il ne contient aucun mot de passe ni aucune donnée d'élève.
+   - `ALWAYSDATA_COMPTE` : le nom du compte ;
+   - `ALWAYSDATA_SSH_KEY` : le contenu de `~/centrale_deploiement` (clé privée).
 
 ---
-
-## 6. Données et RGPD
-
-Ce qui est enregistré sur le serveur (en France, chez alwaysdata) :
-
-- le nom affiché de l'élève (prénom + initiale conseillé) et sa classe ;
-- **l'empreinte** de son code (SHA-256) : le code lui-même n'est jamais stocké ;
-- la date de sa dernière connexion ;
-- les liens de dépôt Nuage et leurs mots de passe.
-
-Aucun fichier d'élève n'est stocké sur le serveur. Pensez tout de même à déclarer ce traitement auprès du DPO de votre académie et à supprimer les classes en fin d'année.
-
-**Sauvegarde** : alwaysdata sauvegarde automatiquement chaque jour. Vous pouvez aussi récupérer `data/centrale.sqlite` par SFTP.
 
 ## 7. Référence de l'API
 
-`POST /api/login.php` — JSON `{ "code": "...", "app": "..." }` (ou formulaire classique)
+Toutes les requêtes, sauf `login.php`, demandent l'en-tête `X-Jeton` reçu à la connexion.
 
-| Statut | Réponse |
+| Requête | Rôle |
 |---|---|
-| 200 | `{ "ok": true, "classe": "5A", "eleve": "Léa D.", "app": "robot-mbot", "depot": { "url": "...", "mot_de_passe": "..." } }` |
-| 400 | Code manquant |
-| 401 | Code inconnu ou désactivé |
-| 403 | Site non autorisé (voir Réglages) |
-| 429 | Trop de codes erronés depuis ce réseau (100 en 15 min) |
+| `POST login.php` `{code, app}` | → `{classe, eleve, jeton, expire, espace, depot}` |
+| `POST deconnexion.php` | Invalide le jeton |
+| `GET donnees.php?app=&cle=` | → `{existe, valeur, maj}` |
+| `GET donnees.php?app=` | → `{cles: [{cle, taille, maj}]}` |
+| `POST donnees.php` `{app, cle, valeur, base?}` | Enregistre (2 Mo max par clé). 409 si `base` est plus ancien que le serveur |
+| `POST donnees.php` `{app, cle, supprimer: true}` | Efface |
+| `GET fichiers.php?app=` / `?app=&nom=` | Liste / télécharge |
+| `POST fichiers.php` (multipart `app`, `fichier`, `nom?`) | Envoie (remplace le fichier du même nom) |
+| `POST fichiers.php` `{app, nom, supprimer: 1}` | Supprime |
+| `GET ressources.php?app=` / `?app=&nom=` | Ressources de l'atelier |
 
-`GET /api/` — vérifie que la Centrale répond.
+Codes d'erreur : 400 (demande incomplète), 401 (non connecté ou session expirée), 403 (site non autorisé), 409 (conflit), 413 (trop gros), 429 (trop d'essais de codes), 507 (espace de l'élève plein).

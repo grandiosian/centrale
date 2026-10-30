@@ -65,7 +65,223 @@ function creer_tables(PDO $pdo): void
             ts  INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_echecs ON echecs (cle, ts);
+
+        -- Sessions des élèves (jeton donné après la saisie du code)
+        CREATE TABLE IF NOT EXISTS sessions (
+            jeton_hash TEXT PRIMARY KEY,
+            eleve_id   INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+            expire     INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions (expire);
+
+        -- Données sauvegardées par les applications (JSON), par élève / atelier / clé
+        CREATE TABLE IF NOT EXISTS donnees (
+            eleve_id INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+            app      TEXT NOT NULL,
+            cle      TEXT NOT NULL,
+            valeur   TEXT NOT NULL,
+            taille   INTEGER NOT NULL,
+            maj      INTEGER NOT NULL,
+            PRIMARY KEY (eleve_id, app, cle)
+        );
+        -- Anciennes versions (une toutes les 10 minutes au plus, 10 gardées par clé)
+        CREATE TABLE IF NOT EXISTS donnees_versions (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            eleve_id INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+            app      TEXT NOT NULL,
+            cle      TEXT NOT NULL,
+            valeur   TEXT NOT NULL,
+            taille   INTEGER NOT NULL,
+            maj      INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_versions ON donnees_versions (eleve_id, app, cle, maj);
+
+        -- Fichiers des élèves (stockés dans data/fichiers, hors de la racine web)
+        CREATE TABLE IF NOT EXISTS fichiers (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            eleve_id INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+            app      TEXT NOT NULL,
+            nom      TEXT NOT NULL,
+            type     TEXT NOT NULL DEFAULT 'application/octet-stream',
+            taille   INTEGER NOT NULL,
+            chemin   TEXT NOT NULL,
+            maj      INTEGER NOT NULL,
+            UNIQUE (eleve_id, app, nom)
+        );
+
+        -- Ressources déposées par l'enseignant pour un atelier (lisibles par tous les élèves)
+        CREATE TABLE IF NOT EXISTS ressources (
+            id     INTEGER PRIMARY KEY AUTOINCREMENT,
+            app    TEXT NOT NULL,
+            nom    TEXT NOT NULL,
+            type   TEXT NOT NULL DEFAULT 'application/octet-stream',
+            taille INTEGER NOT NULL,
+            chemin TEXT NOT NULL,
+            maj    INTEGER NOT NULL,
+            UNIQUE (app, nom)
+        );
         SQL);
+}
+
+/* ---------- Stockage des fichiers ---------- */
+
+const TAILLE_MAX_DONNEE = 2 * 1024 * 1024; // 2 Mo par clé JSON (au-delà : utiliser les fichiers)
+
+function quota_eleve_octets(): int
+{
+    return max(1, (int) reglage('quota_eleve_mo', '100')) * 1024 * 1024;
+}
+
+function fichier_max_octets(): int
+{
+    return max(1, (int) reglage('fichier_max_mo', '20')) * 1024 * 1024;
+}
+
+/** Espace utilisé par un élève (données + fichiers), en octets. */
+function usage_eleve(int $eleve_id): int
+{
+    $st = db()->prepare('SELECT
+            COALESCE((SELECT SUM(taille) FROM donnees WHERE eleve_id = :e), 0)
+          + COALESCE((SELECT SUM(taille) FROM donnees_versions WHERE eleve_id = :e), 0)
+          + COALESCE((SELECT SUM(taille) FROM fichiers WHERE eleve_id = :e), 0)');
+    $st->execute([':e' => $eleve_id]);
+    return (int) $st->fetchColumn();
+}
+
+/** Chemin absolu d'un fichier stocké (chemin relatif enregistré en base). */
+function chemin_stockage(string $relatif): string
+{
+    return DOSSIER_DATA . '/' . $relatif;
+}
+
+/** Range un fichier envoyé dans data/<sous_dossier>/ sous un nom aléatoire. Renvoie le chemin relatif. */
+function ranger_fichier(string $source, string $sous_dossier, bool $deplacer_upload = true): string
+{
+    db(); // crée data/ si besoin
+    $dossier = DOSSIER_DATA . '/' . $sous_dossier;
+    if (!is_dir($dossier)) {
+        mkdir($dossier, 0700, true);
+    }
+    $relatif = $sous_dossier . '/' . bin2hex(random_bytes(16)) . '.bin';
+    $ok = $deplacer_upload ? move_uploaded_file($source, DOSSIER_DATA . '/' . $relatif)
+                           : rename($source, DOSSIER_DATA . '/' . $relatif);
+    if (!$ok) {
+        throw new RuntimeException("Impossible d'enregistrer le fichier.");
+    }
+    return $relatif;
+}
+
+function effacer_fichier_stocke(?string $relatif): void
+{
+    if ($relatif && is_file(chemin_stockage($relatif))) {
+        unlink(chemin_stockage($relatif));
+    }
+}
+
+/** Supprime du disque tous les fichiers d'un élève (à appeler avant de le supprimer en base). */
+function effacer_fichiers_eleve(int $eleve_id): void
+{
+    $st = db()->prepare('SELECT chemin FROM fichiers WHERE eleve_id = ?');
+    $st->execute([$eleve_id]);
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $c) {
+        effacer_fichier_stocke($c);
+    }
+    @rmdir(DOSSIER_DATA . '/fichiers/' . $eleve_id);
+}
+
+/** Nom de fichier sûr : pas de dossier, pas de caractères bizarres. */
+function nom_fichier_propre(string $nom): string
+{
+    $nom = basename(str_replace('\\', '/', $nom));
+    $nom = preg_replace('/[\x00-\x1f\x7f<>:"|?*]/u', '', $nom) ?? '';
+    $nom = trim($nom, " .");
+    return mb_substr($nom, 0, 120);
+}
+
+/** Clé de donnée : lettres, chiffres, - _ . / (ex. "projet", "niveau-2/score"). */
+function cle_propre(string $cle): string
+{
+    $cle = preg_replace('#[^A-Za-z0-9_./-]#', '', trim($cle)) ?? '';
+    // Pas de segments vides, "." ou ".." (évite les chemins piégés dans les exports ZIP)
+    $segments = array_filter(explode('/', $cle), fn($s) => $s !== '' && $s !== '.' && $s !== '..');
+    return substr(implode('/', $segments), 0, 80);
+}
+
+function format_taille(int $octets): string
+{
+    if ($octets < 1024) {
+        return $octets . ' o';
+    }
+    if ($octets < 1024 * 1024) {
+        return round($octets / 1024) . ' Ko';
+    }
+    if ($octets < 1024 ** 3) {
+        return number_format($octets / 1024 / 1024, 1, ',', ' ') . ' Mo';
+    }
+    return number_format($octets / 1024 ** 3, 2, ',', ' ') . ' Go';
+}
+
+/** Convertit une taille de php.ini ("8M", "1G") en octets. */
+function octets_ini(string $valeur): int
+{
+    $valeur = trim($valeur);
+    $n = (int) $valeur;
+    return match (strtolower(substr($valeur, -1))) {
+        'g' => $n * 1024 ** 3,
+        'm' => $n * 1024 ** 2,
+        'k' => $n * 1024,
+        default => $n,
+    };
+}
+
+/** Taille totale du dossier data/ (base + fichiers). */
+function taille_dossier_data(): int
+{
+    $total = 0;
+    if (!is_dir(DOSSIER_DATA)) {
+        return 0;
+    }
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(DOSSIER_DATA, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        $total += $f->getSize();
+    }
+    return $total;
+}
+
+/** Envoie un fichier stocké au navigateur. */
+function servir_fichier(string $relatif, string $nom, string $type, bool $piece_jointe = true): never
+{
+    $chemin = chemin_stockage($relatif);
+    if (!is_file($chemin)) {
+        http_response_code(404);
+        exit;
+    }
+    header('Content-Type: ' . (preg_match('#^[a-z]+/[a-z0-9.+-]+$#i', $type) ? $type : 'application/octet-stream'));
+    header('Content-Length: ' . filesize($chemin));
+    header('X-Content-Type-Options: nosniff');
+    header("Content-Security-Policy: default-src 'none'; sandbox");
+    header('Cache-Control: private, no-store');
+    $ascii = preg_replace('/[^A-Za-z0-9._-]/', '_', $nom);
+    header('Content-Disposition: ' . ($piece_jointe ? 'attachment' : 'inline')
+        . '; filename="' . $ascii . '"; filename*=UTF-8\'\'' . rawurlencode($nom));
+    readfile($chemin);
+    exit;
+}
+
+/* ---------- Pseudonymes ---------- */
+
+/** Prochain numéro libre dans une classe ("01", "02"…). */
+function prochain_numero(int $classe_id): int
+{
+    $st = db()->prepare("SELECT MAX(CAST(etiquette AS INTEGER)) FROM eleves
+                         WHERE classe_id = ? AND etiquette GLOB '[0-9]*'");
+    $st->execute([$classe_id]);
+    return ((int) $st->fetchColumn()) + 1;
+}
+
+function est_pseudonyme(string $etiquette): bool
+{
+    return (bool) preg_match('/^\d{2,3}$/', $etiquette);
 }
 
 /* ---------- Réglages ---------- */
