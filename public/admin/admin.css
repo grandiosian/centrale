@@ -307,3 +307,10 @@ td.actions form[data-confirmer] .question-confirmation { position: absolute; rig
 .reinit-confirmation button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .reinit .nouveaux { margin-top: 12px; }
 .code-etab { text-transform: uppercase; max-width: 90px; font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .1em; }
+
+/* Identifiant élève (4C-LHA-surnom) */
+td.identifiant { white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; }
+td.identifiant form { display: inline; }
+td.identifiant button.lien-bouton { padding: 0 4px; font-size: 1rem; }
+.surnom.ressemble-nom { background: var(--err-fond); color: var(--danger); border-radius: 4px; padding: 1px 4px; font-weight: 700; }
+.surnom.ressemble-nom::after { content: " ⚠ nom ?"; font-family: system-ui, sans-serif; font-size: .75rem; }

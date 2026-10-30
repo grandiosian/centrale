@@ -60,6 +60,7 @@ function action_import(string $action): bool
         }
         $pdo->commit();
     }
+    attribuer_surnoms_manquants();
     echo json_encode(['ok' => true, 'classe_id' => (int) $classe['id'], 'classe' => $classe['nom'], 'creee' => $creee,
                       'prefixe' => prefixe_classe($classe['nom']), 'codes' => $codes], JSON_UNESCAPED_UNICODE);
     exit;

@@ -706,6 +706,12 @@
     '.centrale-form button{font:inherit;font-weight:600;padding:10px 16px;border:0;border-radius:8px;background:#1f5f8b;color:#fff;cursor:pointer}',
     '.centrale-form button[disabled]{opacity:.6;cursor:wait}',
     '.centrale-erreur{color:#b3261e;min-height:1.4em;margin:0}',
+    '.centrale-identite{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}',
+    '.centrale-identite code{font:600 1rem ui-monospace,Menlo,Consolas,monospace;padding:2px 8px;border-radius:6px;background:rgba(127,127,127,.14)}',
+    '.centrale-identite button{font:inherit;font-size:.88rem;font-weight:600;padding:3px 10px;border-radius:6px;border:1px solid #1f5f8b;background:transparent;color:inherit;cursor:pointer}',
+    '.centrale-identite form{display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex-basis:100%}',
+    '.centrale-identite input{font:500 1rem ui-monospace,Menlo,Consolas,monospace;padding:5px 8px;border:1px solid #b9b6ae;border-radius:6px;width:12em;background:inherit;color:inherit}',
+    '.centrale-identite .centrale-aide{flex-basis:100%;font-size:.85rem;opacity:.75;margin:0}',
   ].join('');
 
   function ajouterStyle() {
@@ -743,7 +749,7 @@
     form.innerHTML =
       '<label for="centrale-code">' + (options.titre || 'Mon code') + '</label>' +
       '<input id="centrale-code" name="code" autocomplete="off" autocapitalize="off" spellcheck="false" ' +
-      'placeholder="ex. 5A-abcdefg-hjkm-npqrs" required>' +
+      'placeholder="ex. 4C-LHA-9943-kfmz-tqpr" required>' +
       '<button type="submit">Se connecter</button>' +
       '<p class="centrale-erreur" role="alert"></p>';
     element.appendChild(form);
@@ -768,6 +774,76 @@
         champ.select();
       }
     });
+  }
+
+  /* ======================================================================
+     Identifiant de l'élève : « 4C-LHA-LoutreAgile » (le surnom, à la fin, peut être changé)
+     ====================================================================== */
+
+  function identifiant() {
+    var s = session();
+    return s ? (s.identifiant || '') : '';
+  }
+
+  /** Change le surnom (fin de l'identifiant). Renvoie { identifiant, prefixe, surnom }. */
+  async function changerSurnom(surnom) {
+    var d = await requeteJSON('surnom.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ surnom: String(surnom || '').trim() }),
+    });
+    var s = session();
+    if (s) {
+      s.identifiant = d.identifiant; s.prefixe = d.prefixe; s.surnom = d.surnom; s.surnom_modifiable = d.surnom_modifiable;
+      enregistrerSession(s);
+    }
+    return d;
+  }
+
+  /** Affiche « Ton identifiant : 4C-LHA-LoutreAgile [Changer mon surnom] » dans `element`. */
+  function afficherIdentifiant(element, options) {
+    options = options || {};
+    ajouterStyle();
+    var dessiner = function () {
+      var s = session();
+      element.innerHTML = '';
+      if (!s || !s.identifiant) return;
+      element.className = (element.className.replace(/\bcentrale-identite\b/, '') + ' centrale-identite').trim();
+      element.append(options.libelle != null ? options.libelle : 'Ton identifiant :');
+      var code = document.createElement('code');
+      code.textContent = s.identifiant;
+      element.appendChild(code);
+      if (!s.surnom_modifiable) return;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Changer mon surnom';
+      element.appendChild(b);
+      b.onclick = function () {
+        b.remove();
+        var f = document.createElement('form');
+        f.innerHTML = '<span></span><input maxlength="20" autocomplete="off" spellcheck="false" aria-label="Nouveau surnom">'
+          + '<button type="submit">Valider</button><button type="button">Annuler</button>'
+          + '<p class="centrale-aide">3 à 20 lettres ou chiffres. Pas ton vrai nom, pas de gros mots : ton professeur voit les surnoms.</p>'
+          + '<p class="centrale-erreur" role="alert"></p>';
+        f.querySelector('span').textContent = s.prefixe + '-';
+        var champ = f.querySelector('input');
+        champ.value = s.surnom;
+        f.querySelectorAll('button')[1].onclick = dessiner;
+        f.onsubmit = async function (ev) {
+          ev.preventDefault();
+          try {
+            await changerSurnom(champ.value);
+            dessiner();
+            if (options.onChange) options.onChange(identifiant());
+          } catch (e) {
+            f.querySelector('.centrale-erreur').textContent = e.message;
+          }
+        };
+        element.appendChild(f);
+        champ.focus(); champ.select();
+      };
+    };
+    dessiner();
   }
 
   /* ---------- Événements du navigateur ---------- */
@@ -810,6 +886,9 @@
     activiteDemandee: activiteDemandee,
     reprendreSession: reprendreSession,
     afficherConnexion: afficherConnexion,
+    identifiant: identifiant,
+    changerSurnom: changerSurnom,
+    afficherIdentifiant: afficherIdentifiant,
     nomFichier: nomFichier,
     telecharger: telecharger,
     ouvrirDepot: ouvrirDepot,

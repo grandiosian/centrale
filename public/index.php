@@ -34,6 +34,8 @@ header { display: flex; justify-content: space-between; align-items: center; gap
          padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--bord); }
 header strong { font-size: 1.05rem; }
 #qui { display: flex; align-items: center; gap: 10px; font-size: .95rem; }
+#qui code { font: 600 .9rem ui-monospace, Menlo, Consolas, monospace; }
+.identite { margin: -6px 0 22px; padding: 12px 16px; }
 main { max-width: 900px; margin: 0 auto; padding: 28px 16px 64px; }
 h1 { margin: 0 0 6px; font-size: 1.7rem; letter-spacing: -.01em; }
 h2.section { font-size: 1.25rem; margin: 32px 0 12px; }
@@ -116,6 +118,7 @@ footer a { color: var(--doux); }
     <section id="ecran-eleve" hidden>
         <h1>Mes ateliers</h1>
         <p class="sous">Choisis un atelier. Ton travail y est enregistré automatiquement ; reviens ici avec « ← Mes ateliers ».</p>
+        <div class="carte identite" id="identite"></div>
         <div id="bloc-parcours" hidden>
             <h2 class="section">Mes parcours</h2>
             <div id="liste-parcours"></div>
@@ -142,7 +145,10 @@ footer a { color: var(--doux); }
     $('ecran-connexion').hidden = true;
     $('ecran-eleve').hidden = false;
     $('qui').hidden = false;
-    $('qui').replaceChildren(`${infos.classe} · élève ${infos.eleve} `);
+    $('qui').replaceChildren(el('code', {}, Centrale.identifiant() || `${infos.classe} · ${infos.eleve}`), ' ');
+    Centrale.afficherIdentifiant($('identite'), {
+      onChange: (id) => { $('qui').firstChild.textContent = id; },
+    });
     const sortir = el('button', { class: 'petit secondaire' }, 'Se déconnecter');
     sortir.onclick = () => { Centrale.deconnexion(); location.reload(); };
     $('qui').append(sortir);

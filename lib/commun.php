@@ -270,6 +270,7 @@ function creer_tables(PDO $pdo): void
     ajouter_colonne($pdo, 'ateliers', 'urls_secours', "TEXT NOT NULL DEFAULT ''");
     ajouter_colonne($pdo, 'classes', 'etablissement_id', 'INTEGER REFERENCES etablissements(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'etablissements', 'code', "TEXT NOT NULL DEFAULT ''");   // 3 lettres, dans les codes élèves
+    ajouter_colonne($pdo, 'eleves', 'surnom', "TEXT NOT NULL DEFAULT ''");          // identifiant : 4C-LHA-<surnom>
 }
 
 /** Ajoute une colonne à une table existante (mise à jour d'une base créée par une version précédente). */
@@ -879,6 +880,93 @@ function prefixe_codes(array $classe): string
     }
     $classe_part = substr(implode('', $segments), 0, 10) ?: 'X';
     return $classe_part . ($code_etab !== '' ? '-' . $code_etab : '');
+}
+
+/* ---------- Surnoms : identifiant visible de l'élève, « 4C-LHA-LoutreAgile » ---------- */
+
+const SURNOM_ANIMAUX = ['Loutre', 'Panda', 'Renard', 'Hibou', 'Koala', 'Lynx', 'Castor', 'Dauphin', 'Faucon', 'Gecko', 'Lama',
+    'Manchot', 'Orque', 'Puma', 'Suricate', 'Tigre', 'Zebre', 'Yack', 'Bison', 'Chamois', 'Coyote', 'Ecureuil', 'Flamant',
+    'Gazelle', 'Herisson', 'Ibis', 'Jaguar', 'Kiwi', 'Lemurien', 'Marmotte', 'Narval', 'Ocelot', 'Pelican', 'Quokka',
+    'Raton', 'Salamandre', 'Tapir', 'Toucan', 'Varan', 'Wombat', 'Alpaga', 'Baleine', 'Caribou', 'Dingo', 'Elan', 'Fennec',
+    'Gorille', 'Hamster', 'Impala', 'Lievre', 'Mouflon', 'Oryx', 'Paon', 'Requin', 'Tatou', 'Vautour', 'Zebu', 'Phoque'];
+const SURNOM_ADJECTIFS = ['Agile', 'Rapide', 'Calme', 'Brave', 'Habile', 'Sage', 'Fidele', 'Magique', 'Cosmique', 'Tranquille',
+    'Intrepide', 'Solaire', 'Lunaire', 'Polaire', 'Electrique', 'Atomique', 'Logique', 'Pratique', 'Robuste', 'Souple',
+    'Vaillant', 'Lucide', 'Stellaire', 'Sonique', 'Mecanique', 'Numerique', 'Optique', 'Magnetique', 'Dynamique', 'Unique'];
+// Refusés dans un surnom choisi par l'élève (comparaison sans accents ni majuscules)
+const SURNOM_INTERDITS = ['merd', 'putain', 'pute', 'salope', 'salaud', 'connard', 'connasse', 'encule', 'batard', 'couille',
+    'niquer', 'niktamer', 'enfoire', 'bordel', 'branl', 'abruti', 'debile', 'cretin', 'gogol', 'negro', 'nazi', 'hitler', 'pedo', 'zizi',
+    'teub', 'chatte', 'sexe', 'porno', 'penis', 'vagin', 'bouffon', 'tapette', 'pd', 'fdp', 'ntm', 'tg', 'con', 'cul', 'nul',
+    'bite', 'boloss', 'pétasse', 'petasse', 'grognasse', 'clochard', 'gueule', 'tamere', 'mort', 'tuer', 'suicide'];
+
+function surnom_aleatoire(): string
+{
+    return SURNOM_ANIMAUX[random_int(0, count(SURNOM_ANIMAUX) - 1)] . SURNOM_ADJECTIFS[random_int(0, count(SURNOM_ADJECTIFS) - 1)];
+}
+
+/** Message d'erreur (pour l'élève) si le surnom n'est pas acceptable, sinon null. */
+function surnom_refuse(string $surnom): ?string
+{
+    if (!preg_match('/^[\p{L}0-9]{3,20}$/u', $surnom)) {
+        return 'Ton surnom doit faire de 3 à 20 lettres ou chiffres, sans espace ni tiret.';
+    }
+    $t = strtolower(sans_accents_maj($surnom));
+    foreach (SURNOM_INTERDITS as $mot) {
+        $m = strtolower(sans_accents_maj($mot));
+        if (strlen($m) <= 3 ? $t === $m : str_contains($t, $m)) {
+            return 'Ce surnom n’est pas accepté. Choisis-en un autre.';
+        }
+    }
+    return null;
+}
+
+function surnom_libre(int $classe_id, string $surnom, int $sauf_eleve = 0): bool
+{
+    $st = db()->prepare('SELECT COUNT(*) FROM eleves WHERE classe_id = ? AND surnom = ? COLLATE NOCASE AND id <> ?');
+    $st->execute([$classe_id, $surnom, $sauf_eleve]);
+    return (int) $st->fetchColumn() === 0;
+}
+
+/** Surnom aléatoire, unique dans la classe. */
+function attribuer_surnom(int $eleve_id, int $classe_id): string
+{
+    for ($i = 0; $i < 50; $i++) {
+        $s = surnom_aleatoire() . ($i >= 20 ? (string) random_int(2, 99) : '');
+        if (surnom_libre($classe_id, $s, $eleve_id)) {
+            break;
+        }
+    }
+    db()->prepare('UPDATE eleves SET surnom = ? WHERE id = ?')->execute([$s, $eleve_id]);
+    return $s;
+}
+
+/** Élèves créés avant les surnoms : on leur en donne un. */
+function attribuer_surnoms_manquants(): void
+{
+    foreach (db()->query("SELECT id, classe_id FROM eleves WHERE surnom = ''")->fetchAll() as $e) {
+        attribuer_surnom((int) $e['id'], (int) $e['classe_id']);
+    }
+}
+
+/** « 4C-LHA-LoutreAgile » : le début suit la classe et l'établissement, l'élève peut changer la fin. */
+function identifiant_eleve(array $classe, string $surnom): string
+{
+    return prefixe_codes($classe) . '-' . $surnom;
+}
+
+/** Infos d'identité renvoyées à l'élève par l'API (connexion, session, surnom). */
+function identite_eleve(int $eleve_id): array
+{
+    $st = db()->prepare('SELECT e.surnom, e.classe_id, c.nom, c.etablissement_id FROM eleves e JOIN classes c ON c.id = e.classe_id WHERE e.id = ?');
+    $st->execute([$eleve_id]);
+    $r = $st->fetch();
+    $surnom = $r['surnom'] !== '' ? $r['surnom'] : attribuer_surnom($eleve_id, (int) $r['classe_id']);
+    $classe = ['nom' => $r['nom'], 'etablissement_id' => $r['etablissement_id']];
+    return [
+        'identifiant'       => identifiant_eleve($classe, $surnom),
+        'prefixe'           => prefixe_codes($classe),
+        'surnom'            => $surnom,
+        'surnom_modifiable' => reglage('surnom_modifiable', '1') === '1',
+    ];
 }
 
 function etablissement_par_id(int $id): ?array

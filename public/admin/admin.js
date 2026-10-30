@@ -122,6 +122,15 @@
         : 'Noms non chargés sur cet ordinateur';
     });
     document.querySelectorAll('.oublier-liste').forEach(function (el) { el.hidden = !n; });
+    // Surnom choisi par l'élève qui ressemble à son vrai nom : on prévient l'enseignant (comparaison faite ici, en local)
+    document.querySelectorAll('.surnom[data-surnom]').forEach(function (el) {
+      var nom = nomLocal(el.dataset.classe, el.dataset.numero);
+      var s = sansAccents(el.dataset.surnom).replace(/[^a-z0-9]/g, '');
+      var morceaux = sansAccents(nom).split(/[^a-z0-9]+/).filter(function (m) { return m.length >= 3; });
+      var ressemble = morceaux.some(function (m) { return s.indexOf(m) >= 0; });
+      el.classList.toggle('ressemble-nom', ressemble);
+      el.title = ressemble ? 'Ce surnom ressemble au nom de l’élève : utilisez ↻ pour lui en donner un autre.' : '';
+    });
     document.dispatchEvent(new Event('centrale-noms')); // ex. plan de classe : redessiner avec les noms
   }
 
@@ -258,13 +267,13 @@
    * Liste globale : tous les établissements, toutes les classes, tous les élèves du serveur,
    * avec ce que cet ordinateur sait d'eux (nom, code, PAP / PPS / PAI). Un seul fichier « désanonymiseur ».
    */
-  var ENTETE_LISTE = ['Établissement', 'Classe', 'Numéro', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'];
+  var ENTETE_LISTE = ['Établissement', 'Classe', 'Numéro', 'Identifiant', 'Nom', 'Code', 'Besoins (PAP, PPS, PAI, PPRE)'];
   function lignesListeGlobale() {
     var serveur = [];
     try { serveur = JSON.parse(document.getElementById('json-classes').textContent) || []; } catch (e) { serveur = []; }
     var noms = lire(), codes = lireCle(CLE_CODES);
     if (!serveur.length) {   // secours : seulement ce qui est connu ici
-      serveur = Object.keys(noms).map(function (c) { return { nom: c, etablissement: '', numeros: Object.keys(noms[c]) }; });
+      serveur = Object.keys(noms).map(function (c) { return { nom: c, etablissement: '', eleves: Object.keys(noms[c]).map(function (n) { return [n, '']; }) }; });
     }
     var tri = function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); };
     serveur.sort(function (a, b) {
@@ -272,8 +281,9 @@
     });
     var lignes = [];
     serveur.forEach(function (c) {
-      c.numeros.slice().sort(tri).forEach(function (num) {
-        lignes.push([c.etablissement, c.nom, num, (noms[c.nom] || {})[num] || '', (codes[c.nom] || {})[num] || '',
+      c.eleves.slice().sort(function (a, b) { return tri(a[0], b[0]); }).forEach(function (e) {
+        var num = e[0];
+        lignes.push([c.etablissement, c.nom, num, e[1], (noms[c.nom] || {})[num] || '', (codes[c.nom] || {})[num] || '',
           besoinsLocaux(c.nom, num).join(', ')]);
       });
     });
@@ -501,7 +511,10 @@
 
     document.getElementById('codes-csv').addEventListener('click', function () {
       telechargerCSV('codes_' + dc.prefixe + '_' + aujourdhui() + '.csv', ENTETE_LISTE,
-        lignesCodes().map(function (l) { return [dc.etablissement || '', dc.classe, l.numero, l.nom, l.code, besoinsLocaux(dc.classe, l.numero).join(', ')]; }));
+        lignesCodes().map(function (l) {
+          var s = document.querySelector('.surnom[data-numero="' + l.numero + '"]');
+          return [dc.etablissement || '', dc.classe, l.numero, s ? s.textContent.trim() : '', l.nom, l.code, besoinsLocaux(dc.classe, l.numero).join(', ')];
+        }));
     });
 
     document.getElementById('codes-imprimer').addEventListener('click', function () {

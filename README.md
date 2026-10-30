@@ -299,10 +299,17 @@ Onglet **Fichiers** :
   - Le code commence par la classe, puis le code à 3 lettres de l'établissement (onglet Établissements, champ « Code »), puis une partie personnelle tirée au hasard.
   - Si le nom de la classe contient déjà l'établissement (« 4C-HAUTIERS »), le code reprend seulement « 4C ».
   - Les majuscules et les espaces ne comptent pas à la saisie.
+- **Identifiant de l'élève** : `4C-LHA-LoutreAgile`.
+  - C'est la classe et l'établissement, puis un surnom tiré au hasard, attribué automatiquement.
+  - L'élève le voit sur son portail et peut changer le surnom : 3 à 20 lettres ou chiffres, unique dans la classe, gros mots refusés.
+  - Le début suit la classe et l'établissement. Les applications le lisent avec `Centrale.identifiant()`, ou l'affichent avec `Centrale.afficherIdentifiant(element)`.
+  - Côté enseignant (colonne « Identifiant ») : un surnom qui ressemble au vrai nom est signalé, et ↻ en donne un autre au hasard. La comparaison se fait sur votre ordinateur.
+  - Le changement de surnom par les élèves peut être désactivé dans les Réglages.
+  - L'identifiant sert à afficher l'élève. Pour se connecter, l'élève utilise toujours son code.
 - **Réinitialiser tous les codes et télécharger la liste** (bouton rouge en haut du tableau de bord) :
   - Tous les élèves de tous les établissements reçoivent un nouveau code, après une confirmation. Le travail des élèves est conservé.
   - La liste globale est téléchargée et toutes les fiches sont prêtes à imprimer.
-- **Liste globale** (« Télécharger la liste ») : un seul fichier pour tous les établissements et toutes les classes, avec les colonnes Établissement ; Classe ; Numéro ; Nom ; Code ; Besoins.
+- **Liste globale** (« Télécharger la liste ») : un seul fichier pour tous les établissements et toutes les classes, avec les colonnes Établissement ; Classe ; Numéro ; Identifiant ; Nom ; Code ; Besoins.
 - **Renommer une classe** (bouton à côté du titre de la classe) :
   - Les codes déjà distribués restent valables : ils gardent l'ancien préfixe. Les nouveaux codes prennent le nouveau nom.
   - Les ateliers et parcours réservés à cette classe sont mis à jour.

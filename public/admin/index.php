@@ -60,14 +60,15 @@ function id_post(string $champ): int
 }
 
 /** Petit formulaire POST d'une ligne (bouton d'action). */
-function bouton(string $action, string $libelle, array $champs = [], string $classe = '', string $confirmer = ''): string
+function bouton(string $action, string $libelle, array $champs = [], string $classe = '', string $confirmer = '', string $titre = ''): string
 {
     $html = '<form method="post"' . ($confirmer !== '' ? ' data-confirmer="' . h($confirmer) . '"' : '') . '>' . csrf()
         . '<input type="hidden" name="action" value="' . h($action) . '">';
     foreach ($champs as $n => $v) {
         $html .= '<input type="hidden" name="' . h($n) . '" value="' . h((string) $v) . '">';
     }
-    return $html . '<button class="petit ' . h($classe) . '">' . h($libelle) . '</button></form>';
+    return $html . '<button class="petit ' . h($classe) . '"' . ($titre !== '' ? ' title="' . h($titre) . '" aria-label="' . h($titre) . '"' : '')
+        . '>' . h($libelle) . '</button></form>';
 }
 
 /** Affiche le nom d'un élève : le numéro vient du serveur, le nom est complété par le navigateur. */
@@ -156,6 +157,10 @@ if (empty($_SESSION['admin'])) {
 /* ======================================================================
    Actions de l'enseignant connecté
    ====================================================================== */
+
+if ($action === null) {
+    attribuer_surnoms_manquants();   // nouveaux élèves (et élèves créés avant les surnoms)
+}
 
 if ($action !== null) {
     $pdo = db();
@@ -345,6 +350,15 @@ if ($action !== null) {
             }
             rediriger($retour_classe . '#nouveaux');
 
+        case 'nouveau_surnom':
+            $st = $pdo->prepare('SELECT etiquette FROM eleves WHERE id = ? AND classe_id = ?');
+            $st->execute([$eleve_id, $classe_id]);
+            if ($n = $st->fetchColumn()) {
+                $s = attribuer_surnom($eleve_id, $classe_id);
+                flash("Élève $n : nouveau surnom « $s ».");
+            }
+            rediriger($retour_classe . '#eleves');
+
         case 'basculer':
             $pdo->prepare('UPDATE eleves SET actif = 1 - actif WHERE id = ? AND classe_id = ?')->execute([$eleve_id, $classe_id]);
             $pdo->prepare('DELETE FROM sessions WHERE eleve_id = ?')->execute([$eleve_id]);
@@ -449,6 +463,7 @@ if ($action !== null) {
             definir_reglage('lien_eleves', trim((string) ($_POST['lien_eleves'] ?? '')));
             definir_reglage('quota_eleve_mo', (string) max(1, min(10000, (int) ($_POST['quota_eleve_mo'] ?? 100))));
             definir_reglage('fichier_max_mo', (string) max(1, min(1000, (int) ($_POST['fichier_max_mo'] ?? 20))));
+            definir_reglage('surnom_modifiable', empty($_POST['surnom_modifiable']) ? '0' : '1');
             flash($erreurs
                 ? 'Réglages enregistrés. Lignes ignorées (format attendu : https://site.exemple) : ' . implode(', ', $erreurs)
                 : 'Réglages enregistrés.', $erreurs ? 'err' : 'ok');
@@ -716,6 +731,8 @@ function page_accueil(): void
                             <span class="aide"><?= $nb_eleves ?> élèves × ce quota ≤ espace de l'hébergement</span>
                             <input type="number" name="quota_eleve_mo" min="1" max="10000" value="<?= (int) reglage('quota_eleve_mo', '100') ?>">
                         </label>
+                        <label class="case"><input type="checkbox" name="surnom_modifiable" value="1" <?= reglage('surnom_modifiable', '1') === '1' ? 'checked' : '' ?>>
+                            Les élèves peuvent changer leur surnom (fin de l'identifiant, ex. 4C-LHA-<em>LoutreAgile</em>)</label>
                         <label>Taille max. d'un fichier (Mo)
                             <span class="aide">Plafond du serveur : <?= h((string) ini_get('upload_max_filesize')) ?></span>
                             <input type="number" name="fichier_max_mo" min="1" max="1000" value="<?= (int) reglage('fichier_max_mo', '20') ?>">
@@ -759,6 +776,7 @@ function page_classe(int $id): void
     $avec_noms = array_filter($eleves, fn($e) => !est_pseudonyme($e['etiquette']));
     $quota = quota_eleve_octets();
     $nom = $classe['nom'];
+    $prefixe_codes = prefixe_codes($classe);
 
     $nouveaux = null;
     if (!empty($_SESSION['nouveaux']) && (int) $_SESSION['nouveaux']['classe_id'] === $id) {
@@ -859,12 +877,14 @@ function page_classe(int $id): void
             </div>
             <?php if ($eleves): ?>
                 <div class="defile"><table>
-                    <thead><tr><th>N°</th><th>Nom (sur cet ordinateur)</th><th>Dernière connexion</th><th>Espace</th><th></th></tr></thead>
+                    <thead><tr><th>N°</th><th>Nom (sur cet ordinateur)</th><th>Identifiant</th><th>Dernière connexion</th><th>Espace</th><th></th></tr></thead>
                     <tbody>
                     <?php foreach ($eleves as $e): $ch = ['classe_id' => $id, 'eleve_id' => $e['id']]; ?>
                         <tr class="<?= $e['actif'] ? '' : 'inactif' ?>">
                             <td class="numero"><?= est_pseudonyme($e['etiquette']) ? h($e['etiquette']) : '?' ?></td>
                             <td><?= nom_eleve($nom, $e['etiquette']) ?><?= $e['actif'] ? '' : ' <span class="discret">(désactivé)</span>' ?></td>
+                            <td class="identifiant"><span class="surnom" data-surnom="<?= h($e['surnom']) ?>" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>"><span class="discret"><?= h($prefixe_codes) ?>-</span><?= h($e['surnom']) ?></span>
+                                <?= bouton('nouveau_surnom', '↻', $ch, 'lien-bouton', '', 'Donner un nouveau surnom au hasard') ?></td>
                             <td><?= quand($e['derniere_connexion'] ? (int) $e['derniere_connexion'] : null) ?></td>
                             <td><?= format_taille((int) $e['espace']) ?><?= jauge((int) $e['espace'], $quota) ?></td>
                             <td class="actions">
@@ -1244,10 +1264,12 @@ function pied(): void
         // Classes du serveur (établissement + numéros) : pour la liste globale « Télécharger la liste »
         $classes = [];
         foreach (db()->query('SELECT c.nom, COALESCE(e.nom, \'\') AS etablissement,
-                (SELECT GROUP_CONCAT(etiquette) FROM eleves WHERE classe_id = c.id) AS numeros
-                FROM classes c LEFT JOIN etablissements e ON e.id = c.etablissement_id') as $c) {
+                c.etablissement_id, c.id FROM classes c LEFT JOIN etablissements e ON e.id = c.etablissement_id') as $c) {
+            $st = db()->prepare('SELECT etiquette, surnom FROM eleves WHERE classe_id = ?');
+            $st->execute([$c['id']]);
+            $prefixe = prefixe_codes($c);
             $classes[] = ['nom' => $c['nom'], 'etablissement' => $c['etablissement'],
-                          'numeros' => $c['numeros'] ? explode(',', $c['numeros']) : []];
+                          'eleves' => array_map(fn($e) => [$e['etiquette'], $prefixe . '-' . $e['surnom']], $st->fetchAll())];
         }
         echo "\n<script type=\"application/json\" id=\"json-classes\">"
             . json_encode($classes, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';

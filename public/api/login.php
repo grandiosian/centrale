@@ -64,6 +64,7 @@ envoyer_json(200, [
     'classe' => $eleve['classe'],
     'eleve'  => $eleve['etiquette'],
     'app'    => $app,
+    ...identite_eleve((int) $eleve['id']),   // identifiant « 4C-LHA-LoutreAgile », surnom modifiable
     'jeton'  => $jeton,
     'expire' => $expire,
     'espace' => ['utilise' => $usage, 'quota' => quota_eleve_octets()],
