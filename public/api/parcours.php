@@ -16,6 +16,24 @@ $eleve = eleve_connecte();
 $prog = progression_eleves([$eleve['id']])[$eleve['id']] ?? [];
 $catalogue = catalogue_activites();
 
+// Adresse de secours : si une étape pointe vers un atelier dont l'adresse principale ne répond plus,
+// on la remplace par la première adresse de secours qui répond.
+$remplacements = [];
+foreach (db()->query('SELECT * FROM ateliers')->fetchAll() as $a) {
+    $meilleure = meilleure_adresse($a);
+    if ($meilleure !== $a['url']) {
+        $remplacements[$a['url']] = $meilleure;
+    }
+}
+$adresse = function (string $url) use ($remplacements): string {
+    foreach ($remplacements as $de => $vers) {
+        if ($url !== '' && str_starts_with($url, $de)) {
+            return $vers . substr($url, strlen($de));
+        }
+    }
+    return $url;
+};
+
 $res = [];
 foreach (parcours_pour_classe($eleve['classe']) as $p) {
     $etapes = [];
@@ -27,7 +45,7 @@ foreach (parcours_pour_classe($eleve['classe']) as $p) {
             'titre'    => $et['titre'],
             'app'      => $et['app'],
             'activite' => $et['activite'],
-            'url'      => $et['url'],
+            'url'      => $adresse($et['url']),
             'statut'   => $etat['statut'],
             'taux'     => round($etat['taux'], 3),
             'texte'    => $etat['texte'],

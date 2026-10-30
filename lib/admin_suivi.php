@@ -67,6 +67,18 @@ function action_suivi(string $action): bool
             if (!preg_match('#^https?://\S+$#', $url)) {
                 $erreurs[] = "L'adresse doit commencer par https://";
             }
+            $secours = [];
+            foreach (preg_split('/\R/', (string) ($_POST['urls_secours'] ?? '')) ?: [] as $u) {
+                $u = trim($u);
+                if ($u === '') {
+                    continue;
+                }
+                if (!preg_match('#^https?://\S+$#', $u)) {
+                    $erreurs[] = "Adresse de secours invalide : $u";
+                } elseif ($u !== $url) {
+                    $secours[] = $u;
+                }
+            }
             if ($erreurs) {
                 $_SESSION['brouillon_atelier'] = $_POST;
                 foreach ($erreurs as $e) {
@@ -77,13 +89,13 @@ function action_suivi(string $action): bool
             $champs = [$app, $nom, mb_substr(trim((string) ($_POST['description'] ?? '')), 0, 300), $url,
                 mb_substr(trim((string) ($_POST['icone'] ?? '')), 0, 4),
                 implode(',', array_filter(array_map('trim', explode(',', (string) ($_POST['classes'] ?? ''))))),
-                (int) ($_POST['ordre'] ?? 0), empty($_POST['actif']) ? 0 : 1];
+                (int) ($_POST['ordre'] ?? 0), empty($_POST['actif']) ? 0 : 1, implode("\n", array_unique($secours))];
             try {
                 if ($id) {
-                    $pdo->prepare('UPDATE ateliers SET app = ?, nom = ?, description = ?, url = ?, icone = ?, classes = ?, ordre = ?, actif = ? WHERE id = ?')
+                    $pdo->prepare('UPDATE ateliers SET app = ?, nom = ?, description = ?, url = ?, icone = ?, classes = ?, ordre = ?, actif = ?, urls_secours = ? WHERE id = ?')
                         ->execute([...$champs, $id]);
                 } else {
-                    $pdo->prepare('INSERT INTO ateliers (app, nom, description, url, icone, classes, ordre, actif) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                    $pdo->prepare('INSERT INTO ateliers (app, nom, description, url, icone, classes, ordre, actif, urls_secours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
                         ->execute($champs);
                 }
             } catch (PDOException) {
@@ -440,6 +452,13 @@ function page_ateliers(): void
     $pdo = db();
     $liste = $pdo->query('SELECT * FROM ateliers ORDER BY ordre, nom')->fetchAll();
     $catalogue = catalogue_activites();
+    $ouvertures = [];
+    $st = $pdo->prepare('SELECT app, origine, COUNT(*) AS n FROM connexions WHERE ts >= ? GROUP BY app, origine');
+    $st->execute([time() - 7 * 86400]);
+    foreach ($st->fetchAll() as $o) {
+        $nom_o = nom_origine($o['origine']);
+        $ouvertures[$o['app']][$nom_o] = ($ouvertures[$o['app']][$nom_o] ?? 0) + (int) $o['n'];
+    }
     $connues = array_values(array_unique(array_merge(array_keys($catalogue),
         $pdo->query("SELECT DISTINCT app FROM progression UNION SELECT DISTINCT app FROM donnees")->fetchAll(PDO::FETCH_COLUMN))));
     $enregistrees = array_column($liste, 'app');
@@ -450,7 +469,7 @@ function page_ateliers(): void
     $brouillon = $_SESSION['brouillon_atelier'] ?? null;
     unset($_SESSION['brouillon_atelier']);
     $courant = ['id' => 0, 'app' => (string) ($_GET['app'] ?? ''), 'nom' => '', 'description' => '', 'url' => '',
-                'icone' => '', 'classes' => '', 'ordre' => count($liste) + 1, 'actif' => 1];
+                'icone' => '', 'classes' => '', 'ordre' => count($liste) + 1, 'actif' => 1, 'urls_secours' => ''];
     if ($modifier) {
         $st = $pdo->prepare('SELECT * FROM ateliers WHERE id = ?');
         $st->execute([$modifier]);
@@ -495,6 +514,11 @@ function page_ateliers(): void
                     </label>
                 </div>
                 <label>Adresse de l'application<input name="url" type="url" required value="<?= h($courant['url']) ?>" placeholder="https://grandiosian.github.io/NetSim/"></label>
+                <label>Adresses de secours (facultatives)
+                    <span class="aide">Une par ligne : copie sur la Forge, sur ce serveur (<code><?= h(url_base()) ?>/miroir/…/</code>)…
+                        Si l'adresse principale ne répond plus, le portail ouvre automatiquement la première qui répond.</span>
+                    <textarea name="urls_secours" rows="2" class="mono" placeholder="<?= h(url_base()) ?>/miroir/netsim/"><?= h($courant['urls_secours']) ?></textarea>
+                </label>
                 <label>Description (facultative)<input name="description" maxlength="300" value="<?= h($courant['description']) ?>" placeholder="Construire et tester des réseaux"></label>
                 <div class="grille-atelier reglages-atelier">
                     <label>Classes<span class="aide">Ex. 5A, 5B. Vide = toutes.</span><input name="classes" value="<?= h($courant['classes']) ?>"></label>
@@ -510,14 +534,22 @@ function page_ateliers(): void
 
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
-                <thead><tr><th></th><th>Atelier</th><th>Activités</th><th>Classes</th><th>État</th><th></th></tr></thead>
+                <thead><tr><th></th><th>Atelier</th><th>Activités</th><th>Ouvertures (7 j)</th><th>Classes</th><th>État</th><th></th></tr></thead>
                 <tbody>
                 <?php foreach ($liste as $a): ?>
                     <tr class="<?= $a['actif'] ? '' : 'inactif' ?>">
                         <td style="font-size:1.4rem"><?= h($a['icone']) ?></td>
-                        <td><strong><?= h($a['nom']) ?></strong> <code><?= h($a['app']) ?></code><br>
-                            <a href="<?= h($a['url']) ?>" target="_blank" rel="noopener" class="discret"><?= h($a['url']) ?></a></td>
+                        <td><strong><?= h($a['nom']) ?></strong> <code><?= h($a['app']) ?></code>
+                            <?php foreach (adresses_atelier($a) as $i => $u): $repond = adresse_repond($u); ?>
+                                <br><span class="<?= $repond ? 'ok' : 'alerte' ?>" title="<?= $repond ? 'Répond' : 'Ne répond pas' ?> (vérifié il y a moins de 5 min)"><?= $repond ? '●' : '○' ?></span>
+                                <a href="<?= h($u) ?>" target="_blank" rel="noopener" class="discret"><?= h($u) ?></a><?= $i ? ' <span class="discret">(secours)</span>' : '' ?>
+                            <?php endforeach; ?></td>
                         <td><?= count($catalogue[$a['app']] ?? []) ?: '<span class="discret" title="Les activités apparaissent quand l\'application les déclare (à la première connexion d\'un élève)">—</span>' ?></td>
+                        <td class="discret"><?php
+                            $o = $ouvertures[$a['app']] ?? [];
+                            arsort($o);
+                            echo $o ? implode('<br>', array_map(fn($k, $n) => h($k) . ' : ' . $n, array_keys($o), $o)) : '—';
+                        ?></td>
                         <td><?= $a['classes'] !== '' ? h($a['classes']) : '<span class="discret">toutes</span>' ?></td>
                         <td><?= $a['actif'] ? 'Visible' : 'Masqué' ?></td>
                         <td class="actions">
@@ -533,6 +565,36 @@ function page_ateliers(): void
     </main>
     <?php
     pied();
+}
+
+/** Section « Connexions » de la page d'un élève : quel atelier, depuis quel hébergement. */
+function section_connexions_eleve(int $eleve_id): void
+{
+    $st = db()->prepare('SELECT * FROM connexions WHERE eleve_id = ? ORDER BY ts DESC LIMIT 30');
+    $st->execute([$eleve_id]);
+    $lignes = $st->fetchAll();
+    if (!$lignes) {
+        return;
+    }
+    ?>
+    <section>
+        <h2>Connexions</h2>
+        <p class="aide">Atelier ouvert et site d'où il a été chargé (30 dernières, 120 jours maximum). Aucune adresse IP n'est enregistrée.</p>
+        <div class="defile"><table>
+            <thead><tr><th>Date</th><th>Atelier</th><th>Hébergement</th><th>Connexion</th></tr></thead>
+            <tbody>
+            <?php foreach ($lignes as $c): ?>
+                <tr>
+                    <td><?= quand((int) $c['ts']) ?></td>
+                    <td><code><?= h($c['app']) ?></code></td>
+                    <td title="<?= h($c['origine']) ?>"><?= h(nom_origine($c['origine'])) ?></td>
+                    <td class="discret"><?= $c['moyen'] === 'portail' ? 'depuis le portail' : 'avec son code' ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table></div>
+    </section>
+    <?php
 }
 
 /** Section « Avancement » de la page d'un élève. */

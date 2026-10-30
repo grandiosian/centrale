@@ -722,7 +722,7 @@
    */
   function afficherConnexion(element, options) {
     options = options || {};
-    if (jetonTransmis && (!connecte() || session().jeton !== jetonTransmis)) {
+    if (jetonTransmis) { // ouvert depuis le portail : on valide le jeton (et la Centrale note l'ouverture de l'atelier)
       var j = jetonTransmis;
       jetonTransmis = null;
       element.textContent = 'Connexion…';

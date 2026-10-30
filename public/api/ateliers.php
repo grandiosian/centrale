@@ -39,7 +39,7 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {
         'app'         => $app,
         'nom'         => $a['nom'],
         'description' => $a['description'],
-        'url'         => $a['url'],
+        'url'         => meilleure_adresse($a),   // adresse de secours si la principale ne répond plus
         'icone'       => $a['icone'],
         'taux'        => round($global['taux'], 3),
         'terminees'   => count(array_filter($activites, fn($x) => $x['statut'] === 'termine')),

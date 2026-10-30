@@ -8,6 +8,10 @@
 #     DOSSIER_DISTANT     dossier sur alwaysdata (par défaut : www/centrale)
 #
 # Le dossier data/ (base des codes élèves) n'est jamais touché par le déploiement.
+#
+# Copies de secours : les applications listées dans miroirs.txt sont copiées dans
+# public/miroir/<nom>/ (servies à /miroir/<nom>/). Mise à jour à chaque déploiement
+# et toutes les heures. Si une copie échoue, rien n'est envoyé : le serveur garde la version précédente.
 
 name: Déployer sur alwaysdata
 
@@ -15,6 +19,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '23 * * * *'   # toutes les heures : met à jour les copies de secours
 
 jobs:
   deployer:
@@ -24,6 +30,23 @@ jobs:
 
       - name: Vérifier la syntaxe PHP
         run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Copier les applications de secours (miroirs.txt)
+        run: |
+          set -euo pipefail
+          [ -f miroirs.txt ] || exit 0
+          mkdir -p public/miroir
+          # Pas de PHP dans les copies : ce sont des applications statiques
+          printf '<FilesMatch "\\.(php|phtml|phar)$">\n  Require all denied\n</FilesMatch>\n' > public/miroir/.htaccess
+          grep -vE '^\s*(#|$)' miroirs.txt | while read -r nom depot; do
+            case "$nom" in *[!A-Za-z0-9_-]*) echo "Nom invalide : $nom"; exit 1;; esac
+            echo "→ $nom ($depot)"
+            git clone --quiet --depth 1 "$depot" "$RUNNER_TEMP/miroir-$nom"
+            rm -rf "$RUNNER_TEMP/miroir-$nom/.git" "$RUNNER_TEMP/miroir-$nom/.github"
+            mv "$RUNNER_TEMP/miroir-$nom" "public/miroir/$nom"
+            echo "$(date -u +%FT%TZ) $(git ls-remote "$depot" HEAD | cut -c1-7)" > "public/miroir/$nom/.copie"
+          done
+          ls public/miroir
 
       - name: Vérifier que les secrets sont configurés
         id: config

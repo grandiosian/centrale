@@ -169,8 +169,20 @@ function creer_tables(PDO $pdo): void
             icone       TEXT NOT NULL DEFAULT '',
             classes     TEXT NOT NULL DEFAULT '',          -- vide = toutes les classes
             ordre       INTEGER NOT NULL DEFAULT 0,
-            actif       INTEGER NOT NULL DEFAULT 1
+            actif       INTEGER NOT NULL DEFAULT 1,
+            urls_secours TEXT NOT NULL DEFAULT ''          -- autres adresses, une par ligne
         );
+
+        -- Journal des ouvertures d'ateliers : d'où l'application a été chargée (pas d'adresse IP)
+        CREATE TABLE IF NOT EXISTS connexions (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            eleve_id INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+            app      TEXT NOT NULL,
+            origine  TEXT NOT NULL,                          -- ex. https://grandiosian.github.io
+            moyen    TEXT NOT NULL,                          -- code | portail
+            ts       INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_connexions ON connexions (eleve_id, ts);
         CREATE TABLE IF NOT EXISTS parcours_etapes (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             parcours_id INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
@@ -181,6 +193,116 @@ function creer_tables(PDO $pdo): void
             url         TEXT NOT NULL DEFAULT ''
         );
         SQL);
+    ajouter_colonne($pdo, 'ateliers', 'urls_secours', "TEXT NOT NULL DEFAULT ''");
+}
+
+/** Ajoute une colonne à une table existante (mise à jour d'une base créée par une version précédente). */
+function ajouter_colonne(PDO $pdo, string $table, string $colonne, string $definition): void
+{
+    $colonnes = array_column($pdo->query("PRAGMA table_info($table)")->fetchAll(), 'name');
+    if (!in_array($colonne, $colonnes, true)) {
+        $pdo->exec("ALTER TABLE $table ADD COLUMN $colonne $definition");
+    }
+}
+
+/* ---------- Origine des connexions ---------- */
+
+/** Nom lisible de l'hébergement d'une application, d'après son origine (https://hote). */
+function nom_origine(string $origine): string
+{
+    $hote = strtolower((string) parse_url($origine, PHP_URL_HOST));
+    $port = parse_url($origine, PHP_URL_PORT);
+    $ici = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    return match (true) {
+        $hote === '' => 'inconnue',
+        $hote . ($port ? ':' . $port : '') === $ici => 'Serveur (Centrale)',
+        str_ends_with($hote, '.github.io') => 'GitHub',
+        str_ends_with($hote, 'forge.apps.education.fr') || str_contains($hote, 'gitlab') => 'Forge / GitLab',
+        str_ends_with($hote, '.alwaysdata.net') => 'alwaysdata',
+        $hote === 'localhost' || $hote === '127.0.0.1' => 'Ordinateur local',
+        default => $hote,
+    };
+}
+
+/** Enregistre l'ouverture d'un atelier par un élève (origine = site qui héberge l'application). */
+function noter_connexion(int $eleve_id, string $app, string $moyen): void
+{
+    $origine = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
+    if ($origine === '' || $origine === 'null') {
+        // Même site que la Centrale : le navigateur n'envoie pas toujours l'en-tête Origin
+        $origine = (est_https() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '');
+    }
+    db()->prepare('INSERT INTO connexions (eleve_id, app, origine, moyen, ts) VALUES (?, ?, ?, ?, ?)')
+        ->execute([$eleve_id, $app, mb_substr($origine, 0, 200), $moyen, time()]);
+    // On ne garde que 120 jours d'historique
+    if (random_int(1, 50) === 1) {
+        db()->prepare('DELETE FROM connexions WHERE ts < ?')->execute([time() - 120 * 86400]);
+    }
+}
+
+/* ---------- Disponibilité des adresses (ateliers) ---------- */
+
+/**
+ * L'adresse répond-elle ? Vérifié par le serveur (pas par le navigateur de l'élève),
+ * avec un cache de 5 minutes pour ne pas ralentir le portail.
+ */
+function adresse_repond(string $url): bool
+{
+    // Adresse sur ce serveur (ex. copie de secours /miroir/netsim/) : on regarde directement le disque
+    $p = parse_url($url);
+    if (strcasecmp((string) ($p['host'] ?? '') . (isset($p['port']) ? ':' . $p['port'] : ''), (string) ($_SERVER['HTTP_HOST'] ?? '')) === 0) {
+        if (preg_match('#^/miroir/([A-Za-z0-9_-]+)/#', (string) ($p['path'] ?? ''), $m)) {
+            return is_file(__DIR__ . '/../public/miroir/' . $m[1] . '/index.html');
+        }
+        return true;
+    }
+    $cle = 'etat_url:' . md5($url);
+    $cache = reglage($cle);
+    if ($cache !== null) {
+        [$ok, $quand] = explode('|', $cache) + [1 => 0];
+        if (time() - (int) $quand < 300) {
+            return $ok === '1';
+        }
+    }
+    $ok = false;
+    if (function_exists('curl_init')) {
+        $c = curl_init($url);
+        curl_setopt_array($c, [CURLOPT_NOBODY => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 3,
+            CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_TIMEOUT => 4, CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_USERAGENT => 'Centrale-eleves (verification)']);
+        curl_exec($c);
+        $code = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+        curl_close($c);
+        $ok = $code >= 200 && $code < 400;
+    } else {
+        $ctx = stream_context_create(['http' => ['method' => 'HEAD', 'timeout' => 4, 'ignore_errors' => true]]);
+        $h = @get_headers($url, false, $ctx);
+        $ok = $h && preg_match('#\s[23]\d\d\s#', (string) $h[0]);
+    }
+    definir_reglage($cle, ($ok ? '1' : '0') . '|' . time());
+    return $ok;
+}
+
+/** Adresses d'un atelier (principale puis secours). */
+function adresses_atelier(array $atelier): array
+{
+    $secours = array_filter(array_map('trim', preg_split('/\R/', (string) ($atelier['urls_secours'] ?? '')) ?: []));
+    return array_values(array_unique(array_merge([$atelier['url']], $secours)));
+}
+
+/** Première adresse qui répond (ou la principale si aucune ne répond). */
+function meilleure_adresse(array $atelier): string
+{
+    $adresses = adresses_atelier($atelier);
+    if (count($adresses) === 1) {
+        return $adresses[0];
+    }
+    foreach ($adresses as $u) {
+        if (adresse_repond($u)) {
+            return $u;
+        }
+    }
+    return $adresses[0];
 }
 
 /* ---------- Progression ---------- */

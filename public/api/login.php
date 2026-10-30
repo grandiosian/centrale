@@ -56,6 +56,7 @@ db()->prepare('UPDATE eleves SET derniere_connexion = ? WHERE id = ?')
 
 $depot = depot_pour((int) $eleve['classe_id'], $app);
 [$jeton, $expire] = creer_session((int) $eleve['id']);
+noter_connexion((int) $eleve['id'], $app, 'code');
 $usage = usage_eleve((int) $eleve['id']);
 
 envoyer_json(200, [

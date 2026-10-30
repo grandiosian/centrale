@@ -16,6 +16,7 @@ $st = db()->prepare('SELECT expire FROM sessions WHERE jeton_hash = ?');
 $st->execute([hash('sha256', (string) $_SERVER['HTTP_X_JETON'])]);
 $expire = (int) $st->fetchColumn();
 $depot = depot_pour((int) $eleve['classe_id'], $app);
+noter_connexion($eleve['id'], $app, 'portail');
 
 envoyer_json(200, [
     'ok'     => true,

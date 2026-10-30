@@ -194,7 +194,7 @@ if ($action !== null) {
 
         case 'vider_travail':
             supprimer_eleves('classe_id = ?', [$classe_id]);
-            foreach (['donnees', 'donnees_versions', 'fichiers', 'progression'] as $table) {
+            foreach (['donnees', 'donnees_versions', 'fichiers', 'progression', 'connexions'] as $table) {
                 $pdo->prepare("DELETE FROM $table WHERE eleve_id IN (SELECT id FROM eleves WHERE classe_id = ?)")->execute([$classe_id]);
             }
             flash('Travail et avancement de la classe effacés. Les codes des élèves fonctionnent toujours.');
@@ -901,6 +901,7 @@ function page_eleve(int $id): void
         <?= jauge($usage, $quota) ?>
         <?php messages(); ?>
         <?php section_avancement_eleve($id); ?>
+        <?php section_connexions_eleve($id); ?>
 
         <?php if (!$par_app): ?>
             <p class="vide" style="margin-top:24px">Aucun travail enregistré pour l'instant.</p>

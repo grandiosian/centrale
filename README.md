@@ -148,6 +148,22 @@ Puis ajoutez l'adresse du site de l'application dans **Réglages → Sites autor
   Chaque application lui *déclare* ses activités, et la Centrale peut alors les afficher, les ouvrir directement et les suivre.
 - Ce qui est de la donnée pure (questionnaire, TP noté, consignes) peut être un petit module hébergé sur la Centrale.
 
+### Hébergements multiples et copie de secours
+
+- Chaque atelier a une **adresse principale** et des **adresses de secours**, une par ligne : copie sur la Forge, copie sur ce serveur…
+- La Centrale vérifie elle-même quelles adresses répondent, avec un cache de 5 minutes. Le portail et les parcours ouvrent la première qui répond. Dans l'onglet Ateliers, ● veut dire que l'adresse répond, ○ qu'elle ne répond pas.
+- **Copie de secours sur ce serveur** : chaque application listée dans `miroirs.txt` est copiée dans `public/miroir/<nom>/`, servie à `https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/`.
+  - La copie est mise à jour à chaque déploiement et toutes les heures, par le workflow GitHub.
+  - Si une copie échoue, rien n'est envoyé et le serveur garde la version précédente.
+- Les applications fonctionnent aussi **sans la Centrale**, avec un enregistrement dans le navigateur. Si la Centrale est injoignable, le travail est gardé localement et renvoyé à son retour.
+
+### D'où se connectent les élèves
+
+À chaque ouverture d'atelier, la Centrale note l'hébergement d'où l'application a été chargée : GitHub, Forge, ce serveur… Elle ne stocke pas d'adresse IP, et garde 120 jours d'historique.
+
+- **Onglet Ateliers** : nombre d'ouvertures sur 7 jours par hébergement.
+- **Page Travail d'un élève** : ses 30 dernières connexions, avec l'atelier, l'hébergement, et s'il est passé par le portail ou a tapé son code.
+
 ### Ateliers du portail
 
 Onglet **Ateliers** de l'espace enseignant : icône, nom, identifiant (`app`), adresse, classes concernées.
