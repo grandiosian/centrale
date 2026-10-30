@@ -126,3 +126,41 @@ a.btn { display: inline-block; font-weight: 600; padding: 9px 16px; border-radiu
 a.btn.secondaire { background: transparent; color: var(--accent); }
 a.btn.petit { padding: 4px 10px; font-size: .85rem; }
 td.actions > * { vertical-align: middle; }
+
+/* --- Navigation, suivi, parcours --- */
+.barre nav { display: flex; align-items: center; gap: 4px 18px; flex-wrap: wrap; }
+.barre .onglet { color: var(--doux); text-decoration: none; font-weight: 500; padding: 2px 0; border-bottom: 2px solid transparent; }
+.barre .onglet.actif, .barre .onglet:hover { color: var(--texte); border-bottom-color: var(--accent); }
+main.large { max-width: 1400px; }
+.filtres { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; margin-top: 12px; }
+.filtres label { margin: 0; }
+select { display: block; margin-top: 4px; padding: 8px 10px; font: inherit; color: var(--texte); background: var(--surface);
+         border: 1px solid var(--bord); border-radius: 6px; min-width: 180px; }
+.legende { margin: 0; display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; font-size: .9rem; color: var(--doux); }
+.pastille { display: inline-grid; place-items: center; min-width: 34px; height: 24px; padding: 0 6px; border-radius: 5px; font-size: .8rem; font-weight: 600; }
+.suivi table { font-size: .88rem; }
+.suivi th, .suivi td { padding: 6px 8px; white-space: nowrap; }
+.suivi .fixe, .suivi .fixe2 { position: sticky; background: var(--surface); z-index: 1; }
+.suivi .fixe { left: 0; min-width: 44px; }
+.suivi .fixe2 { left: 44px; min-width: 120px; box-shadow: 1px 0 0 var(--bord); }
+.suivi thead th.fixe, .suivi thead th.fixe2 { z-index: 2; }
+.suivi tr.groupes th { text-align: center; text-transform: none; letter-spacing: 0; color: var(--texte);
+                       border-left: 1px solid var(--bord); background: var(--code-fond); }
+.suivi th.col-act { vertical-align: bottom; height: 120px; padding: 4px 2px; min-width: 40px; max-width: 46px; text-transform: none;
+                    letter-spacing: 0; font-weight: 500; color: var(--texte); }
+.suivi th.col-act span { writing-mode: vertical-rl; text-orientation: sideways; transform: rotate(180deg); display: block; max-height: 112px; overflow: hidden;
+                         text-overflow: ellipsis; margin: 0 auto; }
+.cellule, .pastille { text-align: center; }
+td.cellule { min-width: 40px; border-left: 1px solid var(--bord); }
+.st-termine { background: var(--ok-fond); color: var(--ok); font-weight: 700; }
+.st-termine small { font-weight: 500; }
+.st-commence { background: linear-gradient(to top, color-mix(in srgb, var(--alerte) 28%, transparent) var(--taux, 30%),
+               color-mix(in srgb, var(--alerte) 9%, transparent) var(--taux, 30%)); color: var(--alerte); font-weight: 600; }
+.st-a-faire { background: transparent; }
+.pastille.st-a-faire { border: 1px dashed var(--bord); }
+td.avancement { min-width: 110px; font-weight: 600; }
+.suivi tfoot td { font-weight: 600; color: var(--doux); background: var(--code-fond); }
+textarea.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .88rem; }
+.aide-catalogue { margin-bottom: 12px; font-size: .9rem; }
+.aide-catalogue summary { cursor: pointer; color: var(--accent); }
+.ok { color: var(--ok); font-weight: 600; }

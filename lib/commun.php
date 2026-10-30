@@ -120,7 +120,176 @@ function creer_tables(PDO $pdo): void
             maj    INTEGER NOT NULL,
             UNIQUE (app, nom)
         );
+
+        -- Avancement déclaré par les applications : une ligne par élève / atelier / activité
+        CREATE TABLE IF NOT EXISTS progression (
+            eleve_id  INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+            app       TEXT NOT NULL,
+            activite  TEXT NOT NULL,
+            titre     TEXT NOT NULL DEFAULT '',
+            statut    TEXT NOT NULL DEFAULT 'commence',   -- commence | termine
+            faites    INTEGER,                             -- étapes faites (meilleur résultat)
+            total     INTEGER,                             -- nombre d'étapes
+            score     REAL,                                -- meilleur score
+            score_max REAL,
+            details   TEXT,                                -- JSON libre (réponses, erreurs…)
+            debut     INTEGER NOT NULL,
+            maj       INTEGER NOT NULL,
+            fin       INTEGER,
+            PRIMARY KEY (eleve_id, app, activite)
+        );
+        CREATE INDEX IF NOT EXISTS idx_progression_app ON progression (app, activite);
+
+        -- Catalogue des activités d'un atelier (déclaré par l'application) : colonnes du suivi
+        CREATE TABLE IF NOT EXISTS activites (
+            app      TEXT NOT NULL,
+            activite TEXT NOT NULL,
+            titre    TEXT NOT NULL DEFAULT '',
+            groupe   TEXT NOT NULL DEFAULT '',
+            total    INTEGER,
+            ordre    INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (app, activite)
+        );
+
+        -- Parcours : enchaînement d'étapes, éventuellement dans plusieurs logiciels
+        CREATE TABLE IF NOT EXISTS parcours (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            nom         TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            classes     TEXT NOT NULL DEFAULT '',          -- "5A,5B" ; vide = toutes les classes
+            cree_le     INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS parcours_etapes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            parcours_id INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
+            ordre       INTEGER NOT NULL,
+            titre       TEXT NOT NULL,
+            app         TEXT NOT NULL,
+            activite    TEXT NOT NULL DEFAULT '',          -- vide = tout l'atelier
+            url         TEXT NOT NULL DEFAULT ''
+        );
         SQL);
+}
+
+/* ---------- Progression ---------- */
+
+/** Identifiant d'activité : comme une clé (ex. "relier-salle", "niveau-2/defi-3"). */
+function activite_propre(string $a): string
+{
+    return cle_propre($a);
+}
+
+/**
+ * Taux d'avancement (0 à 1) d'une ligne de progression.
+ * Terminé = 1 ; sinon étapes faites / total ; commencé sans détail = 0,1.
+ */
+function taux_ligne(?array $p): float
+{
+    if (!$p) {
+        return 0.0;
+    }
+    if ($p['statut'] === 'termine') {
+        return 1.0;
+    }
+    if ((int) ($p['total'] ?? 0) > 0) {
+        return min(0.99, max(0.0, (int) $p['faites'] / (int) $p['total']));
+    }
+    if ((float) ($p['score_max'] ?? 0) > 0) {
+        return min(0.99, max(0.0, (float) $p['score'] / (float) $p['score_max']));
+    }
+    return 0.1;
+}
+
+/**
+ * Avancement d'un élève sur une étape de parcours ou une colonne du suivi.
+ * $lignes : progression de l'élève pour cet atelier, indexée par activité.
+ * $catalogue : activités déclarées pour l'atelier (pour une étape « tout l'atelier »).
+ * Renvoie ['statut' => a_faire|commence|termine, 'taux' => 0..1, 'texte' => '3/5', 'maj' => ts|null]
+ */
+function etat_etape(string $activite, array $lignes, array $catalogue): array
+{
+    if ($activite !== '') {
+        $p = $lignes[$activite] ?? null;
+        if (!$p) {
+            return ['statut' => 'a_faire', 'taux' => 0.0, 'texte' => '', 'maj' => null];
+        }
+        $texte = '';
+        if ((int) ($p['total'] ?? 0) > 0) {
+            $texte = min((int) $p['faites'], (int) $p['total']) . '/' . (int) $p['total'];
+        } elseif ($p['score'] !== null && $p['score_max'] !== null) {
+            $texte = rtrim(rtrim(number_format((float) $p['score'], 1, ',', ''), '0'), ',') . '/' . rtrim(rtrim(number_format((float) $p['score_max'], 1, ',', ''), '0'), ',');
+        }
+        return ['statut' => $p['statut'] === 'termine' ? 'termine' : 'commence', 'taux' => taux_ligne($p),
+                'texte' => $texte, 'maj' => (int) $p['maj']];
+    }
+    // Tout l'atelier : moyenne sur le catalogue (ou sur ce qui a été commencé si rien n'est déclaré)
+    $ids = $catalogue ? array_keys($catalogue) : array_keys($lignes);
+    if (!$ids || !$lignes) {
+        return ['statut' => 'a_faire', 'taux' => 0.0, 'texte' => $ids ? '0/' . count($ids) : '', 'maj' => null];
+    }
+    $somme = 0.0;
+    $finies = 0;
+    $maj = 0;
+    foreach ($ids as $id) {
+        $somme += taux_ligne($lignes[$id] ?? null);
+        if (($lignes[$id]['statut'] ?? '') === 'termine') {
+            $finies++;
+        }
+        $maj = max($maj, (int) ($lignes[$id]['maj'] ?? 0));
+    }
+    $taux = $somme / count($ids);
+    return ['statut' => $finies === count($ids) ? 'termine' : 'commence', 'taux' => $taux,
+            'texte' => $finies . '/' . count($ids), 'maj' => $maj ?: null];
+}
+
+/** Progression d'un ensemble d'élèves : [eleve_id][app][activite] => ligne */
+function progression_eleves(array $eleve_ids): array
+{
+    if (!$eleve_ids) {
+        return [];
+    }
+    $marques = implode(',', array_fill(0, count($eleve_ids), '?'));
+    $st = db()->prepare("SELECT * FROM progression WHERE eleve_id IN ($marques)");
+    $st->execute(array_values($eleve_ids));
+    $res = [];
+    foreach ($st->fetchAll() as $p) {
+        $res[(int) $p['eleve_id']][$p['app']][$p['activite']] = $p;
+    }
+    return $res;
+}
+
+/** Catalogue des activités : [app][activite] => ligne, dans l'ordre déclaré */
+function catalogue_activites(?string $app = null): array
+{
+    $st = $app === null
+        ? db()->query('SELECT * FROM activites ORDER BY app, ordre, activite')
+        : db()->prepare('SELECT * FROM activites WHERE app = ? ORDER BY ordre, activite');
+    if ($app !== null) {
+        $st->execute([$app]);
+    }
+    $res = [];
+    foreach ($st->fetchAll() as $a) {
+        $res[$a['app']][$a['activite']] = $a;
+    }
+    return $res;
+}
+
+/** Parcours visibles par une classe, avec leurs étapes. */
+function parcours_pour_classe(?string $classe): array
+{
+    $tous = db()->query('SELECT * FROM parcours ORDER BY nom')->fetchAll();
+    $st = db()->prepare('SELECT * FROM parcours_etapes WHERE parcours_id = ? ORDER BY ordre, id');
+    $res = [];
+    foreach ($tous as $p) {
+        $classes = array_filter(array_map('trim', explode(',', $p['classes'])));
+        if ($classe !== null && $classes && !in_array(mb_strtoupper($classe), array_map('mb_strtoupper', $classes), true)) {
+            continue;
+        }
+        $st->execute([$p['id']]);
+        $p['etapes'] = $st->fetchAll();
+        $res[] = $p;
+    }
+    return $res;
 }
 
 /* ---------- Stockage des fichiers ---------- */

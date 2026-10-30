@@ -26,7 +26,9 @@
   var DELAI_SAUVEGARDE = 3000;
   var DELAI_REESSAI = 10000;
 
-  var config = { api: '', app: '*', surEtat: null, surDeconnexion: null };
+  var PREFIXE_FILE = 'centrale-progression:';
+  var config = { api: '', app: '*', activites: null, surEtat: null, surDeconnexion: null };
+  var jetonTransmis = null;    // jeton reçu dans l'adresse (#centrale=…) depuis le portail ou une autre application
   var memoire = null;          // session si sessionStorage est indisponible
   var attentes = {};           // cle -> { minuteur, promesses: [] }
   var bases = {};              // cle -> date (serveur) de la version sur laquelle l'élève travaille
@@ -43,7 +45,50 @@
     config.api = String(config.api || '').replace(/login\.php$/, '');
     if (config.api && !/\/$/.test(config.api)) config.api += '/';
     if (typeof config.surEtat === 'function') ecouteursEtat.push(config.surEtat);
+    lireJetonTransmis();
     return Centrale;
+  }
+
+  /** Récupère un jeton passé dans l'adresse (#centrale=…) puis le retire de l'adresse. */
+  function lireJetonTransmis() {
+    var h = location.hash.replace(/^#/, '');
+    if (!/(^|&)centrale=/.test(h)) return;
+    var reste = [];
+    h.split('&').forEach(function (morceau) {
+      if (morceau.indexOf('centrale=') === 0) jetonTransmis = decodeURIComponent(morceau.slice(9));
+      else if (morceau) reste.push(morceau);
+    });
+    try {
+      history.replaceState(null, '', location.pathname + location.search + (reste.length ? '#' + reste.join('&') : ''));
+    } catch (e) { /* rien */ }
+  }
+
+  /** Reprend une session à partir d'un jeton (passage d'une application à l'autre). */
+  async function reprendreSession(jeton) {
+    var reponse, donnees = {};
+    try {
+      reponse = await fetch(url('session.php', { app: config.app }), { headers: { 'X-Jeton': jeton } });
+      donnees = await reponse.json();
+    } catch (e) {
+      throw new Error('Serveur injoignable. Vérifie la connexion internet.');
+    }
+    if (!reponse.ok || !donnees.ok) throw new Error(donnees.erreur || 'Session expirée : retape ton code.');
+    enregistrerSession(donnees);
+    apresConnexion();
+    return donnees;
+  }
+
+  /** Après chaque connexion : catalogue des activités et progression restée en attente. */
+  function apresConnexion() {
+    var s = session();
+    if (!s) return;
+    if (config.activites && !s['catalogue:' + config.app]) {
+      declarerActivites(config.activites).then(function () {
+        var s2 = session();
+        if (s2) { s2['catalogue:' + config.app] = true; enregistrerSession(s2); }
+      }).catch(function () { /* on réessaiera à la prochaine connexion */ });
+    }
+    viderFileProgression();
   }
 
   function url(fichier, params) {
@@ -91,7 +136,25 @@
       throw new Error(donnees.erreur || ('Erreur du serveur (' + reponse.status + ').'));
     }
     enregistrerSession(donnees);
+    apresConnexion();
     return donnees;
+  }
+
+  /** Adresse d'une autre application, avec le jeton pour que l'élève n'ait pas à retaper son code. */
+  function lien(adresse) {
+    var s = session();
+    if (!s || !s.jeton) return adresse;
+    var u = new URL(adresse, location.href);
+    var h = u.hash.replace(/^#/, '');
+    u.hash = 'centrale=' + encodeURIComponent(s.jeton) + (h ? '&' + h : '');
+    return u.toString();
+  }
+
+  /** Ouvre une autre application (même onglet par défaut) en gardant la connexion. */
+  function ouvrir(adresse, nouvelOnglet) {
+    toutEnvoyer();
+    if (nouvelOnglet) window.open(lien(adresse), '_blank', 'noopener');
+    else location.href = lien(adresse);
   }
 
   function deconnexion() {
@@ -418,6 +481,111 @@
   }
 
   /* ======================================================================
+     Progression : avancement dans les activités (suivi enseignant)
+     ====================================================================== */
+
+  function cleFile() {
+    var s = session() || {};
+    return PREFIXE_FILE + [s.classe, s.eleve, config.app].join(':');
+  }
+
+  function lireFile() {
+    try { return JSON.parse(localStorage.getItem(cleFile())) || {}; } catch (e) { return {}; }
+  }
+
+  function ecrireFile(f) {
+    try {
+      if (Object.keys(f).length) localStorage.setItem(cleFile(), JSON.stringify(f));
+      else localStorage.removeItem(cleFile());
+    } catch (e) { /* rien */ }
+  }
+
+  /** Fusionne deux envois pour la même activité en gardant le meilleur (comme le serveur). */
+  function fusionner(a, b) {
+    if (!a) return b;
+    var m = Object.assign({}, a, b);
+    ['faites', 'score'].forEach(function (k) {
+      if (a[k] != null && b[k] != null) m[k] = Math.max(a[k], b[k]);
+    });
+    if (a.statut === 'termine') m.statut = 'termine';
+    return m;
+  }
+
+  /**
+   * Signale l'avancement de l'élève dans une activité.
+   *   Centrale.progression("relier-salle", { titre: "Brancher la salle", faites: 3, total: 5 })
+   *   Centrale.progression("relier-salle", { statut: "termine" })
+   *   Centrale.progression("quiz-1", { statut: "termine", score: 8, score_max: 10, details: { reponses } })
+   * Hors ligne, l'envoi est mis en file et repart au retour du réseau.
+   */
+  function progression(activite, infos) {
+    var envoi = Object.assign({ statut: 'commence' }, infos || {}, { activite: activite });
+    var file = lireFile();
+    file[activite] = fusionner(file[activite], envoi);
+    ecrireFile(file);
+    return viderFileProgression();
+  }
+
+  var envoiFileEnCours = null;
+  function viderFileProgression() {
+    if (envoiFileEnCours) return envoiFileEnCours.then(viderFileProgression);
+    if (!connecte()) return Promise.resolve();
+    var file = lireFile();
+    var ids = Object.keys(file);
+    if (!ids.length) return Promise.resolve();
+    envoiFileEnCours = (async function () {
+      for (var i = 0; i < ids.length; i++) {
+        var envoye = file[ids[i]];
+        try {
+          await requeteJSON('progression.php', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.assign({ app: config.app }, envoye)),
+          });
+          var actuelle = lireFile();
+          if (JSON.stringify(actuelle[ids[i]]) === JSON.stringify(envoye)) delete actuelle[ids[i]];
+          ecrireFile(actuelle);
+        } catch (e) {
+          if (e.horsLigne || e.statut === 401) { setTimeout(viderFileProgression, DELAI_REESSAI); break; }
+          var f2 = lireFile(); delete f2[ids[i]]; ecrireFile(f2); // donnée refusée : on l'abandonne
+        }
+      }
+    })().finally(function () { envoiFileEnCours = null; });
+    return envoiFileEnCours;
+  }
+
+  /** Avancement de l'élève dans cet atelier : { activite: { statut, faites, total, score… } } */
+  async function mesProgressions() {
+    var liste = (await requeteJSON('progression.php', { method: 'GET' })).progression;
+    var res = {};
+    liste.forEach(function (p) { res[p.activite] = p; });
+    var file = lireFile(); // ce qui n'est pas encore parti compte aussi
+    Object.keys(file).forEach(function (k) { res[k] = fusionner(res[k], file[k]); });
+    return res;
+  }
+
+  /**
+   * Déclare la liste des activités de l'atelier (dans l'ordre), pour le tableau de suivi :
+   *   Centrale.declarerActivites([{ id: "relier-salle", titre: "Brancher la salle", groupe: "5e", total: 5 }, …])
+   * Le plus simple : passer cette liste à Centrale.init({ activites: [...] }).
+   */
+  async function declarerActivites(liste) {
+    return requeteJSON('activites.php', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app: config.app, activites: liste }),
+    });
+  }
+
+  /** Avancement de l'élève dans TOUS les ateliers : { app: [ … ] } */
+  async function toutesMesProgressions() {
+    return (await requeteJSON('progression.php', { method: 'GET' }, { app: '*' })).progression;
+  }
+
+  /** Parcours de la classe avec l'avancement de l'élève à chaque étape. */
+  async function parcours() {
+    return (await requeteJSON('parcours.php', { method: 'GET' })).parcours;
+  }
+
+  /* ======================================================================
      Outils : nom de fichier, téléchargement, dépôt Nuage
      ====================================================================== */
 
@@ -487,7 +655,17 @@
    */
   function afficherConnexion(element, options) {
     options = options || {};
+    if (jetonTransmis && (!connecte() || session().jeton !== jetonTransmis)) {
+      var j = jetonTransmis;
+      jetonTransmis = null;
+      element.textContent = 'Connexion…';
+      reprendreSession(j)
+        .then(function (infos) { element.innerHTML = ''; if (options.onConnecte) options.onConnecte(infos); })
+        .catch(function () { enregistrerSession(null); afficherConnexion(element, options); });
+      return;
+    }
     if (connecte()) {
+      apresConnexion();
       if (options.onConnecte) options.onConnecte(session());
       return;
     }
@@ -527,7 +705,9 @@
 
   /* ---------- Événements du navigateur ---------- */
 
-  global.addEventListener('online', function () { if (connecte()) { envoyerSecoursEnAttente(); toutEnvoyer(); } });
+  global.addEventListener('online', function () {
+    if (connecte()) { envoyerSecoursEnAttente(); toutEnvoyer(); viderFileProgression(); }
+  });
   global.addEventListener('pagehide', envoiDeSortie);
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') toutEnvoyer();
@@ -551,6 +731,14 @@
     listeRessources: listeRessources,
     chargerRessource: chargerRessource,
     afficherEtat: afficherEtat,
+    progression: progression,
+    mesProgressions: mesProgressions,
+    toutesMesProgressions: toutesMesProgressions,
+    declarerActivites: declarerActivites,
+    parcours: parcours,
+    lien: lien,
+    ouvrir: ouvrir,
+    reprendreSession: reprendreSession,
     afficherConnexion: afficherConnexion,
     nomFichier: nomFichier,
     telecharger: telecharger,

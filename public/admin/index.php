@@ -8,6 +8,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../../lib/commun.php';
+require __DIR__ . '/../../lib/admin_suivi.php';
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
@@ -160,6 +161,8 @@ if ($action !== null) {
     $retour_classe = './?p=classe&id=' . $classe_id;
     $retour_eleve = './?p=eleve&id=' . $eleve_id;
 
+    action_suivi($action); // parcours et suivi (redirige si l'action les concerne)
+
     switch ($action) {
         case 'deconnexion':
             $_SESSION = [];
@@ -191,10 +194,10 @@ if ($action !== null) {
 
         case 'vider_travail':
             supprimer_eleves('classe_id = ?', [$classe_id]);
-            foreach (['donnees', 'donnees_versions', 'fichiers'] as $table) {
+            foreach (['donnees', 'donnees_versions', 'fichiers', 'progression'] as $table) {
                 $pdo->prepare("DELETE FROM $table WHERE eleve_id IN (SELECT id FROM eleves WHERE classe_id = ?)")->execute([$classe_id]);
             }
-            flash('Travail de la classe effacé. Les codes des élèves fonctionnent toujours.');
+            flash('Travail et avancement de la classe effacés. Les codes des élèves fonctionnent toujours.');
             rediriger($retour_classe);
 
         case 'anonymiser':
@@ -459,8 +462,10 @@ if ($page === 'export') {
    ====================================================================== */
 
 match ($page) {
-    'classe' => page_classe((int) ($_GET['id'] ?? 0)),
-    'eleve'  => page_eleve((int) ($_GET['id'] ?? 0)),
+    'classe'   => page_classe((int) ($_GET['id'] ?? 0)),
+    'eleve'    => page_eleve((int) ($_GET['id'] ?? 0)),
+    'suivi'    => page_suivi(),
+    'parcours' => page_parcours(),
     default  => page_accueil(),
 };
 
@@ -612,6 +617,9 @@ function page_accueil(): void
       const projet = await Centrale.charger("projet", { blocs: [] });   // reprend le travail
       // … puis à chaque modification :
       Centrale.sauver("projet", projet);                                // sauvegarde auto
+      // … et quand l’élève avance :
+      Centrale.progression("defi-1", { faites: 2, total: 5 });          // suivi enseignant
+      Centrale.progression("defi-1", { statut: "termine" });
     }
   });
 </script>') ?></pre>
@@ -891,6 +899,7 @@ function page_eleve(int $id): void
             · Espace : <?= format_taille($usage) ?> sur <?= format_taille($quota) ?></p>
         <?= jauge($usage, $quota) ?>
         <?php messages(); ?>
+        <?php section_avancement_eleve($id); ?>
 
         <?php if (!$par_app): ?>
             <p class="vide" style="margin-top:24px">Aucun travail enregistré pour l'instant.</p>
@@ -1023,11 +1032,17 @@ function messages(): void
     unset($_SESSION['flash']);
 }
 
-function barre(): void
+function barre(string $actif = 'classes'): void
 {
+    $liens = ['classes' => ['./', 'Classes'], 'suivi' => ['./?p=suivi', 'Suivi'], 'parcours' => ['./?p=parcours', 'Parcours']];
     ?>
     <header class="barre">
-        <a href="./" class="marque">Centrale élèves</a>
+        <nav>
+            <a href="./" class="marque">Centrale élèves</a>
+            <?php foreach ($liens as $cle => [$url, $libelle]): ?>
+                <a href="<?= $url ?>" class="onglet<?= $cle === $actif ? ' actif' : '' ?>"><?= $libelle ?></a>
+            <?php endforeach; ?>
+        </nav>
         <form method="post">
             <?= csrf() ?>
             <input type="hidden" name="action" value="deconnexion">

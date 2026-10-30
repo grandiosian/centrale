@@ -218,3 +218,34 @@
 
   afficherNoms();
 })();
+
+/* ---------- Export CSV du tableau de suivi (avec les noms gardés localement) ---------- */
+(function () {
+  var b = document.getElementById('exporter-suivi');
+  var table = document.getElementById('table-suivi');
+  if (!b || !table) return;
+  b.addEventListener('click', function () {
+    var lignes = [];
+    var entetes = Array.prototype.map.call(table.querySelectorAll('thead tr:last-child th'), function (th) {
+      return th.getAttribute('title') || th.textContent.trim();
+    });
+    lignes.push(entetes);
+    table.querySelectorAll('tbody tr, tfoot tr').forEach(function (tr) {
+      lignes.push(Array.prototype.map.call(tr.children, function (td) {
+        if (td.classList.contains('cellule') && td.dataset.taux !== undefined) {
+          if (td.classList.contains('st-termine')) return 'terminé';
+          if (td.classList.contains('st-commence')) return td.textContent.trim() || 'en cours';
+          return '';
+        }
+        return td.textContent.trim();
+      }));
+    });
+    var csv = '﻿' + lignes.map(function (l) {
+      return l.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';');
+    }).join('\r\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = b.dataset.fichier + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+})();
