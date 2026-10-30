@@ -85,8 +85,9 @@ function page_import(): void
                     (icône d'export en haut à droite de la liste) et enregistrez le fichier.</li>
                 <li>Ou plus simplement : sélectionnez toute la liste (Ctrl+A), copiez (Ctrl+C) et collez-la dans la zone ci-dessous.</li>
             </ol>
-            <p class="discret">Colonnes reconnues : « Élève » (NOM Prénom) ou « Nom » + « Prénom », et « Classe ».
-                Les autres colonnes (date de naissance, régime, options…) sont ignorées et ne quittent pas votre ordinateur.</p>
+            <p class="discret">Colonnes reconnues : « Élèves » (NOM Prénom) ou « Nom » + « Prénom », « Classe de rattachement » (ou « Classe »)
+                et « Sortie » : un élève dont la date de sortie est passée n'est pas créé.
+                Les autres colonnes (date de naissance, adresse e-mail, tuteur, options, régime…) sont ignorées et ne quittent pas votre ordinateur.</p>
         </details>
 
         <section class="carte">

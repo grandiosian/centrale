@@ -60,7 +60,16 @@
     nom: ['nom', 'nom de famille', 'nom d usage', 'nom eleve', 'nom de l eleve'],
     prenom: ['prenom', 'prenoms', 'prenom 1', 'premier prenom', 'prenom eleve', 'prenom usuel'],
     classe: ['classe', 'classes', 'division', 'classe de rattachement', 'div', 'structure'],
+    sortie: ['sortie', 'date de sortie', 'sorti le', 'date sortie'],
   };
+
+  /** « 05/01/2026 » (Pronote) ou « 2026-01-05 » → Date, sinon null. */
+  function lireDate(s) {
+    var m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) return new Date(+(m[3].length === 2 ? '20' + m[3] : m[3]), +m[2] - 1, +m[1]);
+    m = String(s || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  }
 
   function trouverColonnes(entete) {
     var n = entete.map(sansAccents);
@@ -135,15 +144,27 @@
       return;
     }
     var format = $('imp-format').value;
-    var parClasse = {}, ignorees = 0;
+    var parClasse = {}, ignorees = 0, partis = 0, sansClasse = 0, trouves = 0;
+    var aujourdhui = new Date(); aujourdhui.setHours(0, 0, 0, 0);
     tableau.slice(iEntete + 1).forEach(function (l) {
       var e;
-      if (col.nom >= 0 && col.prenom >= 0) e = { nom: l[col.nom] || '', prenom: l[col.prenom] || '' };
+      if (col.nom >= 0 && col.prenom >= 0) e = { nom: (l[col.nom] || '').trim(), prenom: (l[col.prenom] || '').trim() };
       else e = decouper(l[col.complet] || '');
-      var classe = col.classe >= 0 ? nomClasse(l[col.classe]) : classeDefaut;
-      if (!(e.nom || e.prenom) || !classe) { ignorees++; return; }
+      if (!(e.nom || e.prenom)) { ignorees++; return; }
+      // Élève sorti de l'établissement (colonne « Sortie » de Pronote, date passée) : on ne le crée pas
+      var sortie = col.sortie >= 0 ? lireDate(l[col.sortie]) : null;
+      if (sortie && sortie < aujourdhui) { partis++; return; }
+      var classe = (col.classe >= 0 ? nomClasse(l[col.classe]) : '') || classeDefaut;
+      if (!classe) { sansClasse++; return; }
+      trouves++;
       (parClasse[classe] = parClasse[classe] || []).push(e);
     });
+    if (!trouves) {
+      afficherErreur(sansClasse
+        ? sansClasse + " élève(s) sans classe dans le fichier : indiquez la classe dans le champ prévu, puis cliquez à nouveau sur Analyser."
+        : "Aucun élève trouvé dans ce fichier.");
+      return;
+    }
     var classes = Object.keys(parClasse).sort(function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); }).map(function (nom) {
       var eleves = parClasse[nom].sort(function (a, b) { return (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr'); });
       // Noms au format choisi ; en cas de doublon (deux « Léa D. »), on écrit le nom complet
@@ -163,8 +184,10 @@
       return { nom: nom, existe: !!existante, total: noms.length, nouveaux: nouveaux, deja: noms.length - nouveaux.length, remarque: remarque };
     });
     analyse = { classes: classes };
-    $('imp-resume').textContent = tableau.length - iEntete - 1 - ignorees + ' élève(s) trouvé(s) dans ' + classes.length + ' classe(s)'
-      + (ignorees ? ' · ' + ignorees + ' ligne(s) ignorée(s)' : '') + '.';
+    $('imp-resume').textContent = trouves + ' élève(s) trouvé(s) dans ' + classes.length + ' classe(s)'
+      + (partis ? ' · ' + partis + ' élève(s) sorti(s) de l\'établissement, non créé(s)' : '')
+      + (sansClasse ? ' · ' + sansClasse + ' élève(s) sans classe, ignoré(s) (indiquez une classe dans le champ prévu pour les inclure)' : '')
+      + (ignorees ? ' · ' + ignorees + ' ligne(s) vide(s) ignorée(s)' : '') + '.';
     var corps = $('imp-classes');
     corps.innerHTML = '';
     classes.forEach(function (c, i) {
