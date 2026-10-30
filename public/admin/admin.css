@@ -271,3 +271,6 @@ button.a-confirmer, a.a-confirmer { background: var(--danger) !important; border
 .question-confirmation { flex-basis: 100%; margin-top: 6px; padding: 6px 10px; border-radius: 6px; background: var(--err-fond); color: var(--danger); font-size: .85rem; white-space: normal; text-align: left; }
 form[data-confirmer] { position: relative; }
 td.actions form[data-confirmer] .question-confirmation { position: absolute; right: 0; top: 100%; z-index: 5; width: 260px; box-shadow: 0 4px 14px rgba(0,0,0,.15); }
+.aide-pronote ol { margin: 8px 0; padding-left: 20px; }
+.aide-pronote li { margin: 4px 0; }
+.en-ligne a.btn { white-space: nowrap; }

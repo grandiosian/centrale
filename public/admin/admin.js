@@ -50,7 +50,13 @@
   }
 
   // Accès aux noms locaux pour les autres scripts de l'espace enseignant (plan de classe)
-  window.CentraleNoms = { nomLocal: nomLocal };
+  window.CentraleNoms = {
+    nomLocal: nomLocal,
+    ajouter: function (classe, paires) { ajouter(classe, paires); afficherNoms(); },
+    carte: function (classe) { return Object.assign({}, lire()[classe] || {}); },
+    lireCSV: function (texte) { return lireCSV(texte); },
+    telechargerCSV: function (nom, entete, lignes) { telechargerCSV(nom, entete, lignes); },
+  };
 
   /** Message affiché dans la page (à la place d'alert(), que certains navigateurs intégrés n'affichent pas). */
   function afficherMessage(texte, erreur) {

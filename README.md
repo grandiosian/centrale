@@ -284,6 +284,13 @@ Onglet **Fichiers** :
 
 ## 7. Espace enseignant
 
+- **Importer depuis Pronote** (bouton sur la page Classes) :
+  - Source : un export CSV de la liste des élèves de Pronote, ou un copier-coller de la liste (Ctrl+A, Ctrl+C).
+  - Encodage et séparateur : UTF-8 ou Windows-1252, séparateur tabulation, « ; » ou « , ». Une ligne de titre au-dessus des en-têtes est acceptée.
+  - Colonnes reconnues : « Élève » (NOM Prénom) ou « Nom » + « Prénom », et « Classe ». « 5°A » devient « 5A ». Les autres colonnes sont ignorées.
+  - Lecture du fichier : elle se fait **dans le navigateur**. Pour chaque classe, le serveur ne reçoit que le nom de la classe et le nombre d'élèves. Il crée la classe si besoin et renvoie les codes.
+  - Après l'import : les noms sont enregistrés sur cet ordinateur. Les fiches sont prêtes à imprimer, et un fichier `codes_import_DATE.csv` (classe, numéro, nom, code) est téléchargé : rangez-le dans un dossier privé de votre Nuage.
+  - Réimport : un élève déjà présent (même classe, même nom sur cet ordinateur) n'est pas recréé. On peut donc réimporter après l'arrivée d'un nouvel élève.
 - **Tableau de bord** : classes, nombre d'élèves, espace utilisé, ressources des ateliers, réglages (sites autorisés, quotas).
 - **Classe** : codes, élèves (numéro, nom affiché localement, dernière connexion, espace), **export ZIP** de tout le travail, **effacer le travail** (fin d'année : les codes restent valables), dépôts Nuage facultatifs.
 - **Travail d'un élève** : données et fichiers par atelier, téléchargement, historique avec restauration.

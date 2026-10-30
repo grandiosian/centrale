@@ -11,6 +11,7 @@ require __DIR__ . '/../../lib/commun.php';
 require __DIR__ . '/../../lib/admin_suivi.php';
 require __DIR__ . '/../../lib/admin_organisation.php';
 require __DIR__ . '/../../lib/admin_fichiers.php';
+require __DIR__ . '/../../lib/admin_import.php';
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
@@ -166,6 +167,7 @@ if ($action !== null) {
     action_suivi($action);        // parcours, ateliers, suivi
     action_organisation($action); // établissements, emploi du temps, salles, plans
     action_fichiers($action);     // fichiers du serveur
+    action_import($action);       // import Pronote (réponse JSON)
 
     switch ($action) {
         case 'deconnexion':
@@ -476,6 +478,7 @@ match ($page) {
     'salle'    => page_salle((int) ($_GET['id'] ?? 0)),
     'placement' => page_placement((int) ($_GET['classe'] ?? 0), (int) ($_GET['salle'] ?? 0)),
     'fichiers' => page_fichiers(),
+    'import'   => page_import(),
     default  => page_accueil(),
 };
 
@@ -563,6 +566,7 @@ function page_accueil(): void
                     <input type="hidden" name="action" value="creer_classe">
                     <input name="nom" placeholder="ex. 5A" required maxlength="20" aria-label="Nom de la nouvelle classe">
                     <button>Créer la classe</button>
+                    <a class="btn secondaire" href="./?p=import">Importer depuis Pronote</a>
                 </form>
             </div>
             <?php if (!$classes): ?>
