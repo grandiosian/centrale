@@ -382,10 +382,10 @@ function page_suivi(): void
 
         // Colonnes
         $colonnes = [];
+        $parcours_vu = null;   // vue d'un parcours : mêmes états que le portail (fichiers déposés, équipe)
         if (str_starts_with($vue, 'parcours:')) {
-            $st = $pdo->prepare('SELECT * FROM parcours_etapes WHERE parcours_id = ? ORDER BY ordre, id');
-            $st->execute([(int) substr($vue, 9)]);
-            foreach ($st->fetchAll() as $et) {
+            $parcours_vu = parcours_par_id((int) substr($vue, 9));
+            foreach ($parcours_vu['etapes'] ?? [] as $et) {
                 $colonnes[] = ['app' => $et['app'], 'activite' => $et['activite'], 'titre' => $et['titre'],
                                'groupe' => $et['app'], 'sous' => $et['activite'] !== '' ? $et['activite'] : 'tout l\'atelier'];
             }
@@ -456,12 +456,17 @@ function page_suivi(): void
                 </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($eleves as $e): $somme = 0.0; $derniere = 0; ?>
+                <?php foreach ($eleves as $e): $somme = 0.0; $derniere = 0;
+                    $etats = null;
+                    if ($parcours_vu) {
+                        $proprio = proprietaire_projet(['id' => (int) $e['id']], $parcours_vu);
+                        $etats = etapes_projet($parcours_vu, $proprio, $proprio['type'] === 'eleve' ? [(int) $e['id'] => $prog[(int) $e['id']] ?? []] : null, $catalogue);
+                    } ?>
                     <tr class="<?= $e['actif'] ? '' : 'inactif' ?>">
                         <td class="numero fixe"><?= h($e['etiquette']) ?></td>
                         <td class="fixe2"><a href="./?p=eleve&id=<?= (int) $e['id'] ?>"><?= nom_eleve($classe['nom'], $e['etiquette']) ?></a></td>
                         <?php foreach ($colonnes as $i => $c):
-                            $etat = etat_etape($c['activite'], $prog[(int) $e['id']][$c['app']] ?? [], $catalogue[$c['app']] ?? []);
+                            $etat = $etats[$i] ?? etat_etape($c['activite'], $prog[(int) $e['id']][$c['app']] ?? [], $catalogue[$c['app']] ?? []);
                             $somme += $etat['taux'];
                             $derniere = max($derniere, (int) $etat['maj']);
                             if ($etat['statut'] === 'termine') {

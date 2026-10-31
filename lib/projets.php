@@ -119,7 +119,8 @@ function etapes_projet(array $parcours, array $proprio, ?array $prog_membres = n
             $etat['statut'] = 'commence';
             $etat['taux'] = max($etat['taux'], count($deposees) / count($sorties) / 2);
         }
-        if ($sorties && $etat['texte'] === '') {
+        // Étape « tout l'atelier » qui attend des fichiers : ce sont eux qui comptent, pas les activités de l'application
+        if ($sorties && ($etat['texte'] === '' || $et['activite'] === '')) {
             $etat['texte'] = count($deposees) . '/' . count($sorties) . ' fichier' . (count($sorties) > 1 ? 's' : '');
         }
         $ouverte = match ($parcours['deblocage']) {
