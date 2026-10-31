@@ -57,13 +57,14 @@ function action_organisation(string $action): bool
             }
             $champs = [$nom, $zone, empty($p['ab_actif']) ? 0 : 1, date_valide($ref) ? lundi_de($ref) : '',
                        empty($p['ab_sans_vacances']) ? 0 : 1, empty($p['samedi']) ? 0 : 1];
+            $couleur = preg_match('/^#[0-9a-f]{6}$/i', (string) ($p['couleur'] ?? '')) ? strtolower($p['couleur']) : '';
             $pdo->beginTransaction();
             if ($eid) {
-                $pdo->prepare('UPDATE etablissements SET nom = ?, zone = ?, ab_actif = ?, ref_semaine_a = ?, ab_sans_vacances = ?, samedi = ?, code = ? WHERE id = ?')
-                    ->execute([...$champs, $code, $eid]);
+                $pdo->prepare('UPDATE etablissements SET nom = ?, zone = ?, ab_actif = ?, ref_semaine_a = ?, ab_sans_vacances = ?, samedi = ?, code = ?, couleur = ? WHERE id = ?')
+                    ->execute([...$champs, $code, $couleur, $eid]);
             } else {
-                $pdo->prepare('INSERT INTO etablissements (nom, zone, ab_actif, ref_semaine_a, ab_sans_vacances, samedi, code, cree_le) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([...$champs, $code, time()]);
+                $pdo->prepare('INSERT INTO etablissements (nom, zone, ab_actif, ref_semaine_a, ab_sans_vacances, samedi, code, couleur, cree_le) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([...$champs, $code, $couleur, time()]);
                 $eid = (int) $pdo->lastInsertId();
             }
             // Grille : on met à jour les créneaux existants dans l'ordre, pour ne pas perdre les cours qui y sont rattachés
@@ -376,8 +377,8 @@ function page_etablissements(): void
         <?php if ($liste && !$e): ?>
             <div class="grille-classes">
                 <?php foreach ($liste as $x): ?>
-                    <a class="carte classe" href="./?p=etablissements&id=<?= (int) $x['id'] ?>">
-                        <strong><?= h($x['nom']) ?></strong>
+                    <a class="carte classe avec-etab" style="--etab:<?= h(couleur_etablissement((int) $x['id'])) ?>" href="./?p=etablissements&id=<?= (int) $x['id'] ?>">
+                        <strong><span class="puce-etab"></span><?= h($x['nom']) ?></strong>
                         <span><?= (int) $x['nb_classes'] ?> classe<?= $x['nb_classes'] > 1 ? 's' : '' ?> · <?= (int) $x['nb_salles'] ?> salle<?= $x['nb_salles'] > 1 ? 's' : '' ?></span>
                         <span class="discret">Code <?= h(code_etablissement((int) $x['id'])) ?> · <?= $x['zone'] ? 'Zone ' . h($x['zone']) : 'Zone non précisée' ?><?= $x['ab_actif'] ? ' · semaines A/B' : '' ?></span>
                     </a>
@@ -402,6 +403,9 @@ function page_etablissements(): void
                                 Le changer ne modifie pas les codes déjà distribués.</span>
                             <input name="code" maxlength="3" pattern="[A-Za-z]{3}" class="code-etab" value="<?= h($v['code'] ?? ($e ? code_etablissement($id) : '')) ?>"
                                    placeholder="<?= h(code_etablissement_suggere($v['nom'] ?? '')) ?>"></label>
+                        <label>Couleur
+                            <span class="aide">Liseré des pastilles de classe et couleur dans l'emploi du temps de l'accueil.</span>
+                            <input type="color" name="couleur" value="<?= h(($v['couleur'] ?? '') ?: couleur_etablissement($id ?: (count($liste) + 1))) ?>" class="choix-couleur"></label>
                         <label>Zone de vacances
                             <select name="zone"><?= options_html(['A' => 'Zone A', 'B' => 'Zone B', 'C' => 'Zone C'], $v['zone'] ?? '', 'Non précisée') ?></select></label>
                         <label class="case"><input type="checkbox" name="samedi" value="1" <?= !empty($v['samedi']) ? 'checked' : '' ?>> Cours le samedi</label>
@@ -529,7 +533,7 @@ function section_classes_etab(array $e): void
     ?>
     <section id="classes">
         <h2>Classes</h2>
-        <p><?= $classes ? implode(' ', array_map(fn($c) => '<a class="btn petit secondaire" href="./?p=classe&id=' . (int) $c['id'] . '">' . h($c['nom']) . '</a>', $classes))
+        <p class="liste-pastilles"><?= $classes ? implode(' ', array_map(fn($c) => '<a href="./?p=classe&id=' . (int) $c['id'] . '" title="' . h($c['nom']) . '">' . pastille_classe((int) $c['id']) . '</a>', $classes))
             : '<span class="vide">Aucune classe rattachée.</span>' ?></p>
         <?php if ($libres): ?>
             <form method="post" class="en-ligne">
@@ -635,7 +639,7 @@ function page_edt(): void
                         <?php foreach ($groupe as $s): ?>
                             <a class="seance st-<?= h($s['statut']) ?><?= ($choisie['cle'] ?? '') === $s['cle'] ? ' choisie' : '' ?>" href="<?= h($base . '&seance=' . $s['cle']) ?>#panneau"
                                title="<?= h($s['classe'] . ($s['intitule'] ? ' · ' . $s['intitule'] : '') . ($s['salle'] ? ' · ' . $s['salle'] : '') . ($s['note'] ? ' — ' . $s['note'] : '')) ?>">
-                                <strong><?= h($s['classe']) ?></strong>
+                                <strong><?= pastille_classe((int) $s['classe_id'], (str_contains($s['classe'], ' · ') ? explode(' · ', $s['classe'], 2)[1] : '')) ?></strong>
                                 <?php if ($s['intitule']): ?><span><?= h($s['intitule']) ?></span><?php endif; ?>
                                 <?php if ($s['salle']): ?><span class="salle"><?= h($s['salle']) ?></span><?php endif; ?>
                                 <?php if ($s['statut'] === 'annule'): ?><em>Annulé<?= $s['note'] ? ' : ' . h($s['note']) : '' ?></em>
@@ -829,7 +833,7 @@ function section_aujourdhui(): void
                 <?php foreach ($seances as $s): ?>
                     <tr class="<?= $s['statut'] === 'annule' ? 'inactif' : '' ?>">
                         <td class="numero"><?= h($s['debut']) ?>–<?= h($s['fin']) ?></td>
-                        <td><strong><?= h($s['classe']) ?></strong> <?= h($s['intitule']) ?>
+                        <td><?= pastille_classe((int) $s['classe_id'], (str_contains($s['classe'], ' · ') ? explode(' · ', $s['classe'], 2)[1] : '')) ?> <?= h($s['intitule']) ?>
                             <?php if ($s['statut'] === 'annule'): ?><span class="alerte"> · annulé<?= $s['note'] ? ' (' . h($s['note']) . ')' : '' ?></span><?php endif; ?>
                             <?php if ($s['statut'] === 'modifie'): ?><span class="alerte"> · modifié</span><?php endif; ?>
                             <?php if ($s['note'] && $s['statut'] !== 'annule'): ?><br><span class="discret">📝 <?= h($s['note']) ?></span><?php endif; ?></td>

@@ -1,0 +1,84 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://VOTREPSEUDO.github.io/MonAppli/centrale.json",
+ "format": "passerelle.atelier",
+ "version": 1,
+ "atelier": {
+  "app": "monappli",
+  "nom": "Mon application",
+  "version": "1.0.0",
+  "description": "Une phrase : ce que fait l'application en classe.",
+  "url": "https://VOTREPSEUDO.github.io/MonAppli/",
+  "urls_secours": [],
+  "icone": "🧩",
+  "depot": "https://github.com/VOTREPSEUDO/MonAppli",
+  "langue": "fr",
+  "classes": []
+ },
+ "centrale": {
+  "module": "js/centrale-client.js",
+  "serveur_par_defaut": "https://technoversailles.alwaysdata.net/",
+  "sites_a_autoriser": ["https://VOTREPSEUDO.github.io"],
+  "connexion": {
+   "bouton": "Où l'élève trouve « Mon code » (formulaire Centrale.afficherConnexion).",
+   "depuis_le_portail": "Jeton #centrale=… : connexion automatique.",
+   "activite_directe": "Ce que fait l'application avec Centrale.activiteDemandee().",
+   "retour": "Bouton « ← Mes ateliers » du module, ou équivalent."
+  },
+  "fonctions_utilisees": ["init", "afficherConnexion", "charger", "sauver", "progression"]
+ },
+ "activites": {
+  "identifiants_stables": true,
+  "liste": [
+   { "id": "a1", "titre": "Première activité", "groupe": "5e", "total": 3 }
+  ]
+ },
+ "progression": {
+  "envoi": "Centrale.progression(id, { titre, faites, total, statut })",
+  "champs": {
+   "titre": "titre de l'activité",
+   "faites": "ce qui est compté comme fait",
+   "total": "nombre d'éléments à faire",
+   "statut": "commence | termine"
+  },
+  "champs_non_utilises": ["score", "score_max", "details"],
+  "format": { "$ref": "#/$defs/Progression" }
+ },
+ "donnees": {
+  "projet": {
+   "description": "Le travail de l'élève, enregistré par Centrale.sauver(\"projet\", …).",
+   "sauvegarde": "À chaque modification.",
+   "chargement": "À la connexion.",
+   "format": { "$ref": "#/$defs/Projet" }
+  }
+ },
+ "fichiers": {
+  "utilises": false
+ },
+ "acces_javascript": {
+  "objet": "window.MonAppli",
+  "membres": {
+   "app": "Identifiant de l'atelier.",
+   "version": "Version (identique à atelier.version).",
+   "activites()": "Liste envoyée à la Centrale.",
+   "progression(id)": "{titre, faites, total, statut} ou null.",
+   "donnees()": "Valeurs des clés enregistrées."
+  }
+ },
+ "$defs": {
+  "Progression": {
+   "type": "object",
+   "required": ["faites", "total", "statut"],
+   "properties": {
+    "titre": { "type": "string" },
+    "faites": { "type": "integer", "minimum": 0 },
+    "total": { "type": "integer", "minimum": 1 },
+    "statut": { "enum": ["commence", "termine"] }
+   }
+  },
+  "Projet": {
+   "type": "object",
+   "description": "À remplacer par le schéma du travail de l'élève."
+  }
+ }
+}

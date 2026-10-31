@@ -45,7 +45,7 @@ Centrale (alwaysdata, en France)  ─ ─ ►  export ZIP / dépôt Nuage en sec
 
 Vérification : `https://VOTRECOMPTE.alwaysdata.net/api/` affiche `{"ok":true,…}`.
 
-**Espace disque** : comptez *nombre d'élèves × quota par élève* (réglable dans l'espace enseignant, 100 Mo par défaut). Avec l'offre alwaysdata « Small » (50 Go) et 300 élèves, un quota de 100 à 150 Mo convient. Le tableau de bord affiche l'espace réellement utilisé.
+**Espace disque** : comptez *nombre d'élèves × quota par élève* (réglable dans l'espace enseignant, 100 Mo par défaut). Avec l'offre alwaysdata « Small » (50 Go) et 300 élèves, un quota de 100 à 150 Mo convient. La page Classes affiche l'espace réellement utilisé.
 
 **Taille des fichiers envoyés** : le fichier `public/.user.ini` autorise jusqu'à 64 Mo par envoi. La limite réelle par fichier se règle dans l'espace enseignant (20 Mo par défaut).
 
@@ -96,6 +96,39 @@ Classes créées avec l'ancienne version (noms enregistrés en ligne) : bouton *
 ```
 
 Puis ajoutez l'adresse du site de l'application dans **Réglages → Sites autorisés** (par exemple `https://monpseudo.github.io`).
+
+### Passerelle : le descripteur `centrale.json`
+
+Chaque application publie à la racine de son site un fichier `centrale.json` au format **`passerelle.atelier` v1**. Il décrit ce qu'elle déclare, envoie et enregistre :
+
+- l'atelier : identifiant, nom, adresse, version ;
+- ses activités ;
+- les champs de progression ;
+- les clés de données ;
+- les fichiers qu'elle reçoit ou produit ;
+- les sites à autoriser.
+
+La spécification, le schéma JSON et un modèle vierge sont publiés par la Centrale à l'adresse **`/passerelle/`** (dossier `public/passerelle/`).
+
+Dans l'onglet **Ateliers**, la carte « Brancher une application par sa passerelle » prend l'adresse de l'application. La Centrale lit son `centrale.json` côté serveur, puis :
+
+- elle crée la fiche de l'atelier, ou complète ses champs vides sans écraser vos réglages ;
+- elle garde une copie du descripteur, mise à jour par le bouton « Relire » ;
+- elle ajoute les activités au catalogue : les colonnes du suivi et les identifiants des parcours sont connus avant la première connexion d'un élève ;
+- elle ouvre la **fiche de la passerelle**, avec les activités par groupe, la progression, les données, les fichiers, les remarques sur le descripteur et le JSON complet ;
+- elle signale chaque site à autoriser qui manque, avec un bouton « Autoriser ».
+
+Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteurs. Ces remarques ne sont jamais bloquantes. La Centrale signale :
+
+- un fichier qu'un atelier ne déclare pas recevoir ou produire ;
+- un fichier reçu qu'aucune étape précédente ne produit et qui ne fait pas partie des fichiers fournis ;
+- un atelier qui n'utilise pas encore le dossier de projet.
+
+| Application | Passerelle |
+|---|---|
+| NetSim | `centrale.json` complet : 18 activités, schéma et découvertes, pas de fichiers |
+| TechnoStudio | `centrale.json` complet : 28 activités et activités dynamiques, ressources `*.technostudio.json` / `*.gift`, pas encore de dossier de projet |
+| Établi 3D | Manifeste `postMessage` (`passerelle/manifest.json`, `"protocol": "passerelle"`). La Centrale en tire seulement la fiche. Pour le reste, Établi 3D doit publier un `centrale.json` |
 
 ### Fonctions
 
@@ -263,7 +296,7 @@ Onglet **Emploi du temps** : une grille par semaine, par établissement, avec l'
   - le **modifier** : autre date, autre créneau, autre salle, ou une note comme « Évaluation » ;
   - le **rétablir** comme prévu.
 - **Cours ponctuel** : un rattrapage ou une séance en plus.
-- Le **tableau de bord** affiche les cours du jour, avec un accès direct au plan de classe.
+- L'**Accueil** affiche le calendrier de la semaine et les prochains cours, avec un accès direct au plan de classe.
 
 ### Plans de classe
 
@@ -352,7 +385,7 @@ Adresse : **https://technoversailles.alwaysdata.net/admin/**. Elle n'apparaît p
   - Côté enseignant (colonne « Identifiant ») : un surnom qui ressemble au vrai nom est signalé, et ↻ en donne un autre au hasard. La comparaison se fait sur votre ordinateur.
   - Le changement de surnom par les élèves peut être désactivé dans les Réglages.
   - L'identifiant sert à afficher l'élève. Pour se connecter, l'élève utilise toujours son code.
-- **Réinitialiser tous les codes et télécharger la liste** (bouton rouge en haut du tableau de bord) :
+- **Réinitialiser tous les codes et télécharger la liste** (bouton rouge en haut de la page Classes) :
   - Tous les élèves de tous les établissements reçoivent un nouveau code, après une confirmation. Le travail des élèves est conservé.
   - La liste globale est téléchargée et toutes les fiches sont prêtes à imprimer.
 - **Liste globale** (« Télécharger la liste ») : un seul fichier pour tous les établissements et toutes les classes, avec les colonnes Établissement ; Classe ; Groupe ; Numéro ; Identifiant ; Nom ; Code ; Besoins.
@@ -373,7 +406,16 @@ Adresse : **https://technoversailles.alwaysdata.net/admin/**. Elle n'apparaît p
   - Votre navigateur garde une copie des codes créés ou importés sur cet ordinateur. Charger un fichier de codes (CSV) avec « Charger mon fichier de noms » restaure aussi cette copie.
   - Avec cette copie, vous pouvez **réimprimer les fiches** ou **retélécharger le CSV** à tout moment. Les codes gardés ici sont vérifiés auprès du serveur par leur empreinte.
   - Si des codes manquent ou ne sont plus valables : « Nouveaux codes pour les élèves sans code ici » ou « Nouveaux codes pour toute la classe ». Le travail des élèves est conservé.
-- **Tableau de bord** : classes, nombre d'élèves, espace utilisé, ressources des ateliers, réglages (sites autorisés, quotas).
+- **Accueil** (première page de l'espace enseignant) :
+  - Calendrier de la semaine, avec tous les établissements réunis. Chaque cours prend la couleur de son établissement ; les cours annulés sont barrés et les vacances hachurées. Une ligne marque l'heure actuelle, et ◀ ▶ change de semaine.
+  - Les 8 prochains cours.
+  - Le récapitulatif des connexions : élèves connectés depuis 1 h, aujourd'hui et sur 7 jours, sessions ouvertes, histogramme des 7 derniers jours, connexions par classe et par atelier, 10 dernières connexions.
+- **Code couleur des classes** : une pastille avec le nom court de la classe en bleu marine.
+  - Couleur de la pastille selon le niveau : jaune pour les 4ᵉ, vert pour les 5ᵉ, rouge pour les 3ᵉ (bleu clair pour les 6ᵉ).
+  - Liseré de la couleur de l'établissement, choisie dans l'onglet Établissements (champ « Couleur »).
+  - On retrouve ces pastilles dans les classes, l'emploi du temps, l'accueil et le récapitulatif des connexions.
+- **Classes** : les classes rangées par établissement, avec le nombre d'élèves et l'espace utilisé. C'est aussi là que se trouvent l'import Pronote, la liste globale et la réinitialisation des codes.
+- **Réglages** : ressources des ateliers, « Brancher une application », clé secrète des codes, sites autorisés, quotas.
 - **Classe** : codes, élèves (numéro, nom affiché localement, dernière connexion, espace), **export ZIP** de tout le travail, **effacer le travail** (fin d'année : les codes restent valables), dépôts Nuage facultatifs.
 - **Travail d'un élève** : données et fichiers par atelier, téléchargement, historique avec restauration.
 - **Ressources des ateliers** : déposez des fichiers (modèles 3D, consignes, images) que les élèves d'un atelier peuvent charger.
@@ -403,7 +445,7 @@ L'empreinte d'un code élève est calculée ainsi : `HMAC-SHA256(clé secrète, 
 - La clé est créée automatiquement sur le serveur, dans `~/centrale-cle/cle_secrete.txt`. Ce fichier est hors du site web, hors de la base `data/`, hors du déploiement et hors de GitHub.
 - Une copie de la base seule ne permet donc pas de retrouver les codes en les essayant hors ligne.
 - Le passage à la clé s'est fait sans regénérer les codes : chaque ancienne empreinte a été convertie.
-- **Copie de secours** : tableau de bord → « Clé secrète des codes » → Télécharger. Rangez-la dans un dossier privé du Nuage.
+- **Copie de secours** : Réglages → « Clé secrète des codes » → Télécharger. Rangez-la dans un dossier privé du Nuage.
 - Si la clé est perdue, une alerte s'affiche partout dans l'espace enseignant. Collez alors la copie de secours dans « Restaurer la clé ». Sans copie, il reste « Créer une nouvelle clé », puis il faut réinitialiser tous les codes.
 
 ## 9. Déploiement automatique depuis GitHub

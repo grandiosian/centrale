@@ -23,7 +23,7 @@ function action_groupes(string $action): bool
     $classe_id = (int) ($_POST['classe_id'] ?? 0);
     $retour = './?p=classe&id=' . $classe_id . '#groupes';
     if (!classe_par_id($classe_id)) {
-        rediriger('./');
+        rediriger('./?p=classes');
     }
     $groupes = groupes_de($classe_id);
     $groupe = null;
@@ -197,7 +197,7 @@ function action_equipes(string $action): never
     $classe_id = (int) ($_POST['classe_id'] ?? 0);
     $retour = './?p=classe&id=' . $classe_id . '#equipes';
     if (!classe_par_id($classe_id)) {
-        rediriger('./');
+        rediriger('./?p=classes');
     }
     $equipes = equipes_de($classe_id);
     $equipe = null;

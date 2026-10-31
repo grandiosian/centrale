@@ -74,7 +74,7 @@ function page_import(): void
     barre('classes');
     ?>
     <main>
-        <p class="fil"><a href="./">← Classes</a></p>
+        <p class="fil"><a href="./?p=classes">← Classes</a></p>
         <h1>Importer des classes depuis Pronote</h1>
         <p class="sous">Le fichier est lu <strong>dans votre navigateur</strong> : les noms des élèves ne sont jamais envoyés au serveur.
             Le serveur reçoit seulement le nom de chaque classe et le nombre d'élèves, et renvoie les codes.</p>

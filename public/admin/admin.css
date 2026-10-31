@@ -356,3 +356,104 @@ td.fichiers-projet a { display: block; font-size: .88rem; white-space: nowrap; }
 .liste-fournis li { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
 .liste-fournis form { margin: 0; }
 input.nom-equipe { width: 9em; font-weight: 700; }
+
+/* Code couleur des classes : fond = niveau (6e bleu ciel, 5e vert, 4e jaune, 3e rouge), texte bleu marine,
+   liseré = établissement */
+.pastille-classe { display: inline-flex; align-items: center; gap: 4px; min-width: 2.2em; justify-content: center;
+  padding: 2px 8px; border-radius: 999px; background: var(--niv); color: #13294b; font-weight: 800; font-size: .85rem;
+  line-height: 1.35; letter-spacing: .01em; vertical-align: middle; white-space: nowrap; }
+.pastille-classe.avec-etab { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--etab); }
+.pastille-classe small { font-weight: 700; font-size: .72rem; opacity: .85; }
+.pastille-classe.grande { font-size: 1.15rem; padding: 4px 12px; }
+.carte.classe .tete-classe { display: flex; align-items: center; gap: 10px; }
+.carte.classe.avec-etab { border-left: 4px solid var(--etab); }
+h1 .pastille-classe { margin-right: 8px; }
+.puce-etab { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--etab); vertical-align: -1px; margin-right: 6px; }
+.liste-pastilles a { text-decoration: none; margin: 0 6px 6px 0; display: inline-block; }
+input.choix-couleur { width: 64px; height: 36px; padding: 2px; }
+.seance strong .pastille-classe { font-size: .78rem; }
+
+/* ---------- Accueil ---------- */
+.tete-etab { display: flex; align-items: center; margin: 18px 0 10px; font-size: 1rem; }
+.legende-etabs { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 10px; font-size: .9rem; }
+.legende-etabs .puce-etab { margin-right: 6px; }
+.calendrier .titre-section { margin-bottom: 4px; }
+.cal { display: grid; grid-template-columns: 44px repeat(var(--jours), minmax(0, 1fr)); gap: 0 6px; overflow-x: auto; }
+.cal-heures { position: relative; margin-top: 30px; height: var(--hauteur); font-size: .72rem; color: var(--doux); }
+.cal-heures span { position: absolute; right: 4px; transform: translateY(-50%); }
+.cal-jour { min-width: 104px; }
+.cal-tete { height: 30px; display: flex; align-items: center; justify-content: center; gap: 4px; font-size: .85rem; color: var(--doux); }
+.cal-tete strong { color: var(--texte); font-size: 1rem; }
+.cal-jour.aujourdhui .cal-tete strong { background: var(--accent); color: var(--accent-texte); border-radius: 50%; width: 26px; height: 26px; display: inline-grid; place-items: center; }
+.cal-corps { position: relative; height: var(--hauteur); border-radius: 8px; background: color-mix(in srgb, var(--code-fond) 55%, transparent); }
+.cal-jour.aujourdhui .cal-corps { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.cal-corps .ligne { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--bord); }
+.cal-corps .maintenant { position: absolute; left: -3px; right: 0; border-top: 2px solid #e03131; z-index: 3; }
+.cal-corps .maintenant::before { content: ""; position: absolute; left: -2px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: #e03131; }
+.cal-vacances { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 8px; font-size: .8rem; color: var(--doux);
+  background: repeating-linear-gradient(-45deg, transparent 0 8px, color-mix(in srgb, var(--doux) 12%, transparent) 8px 10px); border-radius: 8px; }
+.cal-jour.vacances .cal-vacances { font-weight: 600; }
+.cal-cours { position: absolute; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; overflow: hidden;
+  padding: 4px 6px; border-radius: 7px; text-decoration: none; color: var(--texte); font-size: .76rem; line-height: 1.25;
+  background: color-mix(in srgb, var(--etab) 16%, var(--surface)); border-left: 4px solid var(--etab); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.cal-cours:hover { background: color-mix(in srgb, var(--etab) 26%, var(--surface)); }
+.cal-cours .pastille-classe { font-size: .74rem; padding: 1px 6px; box-shadow: none; }
+.cal-cours .heure { font-weight: 600; }
+.cal-cours .salle { color: var(--doux); }
+.cal-cours em { font-style: normal; font-weight: 700; color: var(--danger); }
+.cal-cours.st-annule { opacity: .55; text-decoration: line-through; background: repeating-linear-gradient(-45deg, var(--surface) 0 6px, color-mix(in srgb, var(--etab) 14%, var(--surface)) 6px 12px); }
+.cal-cours.st-annule .pastille-classe { text-decoration: line-through; }
+.accueil-colonnes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+@media (max-width: 960px) { .accueil-colonnes { grid-template-columns: 1fr; } }
+.prochains { list-style: none; margin: 0; padding: 0; }
+.prochains li { display: grid; grid-template-columns: 112px 1fr auto; gap: 10px; align-items: center; padding: 10px 8px; border-left: 4px solid var(--etab);
+  border-radius: 6px; margin-bottom: 8px; background: color-mix(in srgb, var(--etab) 6%, transparent); }
+.prochains li.en-cours { background: color-mix(in srgb, var(--etab) 16%, transparent); }
+.prochains li.annule { opacity: .6; }
+.prochains .quand { display: flex; flex-direction: column; font-size: .88rem; }
+.prochains .quand span { color: var(--doux); }
+.prochains .quoi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.prochains .ou { flex-basis: 100%; font-size: .85rem; color: var(--doux); }
+.prochains .actions { display: flex; gap: 6px; }
+.etiquette-en-cours { font-size: .75rem; font-weight: 700; color: #fff; background: #e03131; border-radius: 4px; padding: 1px 6px; }
+@media (max-width: 560px) { .prochains li { grid-template-columns: 1fr; } }
+.chiffres { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.chiffres div { background: var(--code-fond); border-radius: 8px; padding: 8px 10px; }
+.chiffres strong { display: block; font-size: 1.4rem; }
+.chiffres strong small { font-size: .85rem; color: var(--doux); font-weight: 500; }
+.chiffres span { font-size: .8rem; color: var(--doux); }
+@media (max-width: 560px) { .chiffres { grid-template-columns: repeat(2, 1fr); } }
+.histo { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; height: 120px; align-items: end; margin-bottom: 8px; }
+.histo-barre { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.histo-barre i { display: block; width: 70%; min-height: 2px; background: var(--accent); border-radius: 4px 4px 0 0; }
+.histo-barre .valeur { font-size: .75rem; font-weight: 600; }
+.histo-barre .jour { font-size: .75rem; color: var(--doux); margin-top: 4px; }
+#connexions h3 { font-size: .95rem; margin: 16px 0 6px; }
+.par-classe { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.par-classe li { display: grid; grid-template-columns: 90px 1fr 60px; align-items: center; gap: 10px; }
+.par-classe a { text-decoration: none; }
+.jauge-classe { height: 8px; background: var(--code-fond); border-radius: 4px; overflow: hidden; }
+.jauge-classe i { display: block; height: 100%; background: var(--accent); }
+.par-atelier { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; }
+table.dernieres td { padding: 6px 8px; font-size: .88rem; }
+table.dernieres .numero { font-size: .8rem; color: var(--doux); }
+.carte.classe .tete-classe strong { font-size: .95rem; overflow-wrap: anywhere; line-height: 1.25; }
+
+/* ---------- Passerelles des ateliers (centrale.json) ---------- */
+.carte.brancher { margin-bottom: 14px; }
+.carte.brancher .formulaire-ligne { align-items: flex-end; }
+.passerelle .carte { margin-top: 14px; }
+.passerelle .carte h2 { margin-top: 0; font-size: 1.1rem; }
+.passerelle .carte h3 { font-size: .95rem; margin: 12px 0 4px; }
+.remarques summary, .passerelle details summary { cursor: pointer; font-weight: 600; }
+.remarques ul { margin: 8px 0; }
+ul.sites { list-style: none; padding: 0; margin: 0; }
+ul.sites li { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+dl.champs { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+dl.champs dd { margin: 0; }
+pre.json { background: var(--code-fond); padding: 12px; border-radius: 8px; overflow: auto; max-height: 480px; font-size: .8rem; }
+.carte.enchainement { margin-top: 14px; border-left: 4px solid #f59f00; }
+.carte.enchainement h3 { margin-top: 0; }
+.carte.enchainement ul { margin: 6px 0; padding-left: 20px; }
+.passerelle .titre-section .boutons { display: flex; gap: 8px; align-items: center; }
+.passerelle .titre-section .boutons button.petit { padding: 9px 16px; font-size: inherit; }

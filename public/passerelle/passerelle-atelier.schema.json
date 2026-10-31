@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://technoversailles.alwaysdata.net/passerelle/passerelle-atelier.schema.json",
+  "title": "Descripteur d'atelier pour la Centrale (passerelle.atelier v1)",
+  "description": "Valide le fichier centrale.json publié à la racine du site de chaque application branchée sur la Centrale. Les sections et champs inconnus sont acceptés (la Centrale les ignore).",
+  "type": "object",
+  "required": ["format", "version", "atelier", "activites", "progression", "donnees", "fichiers"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "$id": { "type": "string" },
+    "format": { "const": "passerelle.atelier" },
+    "version": { "const": 1 },
+
+    "atelier": {
+      "description": "Fiche de l'atelier, mêmes champs que l'onglet Ateliers de la Centrale.",
+      "type": "object",
+      "required": ["app", "nom", "url", "version"],
+      "properties": {
+        "app": { "type": "string", "pattern": "^[a-z0-9_-]{1,40}$", "description": "Identifiant passé à Centrale.init({ app })." },
+        "nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "url": { "type": "string", "pattern": "^https?://" },
+        "version": { "type": "string", "minLength": 1, "description": "Version de l'application, augmentée à chaque changement du descripteur." },
+        "description": { "type": "string" },
+        "urls_secours": { "type": "array", "items": { "type": "string", "pattern": "^https?://" } },
+        "icone": { "type": "string" },
+        "depot": { "type": "string" },
+        "langue": { "type": "string" },
+        "classes": { "type": "array", "items": { "type": "string" }, "description": "Niveaux ou classes visés (indicatif)." },
+        "parametres": {
+          "type": "object",
+          "description": "Paramètres d'adresse acceptés (ex. ?app=) pour créer plusieurs ateliers Centrale avec la même application.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+
+    "activites": {
+      "type": "object",
+      "required": ["liste"],
+      "properties": {
+        "liste": {
+          "type": "array",
+          "maxItems": 500,
+          "description": "Exactement ce que l'application passe à Centrale.init({ activites }) ou declarerActivites, dans le même ordre.",
+          "items": {
+            "type": "object",
+            "required": ["id", "titre", "groupe", "total"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[A-Za-z0-9_./-]{1,120}$", "description": "Stable : jamais renommé, jamais réutilisé." },
+              "titre": { "type": "string", "maxLength": 120 },
+              "groupe": { "type": "string", "maxLength": 80 },
+              "total": { "type": ["integer", "null"], "minimum": 0, "maximum": 1000 }
+            }
+          }
+        },
+        "dynamiques": {
+          "type": "object",
+          "description": "Activités qui s'ajoutent selon le contenu (ateliers déposés en ressources…) : non listées, mais reconnaissables.",
+          "required": ["motif", "description"],
+          "properties": {
+            "motif": { "type": "string", "description": "Expression régulière des id possibles." },
+            "description": { "type": "string" }
+          }
+        },
+        "declaration": { "type": "string" },
+        "identifiants_stables": { "const": true }
+      }
+    },
+
+    "progression": {
+      "type": "object",
+      "required": ["champs"],
+      "description": "Sens de chaque champ envoyé à Centrale.progression(id, …) dans cette application.",
+      "properties": {
+        "envoi": { "type": "string" },
+        "quand": { "type": "array", "items": { "type": "string" } },
+        "champs": {
+          "type": "object",
+          "required": ["faites", "total", "statut"],
+          "properties": {
+            "titre": { "type": "string" },
+            "faites": { "type": "string" },
+            "total": { "type": "string" },
+            "statut": { "type": "string" },
+            "score": { "type": "string" },
+            "score_max": { "type": "string" },
+            "details": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "champs_non_utilises": { "type": "array", "items": { "enum": ["titre", "faites", "total", "statut", "score", "score_max", "details"] } },
+        "format": { "$ref": "#/$defs/schemaOuRef" }
+      }
+    },
+
+    "donnees": {
+      "type": "object",
+      "description": "Une entrée par clé passée à Centrale.sauver / charger. Une clé variable s'écrit avec un paramètre entre accolades (ex. « at/{atelier} ») et donne son motif.",
+      "propertyNames": { "pattern": "^[A-Za-z0-9_./{}-]{1,120}$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["description", "format"],
+        "properties": {
+          "description": { "type": "string" },
+          "format": { "$ref": "#/$defs/schemaOuRef" },
+          "motif": { "type": "string", "description": "Obligatoire si la clé contient un paramètre {…} : expression régulière des clés réelles." },
+          "sauvegarde": { "type": "string" },
+          "chargement": { "type": "string" },
+          "taille_typique": { "type": "string" }
+        }
+      }
+    },
+
+    "fichiers": {
+      "type": "object",
+      "required": ["utilises"],
+      "description": "Fichiers de l'élève (envoyerFichier) et dossier de projet des ateliers transversaux (Centrale.projet).",
+      "properties": {
+        "utilises": { "type": "boolean" },
+        "dossier_projet": { "type": "boolean", "description": "true si l'application lit ou dépose dans le dossier de projet (Centrale.etape, Centrale.projet)." },
+        "recoit": { "type": "array", "items": { "$ref": "#/$defs/fichier" } },
+        "produit": { "type": "array", "items": { "$ref": "#/$defs/fichier" } },
+        "ressources": { "type": "array", "items": { "$ref": "#/$defs/fichier" }, "description": "Fichiers que l'enseignant peut déposer dans Ressources des ateliers." },
+        "note": { "type": "string" }
+      },
+      "if": { "properties": { "utilises": { "const": true } } },
+      "then": { "anyOf": [{ "required": ["recoit"] }, { "required": ["produit"] }, { "required": ["ressources"] }] }
+    },
+
+    "centrale": { "type": "object" },
+    "stockage_local": { "type": "object" },
+    "acces_javascript": {
+      "type": "object",
+      "properties": { "objet": { "type": "string", "pattern": "^window\\.[A-Za-z_$][\\w$]*$" }, "membres": { "type": "object", "additionalProperties": { "type": "string" } } }
+    },
+    "enums": { "type": "object" },
+    "$defs": { "type": "object" }
+  },
+
+  "$defs": {
+    "schemaOuRef": { "type": "object", "description": "Schéma JSON 2020-12, ou { \"$ref\": \"#/$defs/…\" } vers les $defs du descripteur." },
+    "fichier": {
+      "type": "object",
+      "required": ["nom", "type", "description"],
+      "properties": {
+        "nom": { "type": "string", "pattern": "^[^/\\\\]{1,120}$", "description": "Nom exact dans le dossier (ex. chassis.glb). « * » pour une partie variable : programme-*.ino." },
+        "type": { "type": "string", "pattern": "^[a-z]+/[A-Za-z0-9.+-]+$", "description": "Type MIME (model/gltf-binary, application/json, text/x-c++src…)." },
+        "description": { "type": "string" },
+        "obligatoire": { "type": "boolean", "description": "recoit : l'application ne peut pas commencer sans ce fichier." },
+        "format": { "$ref": "#/$defs/schemaOuRef" }
+      }
+    }
+  }
+}

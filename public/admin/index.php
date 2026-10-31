@@ -13,6 +13,8 @@ require __DIR__ . '/../../lib/admin_organisation.php';
 require __DIR__ . '/../../lib/admin_fichiers.php';
 require __DIR__ . '/../../lib/admin_groupes.php';
 require __DIR__ . '/../../lib/admin_projets.php';
+require __DIR__ . '/../../lib/admin_accueil.php';
+require __DIR__ . '/../../lib/admin_passerelles.php';
 require __DIR__ . '/../../lib/admin_import.php';
 
 header('X-Frame-Options: DENY');
@@ -181,7 +183,7 @@ if ($action !== null) {
             exit;
         }
         flash('Clé secrète des codes introuvable : restaurez-la dans les Réglages (tableau de bord) avant de créer des codes.', 'err');
-        rediriger('./#cle');
+        rediriger('./?p=reglages#cle');
     }
 
     action_suivi($action);        // parcours, ateliers, suivi
@@ -202,13 +204,13 @@ if ($action !== null) {
             $nom = trim((string) ($_POST['nom'] ?? ''));
             if (!preg_match('/^[\p{L}0-9 _-]{1,20}$/u', $nom)) {
                 flash('Nom de classe invalide (1 à 20 caractères : lettres, chiffres, espaces, - ou _).', 'err');
-                rediriger('./');
+                rediriger('./?p=classes');
             }
             try {
                 $pdo->prepare('INSERT INTO classes (nom, cree_le) VALUES (?, ?)')->execute([$nom, time()]);
             } catch (PDOException) {
                 flash('Cette classe existe déjà.', 'err');
-                rediriger('./');
+                rediriger('./?p=classes');
             }
             $nouvelle = (int) $pdo->lastInsertId();
             oublier_renommage($nom);
@@ -271,7 +273,7 @@ if ($action !== null) {
             $cle = cle_secrete();
             if (!$cle || etat_cle() !== 'ok') {
                 flash('Clé secrète introuvable sur le serveur.', 'err');
-                rediriger('./#cle');
+                rediriger('./?p=reglages#cle');
             }
             header('Content-Type: text/plain; charset=utf-8');
             header('Content-Disposition: attachment; filename="cle_secrete_centrale_' . date('Y-m-d') . '.txt"');
@@ -296,7 +298,7 @@ if ($action !== null) {
             } else {
                 flash('Clé secrète restaurée : les codes des élèves fonctionnent de nouveau.');
             }
-            rediriger('./#cle');
+            rediriger('./?p=reglages#cle');
 
         case 'nouvelle_cle':
             // Dernier recours (clé perdue, sans copie) : nouvelle clé ; les anciens codes ne marcheront plus
@@ -307,7 +309,7 @@ if ($action !== null) {
                     flash('Nouvelle clé créée. Les anciens codes ne fonctionnent plus : utilisez « Réinitialiser tous les codes et télécharger la liste », puis téléchargez une copie de secours de la clé.');
                 }
             }
-            rediriger('./#cle');
+            rediriger('./?p=reglages#cle');
 
         case 'reinitialiser_tous_codes':
             // Tous les codes de toutes les classes. Réponse : numéros et codes seulement (les noms sont dans le navigateur).
@@ -342,7 +344,7 @@ if ($action !== null) {
             supprimer_eleves('classe_id = ?', [$classe_id]);
             $pdo->prepare('DELETE FROM classes WHERE id = ?')->execute([$classe_id]);
             flash('Classe supprimée, avec ses codes et tout le travail de ses élèves.');
-            rediriger('./');
+            rediriger('./?p=classes');
 
         case 'vider_travail':
             supprimer_eleves('classe_id = ?', [$classe_id]);
@@ -360,7 +362,7 @@ if ($action !== null) {
         case 'anonymiser':
             $classe = classe_par_id($classe_id);
             if (!$classe) {
-                rediriger('./');
+                rediriger('./?p=classes');
             }
             $st = $pdo->prepare('SELECT id, etiquette FROM eleves WHERE classe_id = ? ORDER BY etiquette COLLATE NOCASE');
             $st->execute([$classe_id]);
@@ -405,7 +407,7 @@ if ($action !== null) {
         case 'generer':
             $classe = classe_par_id($classe_id);
             if (!$classe) {
-                rediriger('./');
+                rediriger('./?p=classes');
             }
             // Seul un NOMBRE arrive ici : les noms sont gardés par le navigateur de l'enseignant.
             $n = (int) ($_POST['nombre'] ?? 0);
@@ -521,7 +523,7 @@ if ($action !== null) {
                 effacer_fichier_stocke($ancien ?: null);
                 flash("Ressource « $nom » ajoutée à l'atelier « $app ».");
             }
-            rediriger('./#ressources');
+            rediriger('./?p=reglages#ressources');
 
         case 'supprimer_ressource':
             $st = $pdo->prepare('SELECT id, chemin FROM ressources WHERE id = ?');
@@ -531,7 +533,7 @@ if ($action !== null) {
                 effacer_fichier_stocke($r['chemin']);
                 flash('Ressource supprimée.');
             }
-            rediriger('./#ressources');
+            rediriger('./?p=reglages#ressources');
 
         /* ----- Réglages ----- */
 
@@ -557,7 +559,7 @@ if ($action !== null) {
             flash($erreurs
                 ? 'Réglages enregistrés. Lignes ignorées (format attendu : https://site.exemple) : ' . implode(', ', $erreurs)
                 : 'Réglages enregistrés.', $erreurs ? 'err' : 'ok');
-            rediriger('./#reglages');
+            rediriger('./?p=reglages#reglages');
 
         case 'changer_mdp':
             $nouveau = (string) ($_POST['nouveau'] ?? '');
@@ -569,7 +571,7 @@ if ($action !== null) {
                 definir_reglage('admin_hash', password_hash($nouveau, PASSWORD_DEFAULT));
                 flash('Mot de passe modifié.');
             }
-            rediriger('./#reglages');
+            rediriger('./?p=reglages#reglages');
     }
     rediriger('./');
 }
@@ -634,6 +636,7 @@ match ($page) {
     'suivi'    => page_suivi(),
     'parcours' => page_parcours(),
     'ateliers' => page_ateliers(),
+    'passerelle' => page_passerelle(),
     'etablissements' => page_etablissements(),
     'edt'      => page_edt(),
     'salle'    => page_salle((int) ($_GET['id'] ?? 0)),
@@ -643,7 +646,9 @@ match ($page) {
     'placement' => page_placement((int) ($_GET['classe'] ?? 0), (int) ($_GET['salle'] ?? 0), (int) ($_GET['groupe'] ?? 0)),
     'fichiers' => page_fichiers(),
     'import'   => page_import(),
-    default  => page_accueil(),
+    'classes'  => page_classes(),
+    'reglages' => page_reglages(),
+    default  => page_tableau_de_bord(),
 };
 
 /* ---------------------------------------------------------------------- */
@@ -688,10 +693,10 @@ function page_connexion(): void
     pied();
 }
 
-function page_accueil(): void
+function page_classes(): void
 {
     $pdo = db();
-    $classes = $pdo->query('SELECT c.id, c.nom,
+    $classes = $pdo->query('SELECT c.id, c.nom, c.etablissement_id,
             (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id) AS nb_eleves,
             (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id AND e.derniere_connexion IS NOT NULL) AS nb_venus,
             (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id AND e.etiquette NOT GLOB \'[0-9][0-9]*\') AS nb_noms,
@@ -699,7 +704,8 @@ function page_accueil(): void
             (SELECT COALESCE(SUM(taille), 0) FROM donnees d JOIN eleves e ON e.id = d.eleve_id WHERE e.classe_id = c.id)
           + (SELECT COALESCE(SUM(taille), 0) FROM donnees_versions d JOIN eleves e ON e.id = d.eleve_id WHERE e.classe_id = c.id)
           + (SELECT COALESCE(SUM(taille), 0) FROM fichiers f JOIN eleves e ON e.id = f.eleve_id WHERE e.classe_id = c.id) AS espace
-        FROM classes c ORDER BY c.nom')->fetchAll();
+        FROM classes c LEFT JOIN etablissements et ON et.id = c.etablissement_id
+        ORDER BY et.nom IS NULL, et.nom, c.nom')->fetchAll();
     $nb_eleves = array_sum(array_column($classes, 'nb_eleves'));
     $disque = taille_dossier_data();
     $ressources = $pdo->query('SELECT * FROM ressources ORDER BY app, nom')->fetchAll();
@@ -708,8 +714,8 @@ function page_accueil(): void
     $api = url_base() . '/api/';
     $client = url_base() . '/js/centrale-client.js';
 
-    entete('Tableau de bord');
-    barre();
+    entete('Classes');
+    barre('classes');
     ?>
     <main>
         <?php messages(); ?>
@@ -721,17 +727,6 @@ function page_accueil(): void
             <div class="stat"><strong><?= count($apps) ?></strong><span>atelier<?= count($apps) > 1 ? 's' : '' ?> actif<?= count($apps) > 1 ? 's' : '' ?></span></div>
         </div>
         <?php liste_locale(); ?>
-        <form method="post" target="_blank" class="apercu-eleve" id="form-apercu">
-            <?= csrf() ?>
-            <input type="hidden" name="action" value="apercu_eleve">
-            <div>
-                <strong>Voir comme un élève</strong>
-                <span class="aide">Ouvre le portail élève avec le compte test de la classe « TEST », sans taper de code.
-                    Il voit les ateliers et parcours ouverts à toutes les classes, ou à la classe TEST.</span>
-            </div>
-            <button class="secondaire">Ouvrir le portail élève</button>
-        </form>
-        <?php section_aujourdhui(); ?>
 
         <section>
             <div class="titre-section">
@@ -747,10 +742,15 @@ function page_accueil(): void
             <?php if (!$classes): ?>
                 <p class="vide">Aucune classe pour l'instant. Créez-en une ci-dessus.</p>
             <?php else: ?>
-                <div class="grille-classes">
-                    <?php foreach ($classes as $c): ?>
-                        <a class="carte classe" href="./?p=classe&id=<?= (int) $c['id'] ?>">
-                            <strong><?= h($c['nom']) ?></strong>
+                <?php $etab_courant = false; foreach ($classes as $i => $c):
+                    if ($c['etablissement_id'] !== $etab_courant):
+                        if ($etab_courant !== false) echo '</div>';
+                        $etab_courant = $c['etablissement_id']; ?>
+                        <h3 class="tete-etab" style="--etab:<?= h(couleur_etablissement($c['etablissement_id'] ? (int) $c['etablissement_id'] : null) ?: 'var(--bord)') ?>"><span class="puce-etab"></span><?= h($c['etablissement_id'] ? (etablissement_par_id((int) $c['etablissement_id'])['nom'] ?? '') : 'Sans établissement') ?></h3>
+                        <div class="grille-classes">
+                    <?php endif; ?>
+                        <a class="carte classe<?= $c['etablissement_id'] ? ' avec-etab' : '' ?>" style="--etab:<?= h(couleur_etablissement($c['etablissement_id'] ? (int) $c['etablissement_id'] : null)) ?>" href="./?p=classe&id=<?= (int) $c['id'] ?>">
+                            <span class="tete-classe"><?= pastille_classe($c, '', 'grande') ?><strong><?= h($c['nom']) ?></strong></span>
                             <span><?= (int) $c['nb_eleves'] ?> élève<?= $c['nb_eleves'] > 1 ? 's' : '' ?>
                                 · <?= (int) $c['nb_venus'] ?> connecté<?= $c['nb_venus'] > 1 ? 's' : '' ?></span>
                             <span><?= format_taille((int) $c['espace']) ?> de travail</span>
@@ -759,11 +759,32 @@ function page_accueil(): void
                             <?php endif; ?>
                             <span class="discret">Dernière activité : <?= quand($c['activite'] ? (int) $c['activite'] : null) ?></span>
                         </a>
-                    <?php endforeach; ?>
+                <?php endforeach; ?>
                 </div>
             <?php endif; ?>
         </section>
 
+    </main>
+    <?php
+    pied();
+}
+
+function page_reglages(): void
+{
+    $pdo = db();
+    $nb_eleves = (int) $pdo->query('SELECT COUNT(*) FROM eleves')->fetchColumn();
+    $ressources = $pdo->query('SELECT * FROM ressources ORDER BY app, nom')->fetchAll();
+    $apps = $pdo->query("SELECT app FROM donnees UNION SELECT app FROM fichiers UNION SELECT app FROM ressources
+                         UNION SELECT app FROM depots WHERE app <> '*' ORDER BY app")->fetchAll(PDO::FETCH_COLUMN);
+    $api = url_base() . '/api/';
+    $client = url_base() . '/js/centrale-client.js';
+
+    entete('Réglages');
+    barre('reglages');
+    ?>
+    <main>
+        <h1>Réglages</h1>
+        <?php messages(); ?>
         <section id="ressources">
             <h2>Ressources des ateliers</h2>
             <p class="aide">Fichiers que vous mettez à disposition des élèves d'un atelier (modèles, consignes, images…).
@@ -901,9 +922,9 @@ function page_classe(int $id): void
     barre();
     ?>
     <main>
-        <p class="fil"><a href="./">← Toutes les classes</a></p>
+        <p class="fil"><a href="./?p=classes">← Toutes les classes</a></p>
         <div class="titre-classe">
-            <h1>Classe <?= h($nom) ?></h1>
+            <h1><?= pastille_classe($classe, '', 'grande') ?>Classe <?= h($nom) ?></h1>
             <details class="renommer">
                 <summary class="btn petit secondaire">Renommer</summary>
                 <form method="post" class="en-ligne">
@@ -1362,7 +1383,7 @@ function messages(): void
     // Alerte permanente si la clé secrète des codes a disparu du serveur
     if (!empty($_SESSION['admin']) && reglage('empreintes_version', '') === '2' && etat_cle() !== 'ok') {
         echo '<p class="message erreur alerte-cle" role="alert"><strong>Les codes des élèves ne fonctionnent plus :</strong> '
-            . 'la clé secrète est introuvable sur le serveur. <a href="./#cle">Restaurez-la depuis votre copie de secours</a>.</p>';
+            . 'la clé secrète est introuvable sur le serveur. <a href="./?p=reglages#cle">Restaurez-la depuis votre copie de secours</a>.</p>';
     }
     foreach ($_SESSION['flash'] ?? [] as [$type, $msg]) {
         echo '<p class="message ' . ($type === 'err' ? 'erreur' : 'succes') . '" role="status">' . h($msg) . '</p>';
@@ -1372,9 +1393,9 @@ function messages(): void
 
 function barre(string $actif = 'classes'): void
 {
-    $liens = ['classes' => ['./', 'Classes'], 'edt' => ['./?p=edt', 'Emploi du temps'], 'etablissements' => ['./?p=etablissements', 'Établissements'],
+    $liens = ['accueil' => ['./', 'Accueil'], 'classes' => ['./?p=classes', 'Classes'], 'edt' => ['./?p=edt', 'Emploi du temps'], 'etablissements' => ['./?p=etablissements', 'Établissements'],
               'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'suivi' => ['./?p=suivi', 'Suivi'],
-              'fichiers' => ['./?p=fichiers', 'Fichiers']];
+              'fichiers' => ['./?p=fichiers', 'Fichiers'], 'reglages' => ['./?p=reglages', 'Réglages']];
     ?>
     <header class="barre">
         <nav>

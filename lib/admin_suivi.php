@@ -162,6 +162,52 @@ function action_suivi(string $action): bool
             flash("Atelier « $nom » enregistré.");
             rediriger('./?p=ateliers');
 
+        case 'lire_passerelle':
+            $id = (int) ($_POST['atelier_id'] ?? 0);
+            $adresse = trim((string) ($_POST['adresse'] ?? ''));
+            if ($id) {
+                $st = $pdo->prepare('SELECT * FROM ateliers WHERE id = ?');
+                $st->execute([$id]);
+                $a = $st->fetch();
+                $adresse = $a ? ($a['descripteur_url'] ?: $a['url']) : '';
+            }
+            [$d, $url_d, $erreur] = lire_passerelle_distante($adresse);
+            if (!$d) {
+                flash($erreur, 'err');
+                rediriger('./?p=ateliers' . ($id ? '' : '&nouveau=1'));
+            }
+            [$err, $av] = verifier_descripteur($d);
+            if ($err) {
+                flash('Ce centrale.json ne suit pas le format passerelle.atelier v1 : ' . implode(' ', array_slice($err, 0, 4)), 'err');
+                rediriger('./?p=ateliers' . ($id ? '' : '&nouveau=1'));
+            }
+            if ($id && $a && $a['app'] !== $d['atelier']['app']) {
+                flash("Ce descripteur décrit l'atelier « {$d['atelier']['app']} », pas « {$a['app']} ». Rien n'a été changé.", 'err');
+                rediriger('./?p=ateliers');
+            }
+            [$app, $cree, $n] = enregistrer_descripteur($d, $url_d);
+            flash(($cree ? "Atelier « {$d['atelier']['nom']} » ajouté au portail" : "Passerelle de « {$d['atelier']['nom']} » relue")
+                . (isset($d['_converti']) ? ' (fiche tirée de son manifeste postMessage).' : " : $n activité" . ($n > 1 ? 's' : '') . ' déclarée' . ($n > 1 ? 's' : '') . '.')
+                . ($av && !isset($d['_converti']) ? ' ' . count($av) . ' remarque' . (count($av) > 1 ? 's' : '') . ' sur le descripteur (voir la fiche).' : ''));
+            rediriger('./?p=passerelle&app=' . rawurlencode($app));
+
+        case 'autoriser_site':
+            $site = rtrim(trim((string) ($_POST['site'] ?? '')), '/');
+            if (preg_match('#^https?://[a-z0-9.-]+(:\d+)?$#i', $site)) {
+                $liste = origines_autorisees();
+                if (!in_array($site, $liste, true)) {
+                    definir_reglage('origines', implode("\n", [...$liste, $site]));
+                }
+                flash("Site $site autorisé.");
+            }
+            rediriger('./?p=passerelle&app=' . rawurlencode(normaliser_app((string) ($_POST['app'] ?? ''))));
+
+        case 'oublier_passerelle':
+            $pdo->prepare("UPDATE ateliers SET descripteur = '', descripteur_url = '', descripteur_lu = 0 WHERE id = ?")
+                ->execute([(int) ($_POST['atelier_id'] ?? 0)]);
+            flash('Descripteur oublié (la fiche de l’atelier et ses activités sont gardées).');
+            rediriger('./?p=ateliers');
+
         case 'supprimer_atelier':
             $pdo->prepare('DELETE FROM ateliers WHERE id = ?')->execute([(int) ($_POST['atelier_id'] ?? 0)]);
             flash("Atelier retiré du portail (le travail et la progression des élèves sont conservés).");
@@ -540,7 +586,7 @@ Programmer le suivi de ligne | prog3d | suivi-ligne | https://grandiosian.github
             </form>
         <?php endif; ?>
 
-        <?php if ($courant['id'] && !$brouillon) section_fournis((int) $courant['id']); ?>
+        <?php if ($courant['id'] && !$brouillon) { carte_enchainement((int) $courant['id']); section_fournis((int) $courant['id']); } ?>
 
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
@@ -642,6 +688,7 @@ function page_ateliers(): void
         <p class="sous">Les ateliers apparaissent sur le portail des élèves (<a href="../" target="_blank"><?= h(url_base()) ?>/</a>).
             L'élève les ouvre d'un clic, déjà connecté, et revient au portail avec le bouton « ← Mes ateliers ».</p>
         <?php messages(); ?>
+        <?php if (!$modifier && !$brouillon) carte_brancher_passerelle(); ?>
 
         <?php if ($suggestions && !$afficher_form): ?>
             <p class="carte">Applications déjà branchées mais pas encore sur le portail :
@@ -684,7 +731,7 @@ function page_ateliers(): void
 
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
-                <thead><tr><th></th><th>Atelier</th><th>Activités</th><th>Ouvertures (7 j)</th><th>Classes</th><th>État</th><th></th></tr></thead>
+                <thead><tr><th></th><th>Atelier</th><th>Passerelle</th><th>Activités</th><th>Ouvertures (7 j)</th><th>Classes</th><th>État</th><th></th></tr></thead>
                 <tbody>
                 <?php foreach ($liste as $a): ?>
                     <tr class="<?= $a['actif'] ? '' : 'inactif' ?>">
@@ -694,6 +741,7 @@ function page_ateliers(): void
                                 <br><span class="<?= $repond ? 'ok' : 'alerte' ?>" title="<?= $repond ? 'Répond' : 'Ne répond pas' ?> (vérifié il y a moins de 5 min)"><?= $repond ? '●' : '○' ?></span>
                                 <a href="<?= h($u) ?>" target="_blank" rel="noopener" class="discret"><?= h($u) ?></a><?= $i ? ' <span class="discret">(secours)</span>' : '' ?>
                             <?php endforeach; ?></td>
+                        <td><?= cellule_passerelle($a) ?></td>
                         <td><?= count($catalogue[$a['app']] ?? []) ?: '<span class="discret" title="Les activités apparaissent quand l\'application les déclare (à la première connexion d\'un élève)">—</span>' ?></td>
                         <td class="discret"><?php
                             $o = $ouvertures[$a['app']] ?? [];

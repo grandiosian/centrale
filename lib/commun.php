@@ -269,6 +269,9 @@ function creer_tables(PDO $pdo): void
         );
         SQL);
     ajouter_colonne($pdo, 'ateliers', 'urls_secours', "TEXT NOT NULL DEFAULT ''");
+    ajouter_colonne($pdo, 'ateliers', 'descripteur', "TEXT NOT NULL DEFAULT ''");       // centrale.json lu (passerelle.atelier)
+    ajouter_colonne($pdo, 'ateliers', 'descripteur_url', "TEXT NOT NULL DEFAULT ''");
+    ajouter_colonne($pdo, 'ateliers', 'descripteur_lu', 'INTEGER NOT NULL DEFAULT 0');
     ajouter_colonne($pdo, 'classes', 'etablissement_id', 'INTEGER REFERENCES etablissements(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'etablissements', 'code', "TEXT NOT NULL DEFAULT ''");   // 3 lettres, dans les codes élèves
     ajouter_colonne($pdo, 'eleves', 'surnom', "TEXT NOT NULL DEFAULT ''");          // identifiant : 4C-LHA-<surnom>
@@ -1092,6 +1095,74 @@ function lire_classe_groupe(string $valeur): array
     return [$cid, $gid ?: null];
 }
 
+/* ---------- Code couleur des classes : pastille du niveau, liseré de l'établissement ---------- */
+
+// Fond de la pastille selon le niveau ; le texte est toujours bleu marine
+const COULEURS_NIVEAUX = ['6' => '#74c0fc', '5' => '#51cf66', '4' => '#ffd43b', '3' => '#ff6b6b'];
+const BLEU_MARINE = '#13294b';
+// Couleurs proposées pour les établissements (distinctes du jaune, du vert et du rouge des niveaux)
+const COULEURS_ETABLISSEMENTS = ['#2f6fdb', '#8b5cf6', '#0f9b8e', '#e8590c', '#c2255c', '#5c7cfa', '#495057'];
+
+/** Niveau d'une classe d'après son nom : « 4C-HAUTIERS » → 4, « 5EME A » → 5 ; null si inconnu. */
+function niveau_classe(string $nom): ?string
+{
+    return preg_match('/^\s*([3-6])/u', $nom, $m) ? $m[1] : null;
+}
+
+/** Nom court de la classe, sans le nom de l'établissement : « 4C-HAUTIERS » → « 4C ». */
+function nom_court_classe(array $classe): string
+{
+    $p = prefixe_codes(['nom' => $classe['nom'], 'etablissement_id' => $classe['etablissement_id'] ?? null]);
+    $court = preg_replace('/-[A-Z]{3}$/', '', $p) ?? $p;
+    return mb_strlen($court) <= 6 ? $court : mb_substr($classe['nom'], 0, 6);
+}
+
+function couleur_etablissement(?int $eid): string
+{
+    if (!$eid) {
+        return '';
+    }
+    static $cache = [];
+    if (!isset($cache[$eid])) {
+        $e = etablissement_par_id($eid);
+        $c = (string) ($e['couleur'] ?? '');
+        $cache[$eid] = preg_match('/^#[0-9a-f]{6}$/i', $c) ? $c : COULEURS_ETABLISSEMENTS[($eid - 1) % count(COULEURS_ETABLISSEMENTS)];
+    }
+    return $cache[$eid];
+}
+
+/** Classe par identifiant, mise en cache (pour les pastilles). */
+function classe_cache(int $id): ?array
+{
+    static $toutes = null;
+    if ($toutes === null) {
+        $toutes = [];
+        foreach (db()->query('SELECT id, nom, etablissement_id FROM classes')->fetchAll() as $c) {
+            $toutes[(int) $c['id']] = $c;
+        }
+    }
+    return $toutes[$id] ?? null;
+}
+
+/**
+ * Pastille d'une classe : fond selon le niveau (5e vert, 4e jaune, 3e rouge), nom court en bleu marine,
+ * liseré de la couleur de l'établissement. $suffixe : un groupe (« GR1 ») affiché à côté.
+ */
+function pastille_classe(array|int $classe, string $suffixe = '', string $taille = ''): string
+{
+    $c = is_int($classe) ? classe_cache($classe) : $classe;
+    if (!$c) {
+        return '';
+    }
+    $niv = niveau_classe($c['nom']);
+    $fond = $niv ? COULEURS_NIVEAUX[$niv] : '#dee2e6';
+    $etab = couleur_etablissement(isset($c['etablissement_id']) ? (int) $c['etablissement_id'] : null);
+    $titre = $c['nom'] . ($suffixe !== '' ? ' · ' . $suffixe : '') . ($niv ? ' (' . $niv . 'e)' : '');
+    return '<span class="pastille-classe' . ($taille !== '' ? ' ' . h($taille) : '') . ($etab ? ' avec-etab' : '') . '" title="' . h($titre) . '"'
+        . ' style="--niv:' . $fond . ';--etab:' . ($etab ?: 'transparent') . '">' . h(nom_court_classe($c))
+        . ($suffixe !== '' ? '<small>' . h($suffixe) . '</small>' : '') . '</span>';
+}
+
 function etablissement_par_id(int $id): ?array
 {
     $st = db()->prepare('SELECT * FROM etablissements WHERE id = ?');
@@ -1299,3 +1370,4 @@ function url_base(): string
 }
 
 require_once __DIR__ . '/projets.php';
+require_once __DIR__ . '/passerelles.php';
