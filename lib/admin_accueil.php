@@ -111,7 +111,19 @@ function page_tableau_de_bord(): void
         <?php liste_locale(); ?>
 
         <section class="carte en-cours-carte">
-            <h2>En cours</h2>
+            <div class="ec-tete">
+                <h2>En cours</h2>
+                <button type="button" id="simuler-cours" class="btn petit secondaire" aria-pressed="false"
+                    title="Afficher un cours de démonstration avec un compte à rebours, sans toucher à l'emploi du temps">Simuler un cours</button>
+            </div>
+            <ul class="en-cours-liste" id="demo-cours" hidden>
+                <li style="--etab:var(--accent)">
+                    <span class="pastille-classe">DÉMO</span>
+                    <span class="intitule">Cours simulé</span>
+                    <span class="ou">démonstration (55 min)</span>
+                    <span class="rebours" id="rebours-demo">—</span>
+                </li>
+            </ul>
             <?php if ($en_cours_maintenant): ?>
                 <ul class="en-cours-liste">
                     <?php foreach ($en_cours_maintenant as $s):
@@ -139,6 +151,23 @@ function page_tableau_de_bord(): void
                     if (r <= 0) { el.textContent = 'cours terminé'; el.classList.add('fini'); return; }
                     el.textContent = fmt(r) + ' restantes'; r--; setTimeout(tick, 1000);
                 })();
+            });
+            // Bouton « Simuler un cours » : affiche un cours de démonstration avec compte à rebours.
+            var b = document.getElementById('simuler-cours'), demo = document.getElementById('demo-cours'),
+                eld = document.getElementById('rebours-demo'), tdemo;
+            if (b) b.addEventListener('click', function () {
+                if (demo.hidden) {
+                    demo.hidden = false; b.textContent = 'Arrêter la simulation'; b.setAttribute('aria-pressed', 'true');
+                    eld.classList.remove('fini');
+                    var r = 55 * 60;
+                    (function tick() {
+                        if (r <= 0) { eld.textContent = 'cours terminé'; eld.classList.add('fini'); return; }
+                        eld.textContent = fmt(r) + ' restantes'; r--; tdemo = setTimeout(tick, 1000);
+                    })();
+                } else {
+                    clearTimeout(tdemo); demo.hidden = true;
+                    b.textContent = 'Simuler un cours'; b.setAttribute('aria-pressed', 'false');
+                }
             });
         })();
         </script>

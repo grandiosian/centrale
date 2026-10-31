@@ -55,6 +55,7 @@ function bibliotheque(): array
                 'total' => $c['total'] !== null ? (int) $c['total'] : null,
                 'description' => is_string($x['description'] ?? null) ? $x['description'] : '',
                 'niveau' => niveau_activite((string) $c['groupe'], (string) $c['titre']),
+                'competences' => (string) ($c['competences'] ?? ''),
                 'atelier' => $ateliers[$app] ?? null,
                 'terminees' => $stats[$app][$id][0] ?? 0, 'commencees' => $stats[$app][$id][1] ?? 0,
                 'ordre' => (int) $c['ordre'],

@@ -7,6 +7,9 @@
   var texte = document.getElementById('b-texte');
   var app = document.getElementById('b-app');
   var vue = document.getElementById('b-vue');
+  var comp = document.getElementById('b-competence');
+  var condense = document.getElementById('b-condense');
+  var main = document.querySelector('main.biblio');
   var niveaux = Array.prototype.slice.call(document.querySelectorAll('.puces-niveaux button'));
   var actif = niveaux.filter(function (b) { return b.classList.contains('actif'); })[0];
   var niveau = actif ? actif.dataset.niveau : '';
@@ -22,6 +25,7 @@
       var ok = (!niveau || li.dataset.niveau === niveau)
         && (!app.value || li.dataset.app === app.value)
         && (!vue.value || (vue.value === 'proposees' ? li.dataset.classes !== '' : (' ' + li.dataset.classes + ' ').indexOf(' ' + vue.value + ' ') >= 0))
+        && (!comp || !comp.value || (' ' + (li.dataset.competences || '') + ' ').indexOf(' ' + comp.value + ' ') >= 0)
         && mots.every(function (m) { return t.indexOf(m) >= 0; });
       li.hidden = !ok;
       if (ok) n++;
@@ -37,7 +41,7 @@
     document.getElementById('b-rien').hidden = n > 0;
     // filtres gardés dans l'adresse et renvoyés avec les formulaires
     var q = new URLSearchParams(location.search);
-    [['niveau', niveau], ['app', app.value], ['vue', vue.value]].forEach(function (p) {
+    [['niveau', niveau], ['app', app.value], ['vue', vue.value], ['competence', comp ? comp.value : '']].forEach(function (p) {
       if (p[1]) q.set(p[0], p[1]); else q.delete(p[0]);
       document.querySelectorAll('input[name="f_' + p[0] + '"]').forEach(function (i) { i.value = p[1]; });
     });
@@ -53,6 +57,18 @@
   texte.addEventListener('input', filtrer);
   app.addEventListener('change', filtrer);
   vue.addEventListener('change', filtrer);
+  if (comp) comp.addEventListener('change', filtrer);
+  if (condense && main) {
+    var condenseOn = false;
+    try { condenseOn = localStorage.getItem('biblio-condense') === '1'; } catch (e) {}
+    var majCondense = function () { main.classList.toggle('condense', condenseOn); condense.setAttribute('aria-pressed', condenseOn ? 'true' : 'false'); };
+    condense.addEventListener('click', function () {
+      condenseOn = !condenseOn;
+      try { localStorage.setItem('biblio-condense', condenseOn ? '1' : '0'); } catch (e) {}
+      majCondense();
+    });
+    majCondense();
+  }
   niveaux.forEach(function (b) {
     b.addEventListener('click', function () {
       niveaux.forEach(function (x) { x.classList.toggle('actif', x === b); });

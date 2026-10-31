@@ -506,6 +506,16 @@ pre.json { background: var(--code-fond); padding: 12px; border-radius: 8px; over
 .reglage-portail h2 { margin-top: 0; font-size: 1.05rem; }
 @media (max-width: 640px) { .biblio-item { grid-template-columns: 24px 1fr; } .biblio-item .essayer { grid-column: 2; justify-self: start; } }
 .biblio [hidden] { display: none !important; }
+/* Bibliothèque : colonnes par application */
+.biblio-colonnes { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; align-items: start; margin-top: 16px; }
+.biblio-colonnes .biblio-app { margin-top: 0; min-width: 0; }
+.biblio-comps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; grid-column: 2; }
+#b-condense[aria-pressed="true"] { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
+/* Bibliothèque : vue condensée (une ligne par activité) */
+.biblio.condense .biblio-item { padding: 6px 12px; align-items: center; }
+.biblio.condense .biblio-corps > .discret { display: none; }   /* description */
+.biblio.condense .biblio-comps { display: none; }
+.biblio.condense .biblio-infos { margin-top: 2px; }
 
 /* Dossiers de projet : vue « À valider » */
 .onglets-vue { display: flex; gap: 4px; margin: 14px 0 4px; border-bottom: 1px solid var(--bord); }
@@ -583,7 +593,11 @@ a.usage.app::before { content: "⚙ "; }
 
 /* Accueil : « En cours » + compte à rebours */
 .en-cours-carte { border-left: 4px solid var(--accent); }
+.ec-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.ec-tete h2 { margin: 0; }
+#simuler-cours[aria-pressed="true"] { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
 .en-cours-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.en-cours-liste[hidden] { display: none; }
 .en-cours-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px;
     border-left: 4px solid var(--etab); background: color-mix(in srgb, var(--etab) 12%, transparent); border-radius: 6px; }
 .en-cours-liste .intitule { font-weight: 600; }

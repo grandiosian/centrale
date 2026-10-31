@@ -118,9 +118,9 @@ function selection_bibliotheque(): array
 function filtres_retour(): string
 {
     $q = [];
-    foreach (['niveau', 'app', 'vue'] as $k) {
+    foreach (['niveau', 'app', 'vue', 'competence'] as $k) {
         $v = (string) ($_POST['f_' . $k] ?? '');
-        if ($v !== '' && preg_match('/^[A-Za-z0-9:_-]{1,40}$/', $v)) {
+        if ($v !== '' && preg_match('/^[A-Za-z0-9.:_-]{1,40}$/', $v)) {
             $q[] = $k . '=' . rawurlencode($v);
         }
     }
@@ -157,9 +157,25 @@ function page_bibliotheque(): void
         $apps[$x['app']] = $x['atelier']['nom'] ?? $x['app'];
     }
     $niveaux = array_count_values(array_column($items, 'niveau'));
+    // Compétences présentes dans la bibliothèque, groupées par thème (pour le filtre)
+    $index_comp = index_competences();
+    $codes_par_theme = [];
+    foreach ($items as $x) {
+        foreach (liste_codes_competences($x['competences'] ?? '') as $code) {
+            $theme = $index_comp[$code]['theme'] ?? substr($code, 0, 3);
+            $codes_par_theme[$theme][$code] = true;
+        }
+    }
+    ksort($codes_par_theme);
+    foreach ($codes_par_theme as &$cs) {
+        $cs = array_keys($cs);
+        sort($cs);
+    }
+    unset($cs);
     $f_niveau = (string) ($_GET['niveau'] ?? '');
     $f_app = (string) ($_GET['app'] ?? '');
     $f_vue = (string) ($_GET['vue'] ?? '');
+    $f_comp = (string) ($_GET['competence'] ?? '');
     $toutes = !portail_seulement_proposees();
 
     entete('Bibliothèque');
@@ -196,6 +212,19 @@ function page_bibliotheque(): void
                 <option value="proposees"<?= $f_vue === 'proposees' ? ' selected' : '' ?>>Déjà proposées</option>
                 <?php foreach ($classes as $c): ?><option value="c:<?= (int) $c['id'] ?>"<?= $f_vue === 'c:' . $c['id'] ? ' selected' : '' ?>>Proposées à <?= h($c['nom']) ?></option><?php endforeach; ?>
             </select>
+            <?php if ($codes_par_theme): ?>
+            <select id="b-competence" aria-label="Compétence">
+                <option value="">Toutes les compétences</option>
+                <?php foreach ($codes_par_theme as $theme => $codes): ?>
+                    <optgroup label="<?= h($theme) ?>">
+                        <?php foreach ($codes as $code): $lib = $index_comp[$code]['texte'] ?? ''; ?>
+                            <option value="<?= h($code) ?>"<?= $f_comp === $code ? ' selected' : '' ?>><?= h($code) ?><?= $lib ? ' — ' . h(mb_strimwidth($lib, 0, 40, '…')) : '' ?></option>
+                        <?php endforeach; ?>
+                    </optgroup>
+                <?php endforeach; ?>
+            </select>
+            <?php endif; ?>
+            <button type="button" id="b-condense" class="btn petit secondaire" aria-pressed="false" title="Affichage condensé : une ligne par activité">Condensé</button>
             <span class="discret" id="b-compte"></span>
         </div>
 
@@ -206,7 +235,8 @@ function page_bibliotheque(): void
 
         <form method="post" id="form-biblio">
             <?= csrf() ?>
-            <input type="hidden" name="f_niveau" value="<?= h($f_niveau) ?>"><input type="hidden" name="f_app" value="<?= h($f_app) ?>"><input type="hidden" name="f_vue" value="<?= h($f_vue) ?>">
+            <input type="hidden" name="f_niveau" value="<?= h($f_niveau) ?>"><input type="hidden" name="f_app" value="<?= h($f_app) ?>"><input type="hidden" name="f_vue" value="<?= h($f_vue) ?>"><input type="hidden" name="f_competence" value="<?= h($f_comp) ?>">
+            <div class="biblio-colonnes">
             <?php
             $app_courante = null;
             $groupe_courant = null;
@@ -231,7 +261,8 @@ function page_bibliotheque(): void
                 endif; ?>
                 <li class="biblio-item" data-niveau="<?= h($x['niveau']) ?>" data-app="<?= h($x['app']) ?>"
                     data-classes="<?= h(implode(' ', array_unique(array_map(fn($q) => 'c:' . $q['classe_id'], $p)))) ?>"
-                    data-texte="<?= h(mb_strtolower($x['titre'] . ' ' . $x['groupe'] . ' ' . $x['activite'] . ' ' . $x['description'])) ?>">
+                    data-texte="<?= h(mb_strtolower($x['titre'] . ' ' . $x['groupe'] . ' ' . $x['activite'] . ' ' . $x['description'])) ?>"
+                    data-competences="<?= h(implode(' ', liste_codes_competences($x['competences'] ?? ''))) ?>">
                     <label class="coche"><input type="checkbox" name="sel[]" value="<?= h($cle) ?>" aria-label="Choisir <?= h($x['titre']) ?>"></label>
                     <div class="biblio-corps">
                         <div class="biblio-titre">
@@ -250,6 +281,9 @@ function page_bibliotheque(): void
                                 </span>
                             <?php endforeach; ?>
                         </div>
+                        <?php $comps = liste_codes_competences($x['competences'] ?? ''); if ($comps): ?>
+                            <div class="biblio-comps"><?php foreach ($comps as $code) echo puce_competence($code) . ' '; ?></div>
+                        <?php endif; ?>
                     </div>
                     <?php if ($x['atelier']): ?>
                         <button type="button" class="petit secondaire essayer" data-app="<?= h($x['app']) ?>" data-activite="<?= h($x['activite']) ?>"
@@ -258,6 +292,7 @@ function page_bibliotheque(): void
                 </li>
             <?php endforeach; ?>
             </ul></section>
+            </div>
             <p class="vide" id="b-rien" hidden>Aucune activité ne correspond à ces filtres.</p>
 
             <div class="barre-selection" id="barre-selection" hidden>
