@@ -74,6 +74,27 @@ function page_tableau_de_bord(): void
     }
     $prochains = array_slice(array_values($prochains), 0, 8);
 
+    // En cours maintenant : séance d'aujourd'hui dont l'heure courante est dans [début, fin[ (la plus proche de la fin d'abord)
+    $en_cours_maintenant = array_values(array_filter($sem['seances'],
+        fn($s) => $s['date'] === $aujourdhui && $s['statut'] !== 'annule' && $s['debut'] <= $heure && $s['fin'] > $heure));
+    usort($en_cours_maintenant, fn($a, $b) => strcmp($a['fin'], $b['fin']));
+
+    // File des élèves à valider / à évaluer, tous parcours confondus, le plus ancien d'abord
+    $a_valider = [];
+    foreach ($pdo->query('SELECT id FROM parcours')->fetchAll(PDO::FETCH_COLUMN) as $pid) {
+        $parc = parcours_par_id((int) $pid);
+        if (!$parc) {
+            continue;
+        }
+        foreach (a_valider_parcours($parc) as $it) {
+            $a_valider[] = $it + ['pid' => (int) $pid, 'pnom' => $parc['nom'],
+                                  'etape_titre' => $parc['etapes'][$it['ordre']]['titre'] ?? ('Étape ' . ($it['ordre'] + 1))];
+        }
+    }
+    usort($a_valider, fn($a, $b) => ($a['depuis'] ?: PHP_INT_MAX) <=> ($b['depuis'] ?: PHP_INT_MAX));
+    $total_av = count($a_valider);
+    $a_valider = array_slice($a_valider, 0, 8);
+
     entete('Accueil');
     barre('accueil');
     ?>
@@ -89,6 +110,39 @@ function page_tableau_de_bord(): void
         <?php messages(); ?>
         <?php liste_locale(); ?>
 
+        <section class="carte en-cours-carte">
+            <h2>En cours</h2>
+            <?php if ($en_cours_maintenant): ?>
+                <ul class="en-cours-liste">
+                    <?php foreach ($en_cours_maintenant as $s):
+                        $reste = max(0, (new DateTimeImmutable($aujourdhui . ' ' . $s['fin'], fuseau()))->getTimestamp() - $maintenant->getTimestamp()); ?>
+                        <li style="--etab:<?= h(couleur_etablissement($s['etablissement_id'])) ?>">
+                            <?= pastille_classe($s['classe_id'], groupe_seance($s)) ?>
+                            <span class="intitule"><?= h($s['intitule'] ?: 'Cours') ?></span>
+                            <span class="ou"><span class="puce-etab"></span><?= h($s['etablissement']) ?><?= $s['salle'] ? ' · ' . h($s['salle']) : '' ?> · <?= h($s['creneau']) ?> (<?= h($s['debut']) ?>–<?= h($s['fin']) ?>)</span>
+                            <span class="rebours" data-reste="<?= (int) $reste ?>" title="Temps restant jusqu'à la fin du cours">jusqu'à <?= h($s['fin']) ?></span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php else: ?>
+                <p class="vide" style="margin:0">Pas de cours en ce moment.<?php if ($prochains):
+                    $p0 = $prochains[0]; ?> Prochain : <strong><?= h(quand_seance($p0['date'], $aujourdhui)) ?></strong> à <?= h($p0['debut']) ?> — <?= pastille_classe($p0['classe_id'], groupe_seance($p0)) ?> <?= h($p0['intitule']) ?>.<?php endif; ?></p>
+            <?php endif; ?>
+        </section>
+        <script>
+        (function () {
+            function fmt(s) { var h = (s / 3600) | 0, m = ((s % 3600) / 60) | 0, x = s % 60;
+                return (h ? h + ' h ' : '') + (h || m ? m + ' min ' : '') + x + ' s'; }
+            document.querySelectorAll('.rebours[data-reste]').forEach(function (el) {
+                var r = parseInt(el.dataset.reste, 10) || 0;
+                (function tick() {
+                    if (r <= 0) { el.textContent = 'cours terminé'; el.classList.add('fini'); return; }
+                    el.textContent = fmt(r) + ' restantes'; r--; setTimeout(tick, 1000);
+                })();
+            });
+        })();
+        </script>
+
         <?php if (!$etabs): ?>
             <section class="carte" style="margin-top:16px">
                 <p>Ajoutez vos établissements (grille horaire, vacances, salles) pour voir ici votre semaine de cours.</p>
@@ -96,6 +150,32 @@ function page_tableau_de_bord(): void
             </section>
         <?php else: ?>
             <?php section_calendrier($lundi, $sem, $etabs, $aujourdhui, $heure); ?>
+        <?php endif; ?>
+
+        <?php if ($a_valider): ?>
+            <section class="carte a-valider-accueil">
+                <h2>Élèves à valider <span class="compte-pastille"><?= (int) $total_av ?></span></h2>
+                <p class="aide" style="margin:2px 0 10px">Étapes de parcours terminées qui attendent ta validation ou ta notation, le plus ancien d'abord.</p>
+                <ol class="file-valider">
+                    <?php foreach ($a_valider as $it):
+                        $l = $it['ligne'];
+                        $qui = ($l['titre'] ?? '') !== '' ? $l['titre']
+                             : implode(', ', array_map(fn($m) => $m['etiquette'], $l['membres'] ?? [])); ?>
+                        <li>
+                            <a href="./?p=projets&amp;parcours=<?= (int) $it['pid'] ?>&amp;vue=a_valider">
+                                <?= pastille_classe($it['classe']) ?>
+                                <span class="qui"><?= h($qui) ?></span>
+                                <span class="quoi"><?= h($it['pnom']) ?> · ét. <?= (int) $it['ordre'] + 1 ?> « <?= h($it['etape_titre']) ?> »</span>
+                                <span class="quand discret"><?= h(depuis_texte((int) $it['depuis'])) ?></span>
+                                <span class="tag <?= $it['valider'] ? 't-valider' : 't-noter' ?>"><?= $it['valider'] ? 'à valider' : 'à évaluer' ?></span>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ol>
+                <?php if ($total_av > count($a_valider)): ?>
+                    <p class="discret" style="margin:8px 0 0">+ <?= (int) ($total_av - count($a_valider)) ?> autre(s) — ouvre un parcours pour tout voir.</p>
+                <?php endif; ?>
+            </section>
         <?php endif; ?>
 
         <div class="accueil-colonnes">

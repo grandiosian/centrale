@@ -580,3 +580,38 @@ a.usage.app::before { content: "⚙ "; }
 .table-catalogue .code-comp { margin: 0 2px 2px 0; }
 .liste-activites { margin: 4px 0 0; padding-left: 18px; font-size: .88rem; }
 .table-imports td.actions form { display: inline; }
+
+/* Accueil : « En cours » + compte à rebours */
+.en-cours-carte { border-left: 4px solid var(--accent); }
+.en-cours-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.en-cours-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px;
+    border-left: 4px solid var(--etab); background: color-mix(in srgb, var(--etab) 12%, transparent); border-radius: 6px; }
+.en-cours-liste .intitule { font-weight: 600; }
+.en-cours-liste .ou { color: var(--doux); font-size: .9rem; display: inline-flex; align-items: center; gap: 4px; }
+.rebours { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent);
+    background: var(--code-fond); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.rebours.fini { color: var(--doux); }
+
+/* Accueil : file des élèves à valider */
+.a-valider-accueil { border-left: 4px solid var(--alerte); }
+.compte-pastille { display: inline-grid; place-items: center; min-width: 1.6em; height: 1.6em; padding: 0 .4em;
+    border-radius: 999px; background: var(--alerte); color: #fff; font-size: .85rem; font-weight: 700; vertical-align: middle; }
+.file-valider { list-style: none; margin: 0; padding: 0; }
+.file-valider li { border-top: 1px solid var(--bord); }
+.file-valider li:first-child { border-top: 0; }
+.file-valider a { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 4px; text-decoration: none; color: var(--texte); }
+.file-valider a:hover { background: var(--code-fond); }
+.file-valider .qui { font-weight: 600; }
+.file-valider .quoi { color: var(--doux); font-size: .9rem; }
+.file-valider .quand { margin-left: auto; }
+.file-valider .tag { font-size: .78rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.file-valider .t-valider { background: var(--err-fond); color: var(--danger); }
+.file-valider .t-noter { background: var(--ok-fond); color: var(--ok); }
+
+/* Ateliers : panneau d'activation par calendrier */
+.table-activations { margin: 4px 0 0; }
+.form-activation { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin-top: 14px; }
+.form-activation label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; margin: 0; }
+.form-activation label.case { flex-direction: row; align-items: center; gap: 6px; }
+.form-activation label[hidden] { display: none; }
+.form-activation button { align-self: end; }

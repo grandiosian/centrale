@@ -68,7 +68,7 @@ function eleve_connecte(): array
     if ($jeton === '') {
         envoyer_json(401, ['ok' => false, 'erreur' => 'Non connecté.', 'session' => 'absente']);
     }
-    $st = db()->prepare('SELECT e.id, e.etiquette, e.classe_id, c.nom AS classe
+    $st = db()->prepare('SELECT e.id, e.etiquette, e.classe_id, e.groupe_id, c.nom AS classe
                          FROM sessions s
                          JOIN eleves e ON e.id = s.eleve_id
                          JOIN classes c ON c.id = e.classe_id

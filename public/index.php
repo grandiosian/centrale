@@ -113,6 +113,16 @@ button[disabled] { opacity: .45; cursor: default; }
 #erreur-code { color: var(--erreur); font-weight: 600; min-height: 1.5em; margin: 8px 0 0; }
 .aide-connexion { margin: 18px 4px 0; color: var(--doux); font-size: .93rem; max-width: 60ch; }
 .aide-connexion strong { color: var(--texte); }
+/* Communiqué + RGPD, sous la fiche de connexion */
+.presentation { margin: 22px 4px 0; }
+.presentation h2 { font-size: 1.15rem; margin: 0 0 8px; letter-spacing: -.01em; }
+.presentation p { margin: 0; }
+.presentation .rgpd { margin-top: 14px; border-top: 1px solid var(--bord); padding-top: 12px; }
+.presentation summary { cursor: pointer; font-weight: 700; color: var(--encre); }
+.presentation summary:hover { text-decoration: underline; }
+.presentation .rgpd ul { margin: 12px 0 0; padding-left: 20px; }
+.presentation .rgpd li { margin: 6px 0; color: var(--texte); }
+.presentation .rgpd-pied { color: var(--doux); font-size: .88rem; margin: 12px 0 0; }
 
 /* ---------- Mes ateliers ---------- */
 .identite { margin: -6px 0 22px; padding: 12px 16px; }
@@ -228,6 +238,27 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
         <p class="aide-connexion"><strong>Code refusé ?</strong> Vérifie chaque lettre de ta fiche.
             Si ça ne marche toujours pas, ton professeur peut t'en donner un nouveau.
             Ne prête jamais ton code : c'est lui qui protège ton travail.</p>
+
+        <section class="carte presentation" aria-labelledby="presentation-titre">
+            <h2 id="presentation-titre">Un seul endroit pour tout ton travail de techno</h2>
+            <p>Ce site réunit les applications de technologie : réseau, modélisation 3D, programmation de cartes…
+                Tu te connectes <strong>une fois</strong> avec ton code, tu ouvres un atelier, et
+                <strong>ton travail est enregistré tout seul</strong>. Tu le retrouves sur n'importe quel
+                ordinateur, et ton professeur voit ton avancement pour t'aider.</p>
+            <details class="rgpd">
+                <summary>Tes données sont protégées (RGPD)</summary>
+                <ul>
+                    <li><strong>Pas de nom sur le serveur.</strong> Il ne connaît que « ta classe · élève 07 »
+                        et une empreinte de ton code. La liste des noms reste sur l'ordinateur de ton professeur.</li>
+                    <li><strong>Hébergé en France.</strong> Aucune publicité, aucune revente, aucun pistage.</li>
+                    <li><strong>Ton travail t'appartient.</strong> Il est gardé sur ton poste et, en sauvegarde,
+                        sur le serveur ; tu peux l'exporter en fichier quand tu veux.</li>
+                    <li><strong>Ton code te protège.</strong> C'est lui, et lui seul, qui garde ton travail à toi.</li>
+                </ul>
+                <p class="rgpd-pied">Conforme au RGPD : données minimales et pseudonymisées, pour l'usage
+                    pédagogique de la classe uniquement.</p>
+            </details>
+        </section>
     </section>
 
     <section id="ecran-eleve" hidden>

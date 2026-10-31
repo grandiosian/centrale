@@ -188,6 +188,37 @@ function action_suivi(string $action): bool
             flash("Atelier « $nom » enregistré.");
             rediriger('./?p=ateliers');
 
+        case 'enregistrer_activation':
+            $id = (int) ($_POST['atelier_id'] ?? 0);
+            $app = normaliser_app((string) ($_POST['app'] ?? ''));
+            $classe_id = (int) ($_POST['classe_id'] ?? 0);
+            $groupe_id = (int) ($_POST['groupe_id'] ?? 0);
+            $mode = in_array($_POST['mode'] ?? '', ['periode', 'cours'], true) ? (string) $_POST['mode'] : 'periode';
+            $debut = date_valide((string) ($_POST['debut'] ?? '')) ? (string) $_POST['debut'] : '';
+            $fin = date_valide((string) ($_POST['fin'] ?? '')) ? (string) $_POST['fin'] : '';
+            $pendant = empty($_POST['pendant_cours']) ? 0 : 1;
+            $retour = './?p=ateliers&modifier=' . $id . '#activation';
+            if ($app === '*' || !$classe_id) {
+                flash("Choisissez une classe pour l'activation.", 'err');
+                rediriger($retour);
+            }
+            if ($mode === 'periode' && $debut !== '' && $fin !== '' && $fin < $debut) {
+                flash("La date de fin doit être après le début.", 'err');
+                rediriger($retour);
+            }
+            $pdo->prepare('INSERT INTO atelier_activations (app, classe_id, groupe_id, mode, pendant_cours, debut, fin, cree_le)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                ->execute([$app, $classe_id, $groupe_id, $mode, $pendant,
+                           $mode === 'periode' ? $debut : '', $mode === 'periode' ? $fin : '', time()]);
+            flash("Fenêtre d'activation ajoutée.");
+            rediriger($retour);
+
+        case 'supprimer_activation':
+            $id = (int) ($_POST['atelier_id'] ?? 0);
+            $pdo->prepare('DELETE FROM atelier_activations WHERE id = ?')->execute([(int) ($_POST['activation_id'] ?? 0)]);
+            flash("Fenêtre d'activation retirée.");
+            rediriger('./?p=ateliers&modifier=' . $id . '#activation');
+
         case 'lire_passerelle':
             $id = (int) ($_POST['atelier_id'] ?? 0);
             $adresse = trim((string) ($_POST['adresse'] ?? ''));
@@ -709,6 +740,11 @@ function page_ateliers(): void
     }
     $pdo = db();
     $liste = $pdo->query('SELECT * FROM ateliers ORDER BY ordre, nom')->fetchAll();
+    $activations = [];
+    foreach ($pdo->query('SELECT * FROM atelier_activations ORDER BY id')->fetchAll() as $av) {
+        $activations[$av['app']][] = $av;
+    }
+    $classes_liste = $pdo->query('SELECT id, nom FROM classes ORDER BY nom')->fetchAll(PDO::FETCH_KEY_PAIR);
     $catalogue = catalogue_activites();
     $ouvertures = [];
     $st = $pdo->prepare('SELECT app, origine, COUNT(*) AS n FROM connexions WHERE ts >= ? GROUP BY app, origine');
@@ -792,6 +828,58 @@ function page_ateliers(): void
             </form>
         <?php endif; ?>
 
+        <?php if ($modifier && $courant['app'] !== ''): $av_liste = $activations[$courant['app']] ?? []; ?>
+            <section class="carte" id="activation">
+                <h2>Disponibilité (calendrier)</h2>
+                <p class="aide">Sans fenêtre ci-dessous, l'atelier est visible en permanence. Ajoute une fenêtre pour ne l'ouvrir
+                    qu'à certaines dates, ou le jour où la classe a cours — pratique pour les applis hébergées ailleurs
+                    (GitLab / GitHub Pages) : elles apparaissent sur le portail le jour J.</p>
+                <?php if ($av_liste): ?>
+                    <div class="defile"><table class="table-activations">
+                        <thead><tr><th>Classe</th><th>Quand</th><th></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($av_liste as $av): ?>
+                            <tr>
+                                <td><?= h($classes_liste[$av['classe_id']] ?? ('#' . $av['classe_id'])) ?><?= $av['groupe_id'] ? ' · groupe ' . (int) $av['groupe_id'] : '' ?></td>
+                                <td><?php if ($av['mode'] === 'cours'): ?>Le jour du cours<?= $av['pendant_cours'] ? ' (pendant le créneau)' : '' ?>
+                                    <?php else: ?><?= $av['debut'] ? 'du ' . h($av['debut']) : '' ?> <?= $av['fin'] ? 'au ' . h($av['fin']) : ($av['debut'] ? '(sans fin)' : 'toujours (si active)') ?><?php endif; ?></td>
+                                <td class="actions"><?= bouton('supprimer_activation', 'Retirer', ['activation_id' => (int) $av['id'], 'atelier_id' => (int) $modifier], 'danger') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table></div>
+                <?php else: ?>
+                    <p class="vide">Aucune fenêtre : atelier visible en permanence.</p>
+                <?php endif; ?>
+                <form method="post" class="form-activation">
+                    <?= csrf() ?>
+                    <input type="hidden" name="action" value="enregistrer_activation">
+                    <input type="hidden" name="atelier_id" value="<?= (int) $modifier ?>">
+                    <input type="hidden" name="app" value="<?= h($courant['app']) ?>">
+                    <label>Classe<select name="classe_id" required><option value="">— choisir —</option><?= options_html($classes_liste, '') ?></select></label>
+                    <label>Mode<select name="mode" id="mode-activation">
+                        <option value="periode">Période de dates</option>
+                        <option value="cours">Le jour du cours</option>
+                    </select></label>
+                    <label class="champ-periode">Du<input type="date" name="debut"></label>
+                    <label class="champ-periode">au<input type="date" name="fin"></label>
+                    <label class="case champ-cours"><input type="checkbox" name="pendant_cours" value="1"> Seulement pendant le créneau</label>
+                    <button>Ajouter</button>
+                </form>
+                <script>
+                (function () {
+                    var m = document.getElementById('mode-activation'); if (!m) return;
+                    function maj() {
+                        var cours = m.value === 'cours';
+                        document.querySelectorAll('.form-activation .champ-periode').forEach(function (e) { e.style.display = cours ? 'none' : ''; });
+                        document.querySelectorAll('.form-activation .champ-cours').forEach(function (e) { e.style.display = cours ? '' : 'none'; });
+                    }
+                    m.addEventListener('change', maj); maj();
+                })();
+                </script>
+            </section>
+        <?php endif; ?>
+
         <?php $avec_test = $liste && !$afficher_form ? carte_tester('./?p=ateliers') : false; ?>
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
@@ -812,7 +900,8 @@ function page_ateliers(): void
                             arsort($o);
                             echo $o ? implode('<br>', array_map(fn($k, $n) => h($k) . ' : ' . $n, array_keys($o), $o)) : '—';
                         ?></td>
-                        <td><?= $a['classes'] !== '' ? h($a['classes']) : '<span class="discret">toutes</span>' ?></td>
+                        <td><?= $a['classes'] !== '' ? h($a['classes']) : '<span class="discret">toutes</span>' ?>
+                            <?php $nav = count($activations[$a['app']] ?? []); if ($nav): ?><br><a class="discret" href="./?p=ateliers&modifier=<?= (int) $a['id'] ?>#activation" title="Fenêtres d'activation par calendrier">📅 <?= $nav ?> activation<?= $nav > 1 ? 's' : '' ?></a><?php endif; ?></td>
                         <td><?= $a['actif'] ? 'Visible' : 'Masqué' ?></td>
                         <td class="actions">
                             <?= $avec_test ? bouton_tester('app:' . $a['app'], 'Ouvrir cet atelier connecté comme l’élève test choisi au-dessus') : '' ?>

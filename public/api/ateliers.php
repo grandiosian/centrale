@@ -22,7 +22,7 @@ $proposees = propositions_eleve((int) $eleve['id']);
 $filtrer = portail_seulement_proposees();
 
 $res = [];
-foreach (ateliers_pour_classe($eleve['classe']) as $a) {
+foreach (ateliers_pour_classe($eleve['classe'], (int) $eleve['classe_id'], isset($eleve['groupe_id']) ? (int) $eleve['groupe_id'] : null) as $a) {
     $app = $a['app'];
     $lignes = $prog[$app] ?? [];
     $cat = $catalogue[$app] ?? [];

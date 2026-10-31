@@ -272,6 +272,21 @@ function creer_tables(PDO $pdo): void
     ajouter_colonne($pdo, 'ateliers', 'descripteur', "TEXT NOT NULL DEFAULT ''");       // centrale.json lu (passerelle.atelier)
     ajouter_colonne($pdo, 'ateliers', 'descripteur_url', "TEXT NOT NULL DEFAULT ''");
     ajouter_colonne($pdo, 'ateliers', 'descripteur_lu', 'INTEGER NOT NULL DEFAULT 0');
+    // Activation d'un atelier par calendrier : fenêtres de disponibilité par classe/groupe.
+    // Aucune fenêtre pour un atelier = visible en permanence (comportement historique).
+    $pdo->exec("CREATE TABLE IF NOT EXISTS atelier_activations (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        app           TEXT    NOT NULL,
+        classe_id     INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        groupe_id     INTEGER NOT NULL DEFAULT 0,          -- 0 = toute la classe
+        mode          TEXT    NOT NULL DEFAULT 'periode',  -- 'periode' | 'cours'
+        pendant_cours INTEGER NOT NULL DEFAULT 0,          -- mode 'cours' : 1 = seulement pendant le créneau
+        debut         TEXT    NOT NULL DEFAULT '',          -- mode 'periode' : AAAA-MM-JJ (vide = sans borne)
+        fin           TEXT    NOT NULL DEFAULT '',          -- mode 'periode' : AAAA-MM-JJ
+        actif         INTEGER NOT NULL DEFAULT 1,
+        cree_le       INTEGER NOT NULL DEFAULT 0
+    )");
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_activations_app ON atelier_activations (app, classe_id)');
     ajouter_colonne($pdo, 'classes', 'etablissement_id', 'INTEGER REFERENCES etablissements(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'etablissements', 'code', "TEXT NOT NULL DEFAULT ''");   // 3 lettres, dans les codes élèves
     ajouter_colonne($pdo, 'eleves', 'surnom', "TEXT NOT NULL DEFAULT ''");          // identifiant : 4C-LHA-<surnom>
@@ -589,11 +604,52 @@ function classe_concernee(string $liste, ?string $classe): bool
         || in_array(mb_strtoupper($classe), array_map('mb_strtoupper', $classes), true);
 }
 
-/** Ateliers actifs proposés à une classe, dans l'ordre. */
-function ateliers_pour_classe(?string $classe): array
+/**
+ * Un atelier est-il disponible maintenant pour cette classe/groupe ?
+ * Aucune fenêtre d'activation définie → toujours disponible (comportement historique).
+ * Sinon, disponible si au moins une fenêtre active correspond : période (dates) ou jour de cours.
+ */
+function atelier_disponible_maintenant(string $app, int $classe_id, ?int $groupe_id = null): bool
+{
+    $st = db()->prepare('SELECT * FROM atelier_activations
+                         WHERE app = ? AND classe_id = ? AND actif = 1 AND (groupe_id = 0 OR groupe_id = ?)');
+    $st->execute([$app, $classe_id, (int) ($groupe_id ?? 0)]);
+    $fenetres = $st->fetchAll();
+    if (!$fenetres) {
+        return true;
+    }
+    $date = aujourd_hui();
+    $heure = (new DateTimeImmutable('now', fuseau()))->format('H:i');
+    $seances = null;   // séances du jour de la classe, chargées seulement si un mode 'cours' le demande
+    foreach ($fenetres as $f) {
+        if ($f['mode'] === 'periode') {
+            if (($f['debut'] === '' || $date >= $f['debut']) && ($f['fin'] === '' || $date <= $f['fin'])) {
+                return true;
+            }
+        } else { // 'cours' : la classe a un cours aujourd'hui (et, si pendant_cours, l'heure est dans le créneau)
+            if ($seances === null) {
+                $seances = array_filter(seances_du_jour($date),
+                    fn($s) => (int) $s['classe_id'] === $classe_id && $s['statut'] !== 'annule');
+            }
+            foreach ($seances as $s) {
+                if (!$f['pendant_cours'] || ($s['debut'] <= $heure && $s['fin'] > $heure)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Ateliers actifs proposés à une classe, dans l'ordre.
+ * Si $classe_id est fourni, applique en plus les fenêtres d'activation par calendrier (portail élève).
+ */
+function ateliers_pour_classe(?string $classe, ?int $classe_id = null, ?int $groupe_id = null): array
 {
     $tous = db()->query('SELECT * FROM ateliers WHERE actif = 1 ORDER BY ordre, nom')->fetchAll();
-    return array_values(array_filter($tous, fn($a) => classe_concernee($a['classes'], $classe)));
+    return array_values(array_filter($tous, fn($a) => classe_concernee($a['classes'], $classe)
+        && ($classe_id === null || atelier_disponible_maintenant($a['app'], $classe_id, $groupe_id))));
 }
 
 /** Parcours visibles par une classe, avec leurs étapes. */
