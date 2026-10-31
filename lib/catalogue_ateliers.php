@@ -101,11 +101,13 @@ function codes_atelier(mixed $v): array
         return codes_valides($v);
     }
     $brut = [];
+    // Codes de la fiche TechnoStudio : le lien « ref » vers le référentiel passe avant la conversion approchée T2C11 → SFC11
+    $code_ou_ref = fn(array $x) => isset($x['ref']) ? array_map('strval', (array) $x['ref']) : [(string) ($x['code'] ?? '')];
     foreach ((array) $v as $c) {
         if (is_array($c)) {
-            $brut[] = (string) ($c['code'] ?? '');
+            array_push($brut, ...$code_ou_ref($c));
             foreach ((array) ($c['sub'] ?? []) as $s) {
-                $brut[] = is_array($s) ? (string) ($s['code'] ?? '') : (string) $s;
+                is_array($s) ? array_push($brut, ...$code_ou_ref($s)) : $brut[] = (string) $s;
             }
         } elseif (is_scalar($c)) {
             $brut[] = (string) $c;

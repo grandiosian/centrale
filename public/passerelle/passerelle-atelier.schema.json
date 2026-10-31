@@ -84,11 +84,12 @@
             "statut": { "type": "string" },
             "score": { "type": "string" },
             "score_max": { "type": "string" },
-            "details": { "type": "string" }
+            "details": { "type": "string" },
+            "constats": { "type": "string", "description": "Quand et comment l'application envoie des constats de compétences (COMPETENCES.md)." }
           },
           "additionalProperties": false
         },
-        "champs_non_utilises": { "type": "array", "items": { "enum": ["titre", "faites", "total", "statut", "score", "score_max", "details"] } },
+        "champs_non_utilises": { "type": "array", "items": { "enum": ["titre", "faites", "total", "statut", "score", "score_max", "details", "constats"] } },
         "format": { "$ref": "#/$defs/schemaOuRef" }
       }
     },

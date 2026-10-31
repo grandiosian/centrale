@@ -132,19 +132,21 @@ Une question corrigée par l'enseignant dans l'application compte avec sa note ;
 
 ## 6. Les codes TechnoStudio
 
-TechnoStudio range ses pastilles avec ses propres codes (charte graphique) : `T1` = OST, `T2` = SFC, `T3` = CCRI, puis le numéro de compétence et de sous-compétence (`T2C11` ≈ `SFC11`).
+TechnoStudio range ses pastilles avec les codes de la charte : `T1` = OST, `T2` = SFC, `T3` = CCRI, puis le numéro de compétence et de sous-compétence (`T2C11`). Ces sous-compétences sont propres à chaque fiche : `T2C12` d'une fiche n'est pas forcément `SFC12`.
 
-- La Centrale **convertit** ces codes à l'import d'un atelier : `T2C11` → `SFC11` (sous-compétence, gardée), `T2C1` → `SFC1` (compétence, écartée car trop large).
-- Pour les constats, TechnoStudio envoie **directement les codes du référentiel**. Le plus simple : une question porte un code du référentiel (`SFC11.5.1`) dans `comp`, à côté de sa pastille T si on veut la garder pour l'affichage.
-- La table de correspondance est dans `competences.json` → `correspondances.technostudio`.
+- Chaque compétence ou sous-compétence de la fiche est donc **reliée au référentiel** par son champ `ref` : `{ "code": "T2C11", "label": "Identifier les constituants de la chaîne d'énergie…", "ref": ["SFC11.5.2"] }`.
+- Une question peut aussi porter directement un code du référentiel dans `comp` (`["SFC11.5.2"]`).
+- Une question notée sans pastille prend les capacités de l'atelier : `"referentiel": ["SFC11.5.1", "CCRI22.5.1"]`.
+- À l'import d'un atelier TechnoStudio, la Centrale prend `ref` ; à défaut seulement, elle convertit le code (`T2C11` → `SFC11`, conversion approchée ; `T2C1` → `SFC1`, écarté car trop large).
+- La table des thèmes est dans `competences.json` → `correspondances.technostudio`.
 
 ## 7. État des applications (31 octobre 2026)
 
 | Application | Déclare | Constats | Comment |
 |---|---|---|---|
-| NetSim 1.6.0 | oui, par exercice | oui | `COMP_EXO` : 5e → `SFC15.5.1` / `SFC15.5.2` ; 4e → `SFC15.4.1` à `SFC15.4.3`, `CCRI17.4.1` (capteur connecté) ; 3e → `SFC15.3.1` / `SFC15.3.2`, `CCRI22.3.1` (plan d'adressage testé). Indices = indices ouverts + étapes passées ; essais = 1 + « Recommencer » ; pas réussi si plus de la moitié des étapes automatiques ont été passées. |
-| Établi 3D 1.2.0 | oui, par catégorie | oui | `COMP_CAT` : modéliser, esquisser → `CCRI16` ; mouvement → `SFC11` + `CCRI16` ; structures → `CCRI21`. Capacité du niveau de la classe. Exercice sans indice → TBM ; avec l'indice ou tuto guidé → MS. Les exemples n'envoient rien. |
-| TechnoStudio 3.2 | pas encore | pas encore | À faire : codes du référentiel sur les questions (`comp`), `competences` dans les activités, constats par feuille notée avec `niveau` (barème ci-dessus). |
+| NetSim 1.7.0 | oui, par exercice | oui | `COMP_EXO` : 5e → `SFC15.5.1` / `SFC15.5.2` ; 4e → `SFC15.4.1` à `SFC15.4.3`, `CCRI17.4.1` (capteur connecté) ; 3e → `SFC15.3.1` / `SFC15.3.2`, `CCRI22.3.1` (plan d'adressage testé). Indices = indices ouverts + étapes passées ; essais = 1 + « Recommencer » ; pas réussi si plus de la moitié des étapes automatiques ont été passées. |
+| Établi 3D 1.3.0 | oui, par catégorie | oui | `COMP_CAT` : modéliser, esquisser → `CCRI16` ; mouvement → `SFC11` + `CCRI16` ; structures → `CCRI21`. Capacité du niveau de la classe. Exercice sans indice → TBM ; avec l'indice ou tuto guidé → MS. Les exemples n'envoient rien. |
+| TechnoStudio 3.3.0 | oui, par feuille notée | oui | Pastilles reliées par `ref`, capacités de l'atelier (`referentiel`). Constat à la fin d'une feuille, `niveau` d'après le barème (§ 5), renvoyé seulement si les niveaux changent. Ateliers du lycée (STI2D, SNT, Pro) : hors référentiel du cycle 4, pas de constat. |
 
 ## 8. Liste de contrôle pour une application
 

@@ -178,24 +178,20 @@ C'est la seule sauvegarde hors du poste qui doit toujours marcher, avec ou sans 
 6. Les compétences et les constats suivent [Compétences](./?doc=competences).
 7. Après la mise en ligne : Centrale → Ateliers → « Ateliers des applications » → « Mettre à jour », et vérifier le bilan.
 
-## 14. État des applications et prochaines modifications (31 octobre 2026)
+## 14. État des applications (31 octobre 2026)
 
-| | NetSim 1.6.0 | Établi 3D 1.2.0 | TechnoStudio 3.2.1 |
+Les trois applications suivent ce document.
+
+| | NetSim 1.7.0 | Établi 3D 1.3.0 | TechnoStudio 3.3.0 |
 |---|---|---|---|
 | `centrale.json` produit et vérifié | oui | oui | oui |
-| `ateliers.json` | à faire | à faire | à faire |
-| Ateliers dans l'application | 18 exercices (`EXOS`) | 39 tutos, exercices, exemples (`LESSONS`, `SAMPLES`) | ateliers intégrés (`DEMOS`) ; ceux des enseignants passent encore par les ressources de la Centrale |
-| Ouvrir par `#activite=` sans connexion | à faire | à faire | `#at-<id>` (à déclarer dans `ouvrir`) |
-| Compétences déclarées et constats | oui | oui | à faire |
-| Enregistrer un fichier / dépôt Nuage | à vérifier | oui (fichier) / à vérifier | à vérifier |
+| `ateliers.json` produit et vérifié | oui, `NetSim.ateliers()` + `outils/verifier-descripteur.html` | oui, `Etabli3D.ateliers()` + `npm test` | oui, `tools/centrale-json.js` (refait à chaque publication) |
+| Ateliers | 18 exercices | 39 tutos, exercices, exemples | ateliers intégrés + dossier `ateliers/` des enseignants |
+| Ouvrir par `#activite=` sans connexion | oui | oui | oui (`<atelier>` ou `<atelier>/<feuille>`) |
+| Compétences déclarées et constats | oui (indices, essais) | oui (indice, niveau de la classe) | oui (niveau d'après le barème) |
+| Fichier de travail et « Déposer sur Nuage » | Exporter le schéma | Fichier → Déposer sur Nuage | Fichier → Enregistrer / Ouvrir mon travail, Déposer sur Nuage |
+| Lien Nuage gardé sur le poste | `netsim-nuage` | `etabli3d.nuage` | `ts-nuage` |
 
-Modifications prévues dans les applications :
+Dans TechnoStudio, les ressources déposées sur la Centrale restent lues à la connexion, en attendant que les ateliers des enseignants soient publiés dans `ateliers/` (voir `ateliers/LISEZMOI.md` du dépôt TechnoStudio).
 
-- **Toutes** : publier `ateliers.json`, produit depuis leurs données, vérifié par leur test ; lire `#activite=<id>` sans la Centrale ; bouton « Déposer sur Nuage » avec repli sur un lien réglé localement.
-- **NetSim** : `ateliers.json` depuis `EXOS` et `COMP_EXO`.
-- **Établi 3D** : `ateliers.json` depuis `LESSONS` et `SAMPLES` (avec `COMP_CAT`).
-- **TechnoStudio** :
-  - publier les ateliers des enseignants avec l'application (dossier `ateliers/`, listés dans `ateliers.json` avec `fichier`) au lieu de les déposer en ressources sur la Centrale ;
-  - mettre les codes du référentiel sur les questions (`comp`) ;
-  - déclarer `competences` dans les activités ;
-  - envoyer un constat par feuille notée, avec `niveau` d'après le barème.
+Une nouvelle application suit la liste de contrôle du § 13 ; ensuite : Centrale → Ateliers → « Ateliers des applications » → « Importer ».
