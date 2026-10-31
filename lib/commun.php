@@ -460,7 +460,7 @@ function adresse_repond(string $url): bool
             CURLOPT_USERAGENT => 'Centrale-eleves (verification)']);
         curl_exec($c);
         $code = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
-        curl_close($c);
+        // curl_close() est inutile depuis PHP 8.0 (le handle est libéré automatiquement) et déprécié en 8.5.
         $ok = $code >= 200 && $code < 400;
     } else {
         $ctx = stream_context_create(['http' => ['method' => 'HEAD', 'timeout' => 4, 'ignore_errors' => true]]);

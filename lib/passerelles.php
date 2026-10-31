@@ -45,11 +45,13 @@ function telecharger_descripteur(string $url): array
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS, CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS]);
         $corps = curl_exec($c);
         $code = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
-        curl_close($c);
+        // curl_close() est inutile depuis PHP 8.0 (handle libéré automatiquement) et déprécié en 8.5.
     } else {
         $ctx = stream_context_create(['http' => ['timeout' => 10, 'ignore_errors' => true, 'header' => "Accept: application/json\r\n"]]);
         $corps = @file_get_contents($url, false, $ctx, 0, TAILLE_MAX_DESCRIPTEUR + 1);
-        $code = isset($http_response_header[0]) && preg_match('#\s(\d{3})\s#', $http_response_header[0], $m) ? (int) $m[1] : 0;
+        // $http_response_header est déprécié en PHP 8.5 ; http_get_last_response_headers() le remplace (8.5+), sinon repli sur l'ancien.
+        $entetes = function_exists('http_get_last_response_headers') ? (http_get_last_response_headers() ?? []) : ($http_response_header ?? []);
+        $code = isset($entetes[0]) && preg_match('#\s(\d{3})\s#', $entetes[0], $m) ? (int) $m[1] : 0;
     }
     if ($corps === false || $code === 0) {
         return [null, "Le serveur de l'application ne répond pas ($url)."];

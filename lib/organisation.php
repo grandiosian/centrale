@@ -157,7 +157,7 @@ function importer_vacances(array $etab, string $annee): int
             CURLOPT_FOLLOWLOCATION => true, CURLOPT_USERAGENT => 'Centrale-eleves']);
         $texte = curl_exec($c);
         $code = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
-        curl_close($c);
+        // curl_close() est inutile depuis PHP 8.0 (handle libéré automatiquement) et déprécié en 8.5.
         if ($code !== 200) {
             $texte = false;
         }
