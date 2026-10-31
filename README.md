@@ -188,7 +188,7 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 
 - Chaque atelier a une **adresse principale** et des **adresses de secours**, une par ligne : copie sur la Forge, copie sur ce serveur…
 - La Centrale vérifie elle-même quelles adresses répondent, avec un cache de 5 minutes. Le portail et les parcours ouvrent la première qui répond. Dans l'onglet Ateliers, ● veut dire que l'adresse répond, ○ qu'elle ne répond pas.
-- **Copie de secours sur ce serveur** : chaque application listée dans `miroirs.txt` est copiée dans `public/miroir/<nom>/`, servie à `https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/` (NetSim et Établi 3D). Une ligne peut ajouter le dossier à publier et la commande qui l'assemble : `etabli3d https://github.com/grandiosian/etabli3d dist python3 build.py`. Pour s'en servir, ajoutez cette adresse aux adresses de secours de l'atelier.
+- **Copie de secours sur ce serveur** : chaque application listée dans `miroirs.txt` est copiée dans `public/miroir/<nom>/`, servie à `https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/` (NetSim, TechnoStudio et Établi 3D). Une ligne peut ajouter le dossier à publier et la commande qui l'assemble : `etabli3d https://github.com/grandiosian/etabli3d dist python3 build.py`. Pour s'en servir, ajoutez cette adresse aux adresses de secours de l'atelier.
   - La copie est mise à jour à chaque déploiement et toutes les heures, par le workflow GitHub.
   - Si une copie échoue, rien n'est envoyé et le serveur garde la version précédente.
 - Les applications fonctionnent aussi **sans la Centrale**, avec un enregistrement dans le navigateur. Si la Centrale est injoignable, le travail est gardé localement et renvoyé à son retour.
