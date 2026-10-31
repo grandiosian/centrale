@@ -170,6 +170,18 @@ if ($action !== null) {
     $retour_classe = './?p=classe&id=' . $classe_id;
     $retour_eleve = './?p=eleve&id=' . $eleve_id;
 
+    // Sans la clé secrète, aucun code ne peut être créé ni vérifié : on l'explique au lieu de planter
+    $actions_codes = ['generer', 'regenerer', 'regenerer_classe', 'reinitialiser_tous_codes', 'apercu_eleve', 'verifier_codes', 'import_classe'];
+    if (in_array($action, $actions_codes, true) && etat_cle() !== 'ok') {
+        if (in_array($action, ['reinitialiser_tous_codes', 'verifier_codes', 'import_classe'], true)) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'erreur' => 'Clé secrète des codes introuvable : restaurez-la dans les Réglages.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        flash('Clé secrète des codes introuvable : restaurez-la dans les Réglages (tableau de bord) avant de créer des codes.', 'err');
+        rediriger('./#cle');
+    }
+
     action_suivi($action);        // parcours, ateliers, suivi
     action_organisation($action); // établissements, emploi du temps, salles, plans
     action_fichiers($action);     // fichiers du serveur
@@ -253,6 +265,48 @@ if ($action !== null) {
                 ->execute([hash('sha256', $jeton), $eid, time() + 2 * 3600]);
             rediriger('../#centrale=' . $jeton);
 
+        case 'telecharger_cle':
+            $cle = cle_secrete();
+            if (!$cle || etat_cle() !== 'ok') {
+                flash('Clé secrète introuvable sur le serveur.', 'err');
+                rediriger('./#cle');
+            }
+            header('Content-Type: text/plain; charset=utf-8');
+            header('Content-Disposition: attachment; filename="cle_secrete_centrale_' . date('Y-m-d') . '.txt"');
+            header('Cache-Control: no-store');
+            echo "Centrale élèves — clé secrète des codes élèves (" . url_base() . ")\r\n\r\n"
+                . "Gardez ce fichier dans un dossier privé de votre Nuage, avec la liste des élèves.\r\n"
+                . "Si le fichier de la clé est perdu sur le serveur, les codes ne fonctionnent plus :\r\n"
+                . "espace enseignant → tableau de bord → Clé secrète des codes → Restaurer, puis collez la ligne ci-dessous.\r\n\r\n"
+                . $cle . "\r\n";
+            exit;
+
+        case 'restaurer_cle':
+            preg_match('/\b[0-9a-f]{64}\b/', strtolower((string) ($_POST['cle'] ?? '')), $m);
+            $cle = $m[0] ?? '';
+            $attendue = reglage('cle_empreinte', '');
+            if ($cle === '') {
+                flash('Aucune clé trouvée : collez le contenu du fichier de secours (64 caractères 0-9 a-f).', 'err');
+            } elseif ($attendue !== '' && !hash_equals($attendue, empreinte_cle($cle))) {
+                flash("Ce n'est pas la bonne clé : elle ne correspond pas aux codes de vos élèves. Rien n'a été changé.", 'err');
+            } elseif (!ecrire_cle($cle)) {
+                flash('Impossible d’écrire la clé dans ' . dossier_cle() . '.', 'err');
+            } else {
+                flash('Clé secrète restaurée : les codes des élèves fonctionnent de nouveau.');
+            }
+            rediriger('./#cle');
+
+        case 'nouvelle_cle':
+            // Dernier recours (clé perdue, sans copie) : nouvelle clé ; les anciens codes ne marcheront plus
+            if (etat_cle() !== 'ok') {
+                $cle = bin2hex(random_bytes(32));
+                if (ecrire_cle($cle)) {
+                    definir_reglage('cle_empreinte', empreinte_cle($cle));
+                    flash('Nouvelle clé créée. Les anciens codes ne fonctionnent plus : utilisez « Réinitialiser tous les codes et télécharger la liste », puis téléchargez une copie de secours de la clé.');
+                }
+            }
+            rediriger('./#cle');
+
         case 'reinitialiser_tous_codes':
             // Tous les codes de toutes les classes. Réponse : numéros et codes seulement (les noms sont dans le navigateur).
             header('Content-Type: application/json; charset=utf-8');
@@ -274,7 +328,8 @@ if ($action !== null) {
             $recus = json_decode((string) ($_POST['empreintes'] ?? '{}'), true) ?: [];
             $valides = [];
             foreach ($recus as $num => $empreinte) {
-                if (isset($hashes[$num]) && is_string($empreinte) && hash_equals($hashes[$num], $empreinte)) {
+                if (isset($hashes[$num]) && is_string($empreinte) && preg_match('/^[0-9a-f]{64}$/', $empreinte)
+                    && hash_equals($hashes[$num], empreinte_avec_cle($empreinte))) {
                     $valides[] = (string) $num;
                 }
             }
@@ -749,6 +804,8 @@ function page_accueil(): void
   });
 </script>') ?></pre>
         </section>
+
+        <?php section_cle(); ?>
 
         <section id="reglages">
             <h2>Réglages</h2>
@@ -1234,6 +1291,48 @@ function section_reinitialiser_codes(int $nb_classes, int $nb_eleves): void
     <?php
 }
 
+/** Tableau de bord : état de la clé secrète, copie de secours, restauration. */
+function section_cle(): void
+{
+    $etat = reglage('empreintes_version', '') === '2' ? etat_cle() : 'ancienne';
+    ?>
+    <section id="cle">
+        <h2>Clé secrète des codes</h2>
+        <div class="carte">
+            <?php if ($etat === 'ok'): ?>
+                <p>Les empreintes des codes élèves sont calculées avec une clé secrète rangée sur le serveur, à part :
+                    hors du site, de la base de données et de GitHub. Une copie de la base seule ne permet pas de retrouver les codes.</p>
+                <p class="aide">Empreinte de la clé : <code><?= h(substr(reglage('cle_empreinte', ''), 0, 8)) ?></code>. Si ce fichier était perdu,
+                    les codes ne fonctionneraient plus : gardez-en une copie dans un dossier privé de votre Nuage.</p>
+                <form method="post" class="en-ligne">
+                    <?= csrf() ?>
+                    <input type="hidden" name="action" value="telecharger_cle">
+                    <button class="secondaire">Télécharger une copie de secours de la clé</button>
+                </form>
+            <?php elseif ($etat === 'ancienne'): ?>
+                <p class="alerte">La clé secrète n'a pas pu être créée sur le serveur (dossier <?= h(dossier_cle()) ?> non accessible).
+                    Les codes fonctionnent avec l'ancienne méthode.</p>
+            <?php else: ?>
+                <p class="alerte"><strong><?= $etat === 'absente' ? 'Clé introuvable sur le serveur.' : 'La clé du serveur ne correspond pas aux codes des élèves.' ?></strong>
+                    Collez ci-dessous le contenu de votre fichier de secours <code>cle_secrete_centrale_….txt</code>.
+                    (Sans copie : réinitialisez tous les codes avec le bouton rouge, après avoir restauré une clé.)</p>
+            <?php endif; ?>
+            <?php if ($etat === 'absente' || $etat === 'differente'): ?>
+                <form method="post">
+                    <?= csrf() ?>
+                    <input type="hidden" name="action" value="restaurer_cle">
+                    <label>Contenu du fichier de secours<textarea name="cle" rows="3" class="mono" required></textarea></label>
+                    <button>Restaurer la clé</button>
+                </form>
+                <p class="aide" style="margin-top:14px">Pas de copie de secours ?</p>
+                <?= bouton('nouvelle_cle', 'Créer une nouvelle clé (tous les codes devront être redistribués)', [], 'danger',
+                    'Les codes actuels des élèves ne fonctionneront plus. Il faudra réinitialiser tous les codes et redistribuer les fiches.') ?>
+            <?php endif; ?>
+        </div>
+    </section>
+    <?php
+}
+
 function liste_locale(): void
 {
     ?>
@@ -1249,6 +1348,11 @@ function liste_locale(): void
 
 function messages(): void
 {
+    // Alerte permanente si la clé secrète des codes a disparu du serveur
+    if (!empty($_SESSION['admin']) && reglage('empreintes_version', '') === '2' && etat_cle() !== 'ok') {
+        echo '<p class="message erreur alerte-cle" role="alert"><strong>Les codes des élèves ne fonctionnent plus :</strong> '
+            . 'la clé secrète est introuvable sur le serveur. <a href="./#cle">Restaurez-la depuis votre copie de secours</a>.</p>';
+    }
     foreach ($_SESSION['flash'] ?? [] as [$type, $msg]) {
         echo '<p class="message ' . ($type === 'err' ? 'erreur' : 'succes') . '" role="status">' . h($msg) . '</p>';
     }

@@ -42,7 +42,12 @@ if (normaliser_code($code) === '') {
 $st = db()->prepare('SELECT e.id, e.etiquette, e.classe_id, c.nom AS classe
                      FROM eleves e JOIN classes c ON c.id = e.classe_id
                      WHERE e.code_hash = ? AND e.actif = 1');
-$st->execute([hash_code($code)]);
+try {
+    $empreinte = hash_code($code);
+} catch (RuntimeException) {
+    envoyer_json(503, ['ok' => false, 'erreur' => 'Connexion impossible pour le moment (réglage du serveur). Préviens ton professeur.']);
+}
+$st->execute([$empreinte]);
 $eleve = $st->fetch();
 
 if (!$eleve) {

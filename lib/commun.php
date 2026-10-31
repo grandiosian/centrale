@@ -28,6 +28,7 @@ function db(): PDO
     $pdo->exec('PRAGMA foreign_keys = ON');
     $pdo->exec('PRAGMA busy_timeout = 5000');
     creer_tables($pdo);
+    preparer_empreintes($pdo);
     return $pdo;
 }
 
@@ -1063,10 +1064,124 @@ function normaliser_code(string $code): string
     return strtolower(preg_replace('/\s+/', '', $code) ?? '');
 }
 
-/** Seule l'empreinte du code est stockée, jamais le code lui-même. */
+/**
+ * Seule l'empreinte du code est stockée, jamais le code lui-même :
+ *   empreinte = HMAC-SHA256(clé secrète, SHA-256(code))
+ * La clé secrète est rangée hors du site, de la base et du dépôt GitHub : une copie de la base
+ * seule ne permet pas de retrouver les codes, même en essayant des milliards de codes.
+ */
 function hash_code(string $code): string
 {
-    return hash('sha256', normaliser_code($code));
+    return empreinte_avec_cle(hash('sha256', normaliser_code($code)));
+}
+
+/** SHA-256(code) → empreinte stockée. Lève une exception si la clé secrète est introuvable. */
+function empreinte_avec_cle(string $sha): string
+{
+    if (reglage('empreintes_version', '') !== '2') {
+        return $sha;   // ancienne base pas encore convertie (clé impossible à créer) : ancien calcul
+    }
+    $cle = cle_secrete();
+    if ($cle === null || etat_cle() !== 'ok') {
+        throw new RuntimeException('cle_absente');
+    }
+    return hash_hmac('sha256', $sha, $cle);
+}
+
+/* ---------- Clé secrète des empreintes ---------- */
+
+const FICHIER_CLE = 'cle_secrete.txt';
+
+/** Dossier de la clé : dans le dossier personnel du compte (hors du site web, de data/ et du déploiement). */
+function dossier_cle(): string
+{
+    $d = getenv('CENTRALE_DOSSIER_CLE');
+    if ($d) {
+        return rtrim($d, '/');
+    }
+    $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
+    if (!$home && function_exists('posix_getpwuid') && function_exists('posix_geteuid')) {
+        $home = posix_getpwuid(posix_geteuid())['dir'] ?? '';
+    }
+    $racine_site = realpath(__DIR__ . '/../public') ?: '';
+    if ($home && is_dir($home) && is_writable($home) && !str_starts_with($racine_site, rtrim($home, '/') . '/centrale-cle')) {
+        return rtrim($home, '/') . '/centrale-cle';
+    }
+    return dirname(__DIR__, 2) . '/centrale-cle';
+}
+
+function cle_secrete(bool $relire = false): ?string
+{
+    static $cle = false;
+    if ($cle === false || $relire) {
+        $f = dossier_cle() . '/' . FICHIER_CLE;
+        $t = is_file($f) ? trim((string) @file_get_contents($f)) : '';
+        $cle = preg_match('/^[0-9a-f]{64}$/', $t) ? $t : null;
+    }
+    return $cle;
+}
+
+function ecrire_cle(string $cle): bool
+{
+    $d = dossier_cle();
+    if (!is_dir($d) && !@mkdir($d, 0700, true)) {
+        return false;
+    }
+    @file_put_contents($d . '/.htaccess', "Require all denied\n");
+    $ok = @file_put_contents($d . '/' . FICHIER_CLE, $cle . "\n", LOCK_EX) !== false;
+    @chmod($d . '/' . FICHIER_CLE, 0600);
+    cle_secrete(true);
+    return $ok;
+}
+
+/** Petite empreinte de la clé, gardée dans la base, pour reconnaître la bonne clé lors d'une restauration. */
+function empreinte_cle(string $cle): string
+{
+    return substr(hash_hmac('sha256', 'centrale-verification-cle', $cle), 0, 16);
+}
+
+/** 'ok', 'absente' (fichier perdu) ou 'differente' (ce n'est pas la clé qui a servi aux empreintes). */
+function etat_cle(): string
+{
+    $cle = cle_secrete();
+    if ($cle === null) {
+        return 'absente';
+    }
+    $attendue = reglage('cle_empreinte', '');
+    return $attendue === '' || hash_equals($attendue, empreinte_cle($cle)) ? 'ok' : 'differente';
+}
+
+/**
+ * Première fois : crée la clé et convertit les empreintes existantes (SHA-256 seul → HMAC avec la clé).
+ * Les codes déjà distribués restent valables : on part de l'ancienne empreinte, pas du code.
+ * Si la base est déjà convertie et la clé introuvable, on n'en crée SURTOUT PAS une nouvelle.
+ */
+function preparer_empreintes(PDO $pdo): void
+{
+    $version = $pdo->query("SELECT valeur FROM reglages WHERE cle = 'empreintes_version'")->fetchColumn();
+    if ($version === '2') {
+        return;
+    }
+    $cle = cle_secrete();
+    if ($cle === null) {
+        $cle = bin2hex(random_bytes(32));
+        if (!ecrire_cle($cle)) {
+            return;   // dossier non accessible en écriture : on garde l'ancien calcul, rien n'est cassé
+        }
+    }
+    $pdo->exec('BEGIN IMMEDIATE');
+    if ($pdo->query("SELECT valeur FROM reglages WHERE cle = 'empreintes_version'")->fetchColumn() === '2') {
+        $pdo->exec('COMMIT');
+        return;
+    }
+    $maj = $pdo->prepare('UPDATE eleves SET code_hash = ? WHERE id = ?');
+    foreach ($pdo->query('SELECT id, code_hash FROM eleves')->fetchAll() as $e) {
+        $maj->execute([hash_hmac('sha256', $e['code_hash'], $cle), $e['id']]);
+    }
+    $reglage = $pdo->prepare('INSERT INTO reglages (cle, valeur) VALUES (?, ?) ON CONFLICT(cle) DO UPDATE SET valeur = excluded.valeur');
+    $reglage->execute(['cle_empreinte', empreinte_cle($cle)]);
+    $reglage->execute(['empreintes_version', '2']);
+    $pdo->exec('COMMIT');
 }
 
 /** Identifiant d'application : lettres, chiffres, - et _. Vide = "*" (toutes). */

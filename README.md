@@ -352,6 +352,16 @@ Les noms restent dans le navigateur de l'enseignant et dans son fichier CSV. Ce 
 
 ---
 
+### Clé secrète des codes
+
+L'empreinte d'un code élève est calculée ainsi : `HMAC-SHA256(clé secrète, SHA-256(code))`.
+
+- La clé est créée automatiquement sur le serveur, dans `~/centrale-cle/cle_secrete.txt`. Ce fichier est hors du site web, hors de la base `data/`, hors du déploiement et hors de GitHub.
+- Une copie de la base seule ne permet donc pas de retrouver les codes en les essayant hors ligne.
+- Le passage à la clé s'est fait sans regénérer les codes : chaque ancienne empreinte a été convertie.
+- **Copie de secours** : tableau de bord → « Clé secrète des codes » → Télécharger. Rangez-la dans un dossier privé du Nuage.
+- Si la clé est perdue, une alerte s'affiche partout dans l'espace enseignant. Collez alors la copie de secours dans « Restaurer la clé ». Sans copie, il reste « Créer une nouvelle clé », puis il faut réinitialiser tous les codes.
+
 ## 9. Déploiement automatique depuis GitHub
 
 À chaque `push` sur `main`, GitHub copie le code sur alwaysdata (`.github/workflows/deploy.yml`). Le dossier `data/` n'est jamais touché.
