@@ -127,6 +127,7 @@ jobs:
           done
           echo "::notice title=API état ($code)::$(head -c 1500 etat.json)"
           [ "$code" = 200 ] || { echo "::error title=API::$API ne répond pas ($code)"; exit 1; }
+          echo "::notice title=API depuis GitHub Pages::$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: https://grandiosian.github.io' "$API") (200 : site autorisé ; 403 : ajouter https://grandiosian.github.io dans Réglages → Sites autorisés)"
           echo "::notice title=API sans connexion::$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"carte":"uno","code":"void setup(){}"}' "$API") (attendu : 401)"
           ko=0
           for c in uno microbit $( [ "${{ vars.COMPILATION_ESP32 || 'non' }}" = oui ] && echo esp32 ); do
