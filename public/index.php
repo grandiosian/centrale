@@ -137,6 +137,15 @@ button[disabled] { opacity: .45; cursor: default; }
 .atelier .compte { font-size: .85rem; color: var(--doux); }
 .atelier .pied { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: auto; padding-top: 10px; }
 .atelier .pied > button:last-child { margin-left: auto; }
+/* Onglets des ateliers + cartes « bientôt » */
+.onglets-ateliers { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.onglets-ateliers .onglet { background: var(--surface); color: var(--texte); border: 1px solid var(--bord); border-radius: 999px; padding: 7px 16px; font: inherit; font-weight: 700; cursor: pointer; }
+.onglets-ateliers .onglet small { color: var(--doux); font-weight: 600; margin-left: 2px; }
+.onglets-ateliers .onglet.actif { background: var(--encre); color: var(--encre-texte); border-color: var(--encre); }
+.onglets-ateliers .onglet.actif small { color: inherit; opacity: .85; }
+.atelier.bientot { opacity: .72; filter: grayscale(.45); }
+.atelier.bientot .pied { justify-content: space-between; align-items: center; }
+.rebours-bientot { font-weight: 700; color: var(--doux); font-variant-numeric: tabular-nums; }
 .activites { list-style: none; margin: 10px 0 0; padding: 0; max-height: 320px; overflow: auto; border-top: 1px solid var(--bord); }
 .activites .groupe { font-size: .82rem; font-weight: 700; color: var(--doux); padding: 10px 0 2px; }
 .activites li.act { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 6px 0;
@@ -274,6 +283,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
             <div id="liste-parcours"></div>
         </div>
         <h2 class="section" id="titre-ateliers" hidden>Tous les ateliers</h2>
+        <nav class="onglets-ateliers" id="onglets-ateliers" hidden aria-label="Filtrer les ateliers"></nav>
         <div class="grille" id="liste-ateliers"></div>
     </section>
 </main>
@@ -383,43 +393,108 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     }));
   }
 
-  /* ---------- Ateliers ---------- */
+  /* ---------- Ateliers (onglets : Complété · À faire · En cours · Bientôt) ---------- */
+  const ONGLETS_ATELIERS = [['complete', 'Complété'], ['afaire', 'À faire'], ['encours', 'En cours'], ['bientot', 'Bientôt']];
+  let minuterieBientot = null;
+
+  function statutAtelier(a) {
+    if (a.disponible === false) return 'bientot';                      // calendrier : pas encore ouvert
+    if (a.total && a.terminees === a.total) return 'complete';         // tout terminé
+    const commence = a.terminees > 0 || (a.activites || []).some((x) => x.statut !== 'a_faire');
+    return commence ? 'encours' : 'afaire';
+  }
+
+  function texteRebours(ts) {
+    let s = Math.max(0, Math.round(ts - Date.now() / 1000));
+    if (s <= 0) return 'disponible — actualise la page';
+    const j = Math.floor(s / 86400); s -= j * 86400;
+    const h = Math.floor(s / 3600); s -= h * 3600;
+    const m = Math.floor(s / 60); const x = s - m * 60;
+    if (j >= 1) return 'dans ' + j + ' j ' + h + ' h';
+    if (h >= 1) return 'dans ' + h + ' h ' + m + ' min';
+    return 'dans ' + m + ' min ' + x + ' s';
+  }
+  function lancerReboursBientot() {
+    if (minuterieBientot) { clearInterval(minuterieBientot); minuterieBientot = null; }
+    const maj = () => document.querySelectorAll('.rebours-bientot[data-ts]').forEach((e) => {
+      if (!e.closest('.atelier').hidden) e.textContent = texteRebours(parseInt(e.dataset.ts, 10));
+    });
+    maj();
+    minuterieBientot = setInterval(maj, 1000);
+  }
+
+  function carteAtelier(a, ouverts) {
+    const statut = statutAtelier(a);
+    if (statut === 'bientot') {
+      const node = el('div', { class: 'carte atelier bientot' },
+        el('div', { class: 'atelier-tete' }, el('div', { class: 'icone' }, a.icone || '🧩'),
+          el('div', {}, el('h3', {}, a.nom), el('div', { class: 'compte' }, 'Pas encore ouvert'))),
+        a.description ? el('p', { class: 'desc' }, a.description) : null,
+        el('div', { class: 'pied' },
+          el('span', { class: 'rebours-bientot', 'data-ts': String(a.disponible_le || 0) }, '…'),
+          el('button', { disabled: 'disabled', title: "Cet atelier s'ouvrira automatiquement le jour venu" }, 'Bientôt')));
+      return { statut, node };
+    }
+    const pct = Math.round(a.taux * 100);
+    const libelle = a.terminees === a.total && a.total ? 'Revoir' : pct > 0 ? 'Continuer' : 'Ouvrir';
+    const bouton = el('button', {}, libelle);
+    bouton.onclick = () => ouvrir(a.url);
+    const liste = el('ul', { class: 'activites', 'data-app': a.app });
+    liste.hidden = !ouverts.has(a.app);
+    let groupe = null;
+    a.activites.forEach((x) => {
+      if (x.groupe && x.groupe !== groupe) { groupe = x.groupe; liste.append(el('li', { class: 'groupe' }, groupe)); }
+      const b = el('button', { class: 'petit secondaire' }, x.statut === 'termine' ? 'Revoir' : x.statut === 'commence' ? 'Continuer' : 'Ouvrir');
+      b.onclick = () => ouvrir(a.url, x.id);
+      liste.append(el('li', { class: 'act ' + x.statut },
+        el('span', { class: 'puce' }, x.statut === 'termine' ? '✓' : ''),
+        el('div', {}, el('div', {}, x.titre), el('div', { class: 'etat' },
+          x.statut === 'termine' ? 'Terminé' : x.statut === 'commence' ? 'En cours' + (x.texte ? ' · ' + x.texte : '') : 'À faire')),
+        b));
+    });
+    const voir = el('button', { class: 'lien' }, liste.hidden ? `Voir les activités (${a.total})` : 'Masquer les activités');
+    voir.onclick = () => { liste.hidden = !liste.hidden; voir.textContent = liste.hidden ? `Voir les activités (${a.total})` : 'Masquer les activités'; };
+    const node = el('div', { class: 'carte atelier' },
+      el('div', { class: 'atelier-tete' }, el('div', { class: 'icone' }, a.icone || '🧩'),
+        el('div', {}, el('h3', {}, a.nom), a.total ? el('div', { class: 'compte' }, `${a.terminees}/${a.total} ${a.total > 1 ? 'activités terminées' : 'activité terminée'}`) : null)),
+      a.description ? el('p', { class: 'desc' }, a.description) : null,
+      a.total ? el('div', { class: 'barre-prog' }, el('i', { style: `width:${pct}%` })) : null,
+      a.total ? liste : null,
+      el('div', { class: 'pied' }, a.total ? voir : el('span'), bouton));
+    return { statut, node };
+  }
+
   function afficherAteliers(ateliers) {
     const grille = $('liste-ateliers');
+    const barre = $('onglets-ateliers');
     if (!ateliers.length) {
+      barre.hidden = true;
       grille.replaceChildren(el('div', { class: 'carte' }, el('p', { class: 'vide', style: 'margin:0' },
         "Ton professeur n'a pas encore ouvert d'atelier pour ta classe.")));
       return;
     }
     const ouverts = new Set([...grille.querySelectorAll('.activites:not([hidden])')].map((x) => x.dataset.app));
-    grille.replaceChildren(...ateliers.map((a) => {
-      const pct = Math.round(a.taux * 100);
-      const libelle = a.terminees === a.total && a.total ? 'Revoir' : pct > 0 ? 'Continuer' : 'Ouvrir';
-      const bouton = el('button', {}, libelle);
-      bouton.onclick = () => ouvrir(a.url);
-      const liste = el('ul', { class: 'activites', 'data-app': a.app });
-      liste.hidden = !ouverts.has(a.app);
-      let groupe = null;
-      a.activites.forEach((x) => {
-        if (x.groupe && x.groupe !== groupe) { groupe = x.groupe; liste.append(el('li', { class: 'groupe' }, groupe)); }
-        const b = el('button', { class: 'petit secondaire' }, x.statut === 'termine' ? 'Revoir' : x.statut === 'commence' ? 'Continuer' : 'Ouvrir');
-        b.onclick = () => ouvrir(a.url, x.id);
-        liste.append(el('li', { class: 'act ' + x.statut },
-          el('span', { class: 'puce' }, x.statut === 'termine' ? '✓' : ''),
-          el('div', {}, el('div', {}, x.titre), el('div', { class: 'etat' },
-            x.statut === 'termine' ? 'Terminé' : x.statut === 'commence' ? 'En cours' + (x.texte ? ' · ' + x.texte : '') : 'À faire')),
-          b));
-      });
-      const voir = el('button', { class: 'lien' }, liste.hidden ? `Voir les activités (${a.total})` : 'Masquer les activités');
-      voir.onclick = () => { liste.hidden = !liste.hidden; voir.textContent = liste.hidden ? `Voir les activités (${a.total})` : 'Masquer les activités'; };
-      return el('div', { class: 'carte atelier' },
-        el('div', { class: 'atelier-tete' }, el('div', { class: 'icone' }, a.icone || '🧩'),
-          el('div', {}, el('h3', {}, a.nom), a.total ? el('div', { class: 'compte' }, `${a.terminees}/${a.total} ${a.total > 1 ? 'activités terminées' : 'activité terminée'}`) : null)),
-        a.description ? el('p', { class: 'desc' }, a.description) : null,
-        a.total ? el('div', { class: 'barre-prog' }, el('i', { style: `width:${pct}%` })) : null,
-        a.total ? liste : null,
-        el('div', { class: 'pied' }, a.total ? voir : el('span'), bouton));
+    const cartes = ateliers.map((a) => carteAtelier(a, ouverts));
+    const comptes = {};
+    cartes.forEach((c) => { comptes[c.statut] = (comptes[c.statut] || 0) + 1; });
+    const dispo = ONGLETS_ATELIERS.filter(([k]) => comptes[k]);
+    const actif = (barre.dataset.actif && comptes[barre.dataset.actif]) ? barre.dataset.actif
+      : (['afaire', 'encours', 'bientot', 'complete'].find((k) => comptes[k]) || 'afaire');
+    grille.replaceChildren(...cartes.map((c) => c.node));
+    function filtrer(tab) {
+      cartes.forEach((c) => { c.node.hidden = c.statut !== tab; });
+      barre.querySelectorAll('.onglet').forEach((x) => x.classList.toggle('actif', x.dataset.tab === tab));
+      barre.dataset.actif = tab;
+      lancerReboursBientot();
+    }
+    barre.hidden = dispo.length < 2;   // un seul groupe : pas d'onglets
+    barre.replaceChildren(...dispo.map(([k, lib]) => {
+      const b = el('button', { class: 'onglet' + (k === actif ? ' actif' : ''), 'data-tab': k, type: 'button' },
+        lib, ' ', el('small', {}, String(comptes[k])));
+      b.onclick = () => filtrer(k);
+      return b;
     }));
+    filtrer(actif);
   }
 
   /* ---------- Parcours (ateliers transversaux, individuels ou en équipe) ---------- */

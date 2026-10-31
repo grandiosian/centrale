@@ -641,6 +641,72 @@ function atelier_disponible_maintenant(string $app, int $classe_id, ?int $groupe
     return false;
 }
 
+/** Prochains débuts de cours (horodatages) d'une classe, sur ~3 semaines, triés. Mémoïsé par requête. */
+function prochaines_seances_classe(int $classe_id): array
+{
+    static $cache = [];
+    if (isset($cache[$classe_id])) {
+        return $cache[$classe_id];
+    }
+    $maintenant = new DateTimeImmutable('now', fuseau());
+    $lundi = lundi_de($maintenant->format('Y-m-d'));
+    $etabs = db()->query('SELECT * FROM etablissements')->fetchAll();
+    $ts = [];
+    for ($s = 0; $s < 3; $s++) {
+        $jourLundi = ajouter_jours($lundi, $s * 7);
+        foreach ($etabs as $e) {
+            $creneaux = [];
+            foreach (creneaux_de((int) $e['id']) as $c) {
+                $creneaux[(int) $c['id']] = $c;
+            }
+            foreach (semaine_emploi_du_temps($e, $jourLundi)['seances'] as $x) {
+                if ((int) $x['classe_id'] !== $classe_id || $x['statut'] === 'annule' || !isset($creneaux[$x['creneau_id']])) {
+                    continue;
+                }
+                $deb = (new DateTimeImmutable($x['date'] . ' ' . $creneaux[$x['creneau_id']]['debut'], fuseau()))->getTimestamp();
+                if ($deb > $maintenant->getTimestamp()) {
+                    $ts[] = $deb;
+                }
+            }
+        }
+    }
+    sort($ts);
+    return $cache[$classe_id] = $ts;
+}
+
+/**
+ * Quand un atelier (gated par le calendrier) (re)devient disponible pour cette classe/groupe :
+ * horodatage de la prochaine ouverture, ou null s'il est disponible maintenant ou jamais à l'horizon.
+ */
+function prochaine_disponibilite(string $app, int $classe_id, ?int $groupe_id = null): ?int
+{
+    $st = db()->prepare('SELECT * FROM atelier_activations
+                         WHERE app = ? AND classe_id = ? AND actif = 1 AND (groupe_id = 0 OR groupe_id = ?)');
+    $st->execute([$app, $classe_id, (int) ($groupe_id ?? 0)]);
+    $fenetres = $st->fetchAll();
+    if (!$fenetres) {
+        return null;
+    }
+    $aujourdhui = aujourd_hui();
+    $meilleur = null;
+    $seances = null;
+    foreach ($fenetres as $f) {
+        if ($f['mode'] === 'periode') {
+            if ($f['debut'] === '' || $f['debut'] <= $aujourdhui) {
+                continue;   // sans borne de début, ou déjà commencée : ce n'est pas « bientôt »
+            }
+            $deb = (new DateTimeImmutable($f['debut'] . ' 00:00', fuseau()))->getTimestamp();
+            $meilleur = $meilleur === null ? $deb : min($meilleur, $deb);
+        } else { // 'cours' : prochain cours de la classe
+            $seances ??= prochaines_seances_classe($classe_id);
+            if ($seances) {
+                $meilleur = $meilleur === null ? $seances[0] : min($meilleur, $seances[0]);
+            }
+        }
+    }
+    return $meilleur;
+}
+
 /**
  * Ateliers actifs proposés à une classe, dans l'ordre.
  * Si $classe_id est fourni, applique en plus les fenêtres d'activation par calendrier (portail élève).
@@ -1444,3 +1510,4 @@ require_once __DIR__ . '/passerelles.php';
 require_once __DIR__ . '/bibliotheque.php';
 require_once __DIR__ . '/competences.php';
 require_once __DIR__ . '/catalogue_ateliers.php';
+require_once __DIR__ . '/organisation.php';   // emploi du temps : utilisé par l'activation calendaire des ateliers (portail)

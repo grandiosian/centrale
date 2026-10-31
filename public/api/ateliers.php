@@ -21,9 +21,21 @@ $catalogue = catalogue_activites();
 $proposees = propositions_eleve((int) $eleve['id']);
 $filtrer = portail_seulement_proposees();
 
+$cid = (int) $eleve['classe_id'];
+$gid = isset($eleve['groupe_id']) ? (int) $eleve['groupe_id'] : null;
+
 $res = [];
-foreach (ateliers_pour_classe($eleve['classe'], (int) $eleve['classe_id'], isset($eleve['groupe_id']) ? (int) $eleve['groupe_id'] : null) as $a) {
+foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers de la classe : la disponibilité est calculée ci-dessous
     $app = $a['app'];
+    // Fenêtres d'activation (calendrier) : disponible maintenant, « bientôt » (avec une date), ou caché.
+    $disponible = atelier_disponible_maintenant($app, $cid, $gid);
+    $disponible_le = null;
+    if (!$disponible) {
+        $disponible_le = prochaine_disponibilite($app, $cid, $gid);
+        if ($disponible_le === null) {
+            continue;   // ni maintenant ni bientôt : pas montré
+        }
+    }
     $lignes = $prog[$app] ?? [];
     $cat = $catalogue[$app] ?? [];
     $activites = [];
@@ -58,6 +70,8 @@ foreach (ateliers_pour_classe($eleve['classe'], (int) $eleve['classe_id'], isset
         'total'       => count($activites),
         'maj'         => $global['maj'],
         'activites'   => $activites,
+        'disponible'    => $disponible,
+        'disponible_le' => $disponible_le,   // horodatage d'ouverture si « bientôt », sinon null
     ];
 }
 
