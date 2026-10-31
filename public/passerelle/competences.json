@@ -1,0 +1,975 @@
+{
+ "format": "referentiel.competences",
+ "version": 1,
+ "id": "technologie-c4-2024",
+ "titre": "Technologie — cycle 4 (programme 2024)",
+ "source": "Programme de technologie du cycle 4, BO du 29 février 2024 (tableaux OST, SFC, CCRI).",
+ "niveaux": [
+  "5e",
+  "4e",
+  "3e"
+ ],
+ "codes": "Thème OST ; compétence OST1 ; sous-compétence OST11 ; capacité OST11.5.2 = sous-compétence OST11, niveau 5e, capacité n° 2. Les codes ne changent jamais.",
+ "echelle": [
+  {
+   "niveau": 1,
+   "code": "MI",
+   "libelle": "Maîtrise insuffisante",
+   "couleur": "#d64035"
+  },
+  {
+   "niveau": 2,
+   "code": "MF",
+   "libelle": "Maîtrise fragile",
+   "couleur": "#f0a030"
+  },
+  {
+   "niveau": 3,
+   "code": "MS",
+   "libelle": "Maîtrise satisfaisante",
+   "couleur": "#7cb342"
+  },
+  {
+   "niveau": 4,
+   "code": "TBM",
+   "libelle": "Très bonne maîtrise",
+   "couleur": "#2e7d32"
+  }
+ ],
+ "correspondances": {
+  "technostudio": {
+   "T1": "OST",
+   "T2": "SFC",
+   "T3": "CCRI"
+  },
+  "note": "TechnoStudio code T1 = OST, T2 = SFC, T3 = CCRI ; T2C11 ≈ sous-compétence SFC11."
+ },
+ "themes": [
+  {
+   "code": "OST",
+   "titre": "Les objets et les systèmes techniques : leurs usages et leurs interactions à découvrir et à analyser",
+   "technostudio": "T1",
+   "competences": [
+    {
+     "code": "OST1",
+     "titre": "Décrire les liens entre usages et évolutions technologiques des objets et des systèmes techniques",
+     "sous": [
+      {
+       "code": "OST11",
+       "titre": "Évolution des OST",
+       "capacites": [
+        {
+         "code": "OST11.5.1",
+         "niveau": "5e",
+         "texte": "Collecter, trier et analyser des données"
+        },
+        {
+         "code": "OST11.5.2",
+         "niveau": "5e",
+         "texte": "Comparer des principes techniques pour une même fonction technique"
+        },
+        {
+         "code": "OST11.4.1",
+         "niveau": "4e",
+         "texte": "Mettre en relation les OST avec leurs usages"
+        },
+        {
+         "code": "OST11.4.2",
+         "niveau": "4e",
+         "texte": "Identifier les avantages et les inconvénients associés aux évolutions technologiques et informatiques"
+        },
+        {
+         "code": "OST11.4.3",
+         "niveau": "4e",
+         "texte": "Justifier l’évolution d’un OST pour répondre à l’évolution des besoins"
+        },
+        {
+         "code": "OST11.3.1",
+         "niveau": "3e",
+         "texte": "Identifier les innovations de rupture qui sont attachées à l’évolution d’un OST"
+        },
+        {
+         "code": "OST11.3.2",
+         "niveau": "3e",
+         "texte": "Mettre en relation une découverte scientifique avec ses développements technologiques et leurs effets sur la société"
+        },
+        {
+         "code": "OST11.3.3",
+         "niveau": "3e",
+         "texte": "Exprimer dans un argumentaire court l’incidence d’un OST sur la société"
+        },
+        {
+         "code": "OST11.3.4",
+         "niveau": "3e",
+         "texte": "Exprimer dans un argumentaire court l’incidence des contraintes sociétales sur les OST"
+        }
+       ],
+       "connaissances": [
+        "Les éléments qui participent à l’évolution des besoins (invention, innovation, développement durable)",
+        "La fonction technique, le principe technique",
+        "La famille et la lignée d’OST",
+        "Les contraintes sociétales",
+        "Les grands types d’apprentissage des intelligences artificielles et leurs usages possibles (géolocalisation, identification, calcul, traduction, etc.)",
+        "Les incidences sociétales, notamment l’étude du biais et de l’effet de l’usage d’une intelligence artificielle (IA)"
+       ],
+       "remobiliser": []
+      },
+      {
+       "code": "OST12",
+       "titre": "usages et impacts sociétaux du numérique",
+       "capacites": [
+        {
+         "code": "OST12.5.1",
+         "niveau": "5e",
+         "texte": "Décrire le rôle des systèmes d’information dans le partage d’information"
+        },
+        {
+         "code": "OST12.5.2",
+         "niveau": "5e",
+         "texte": "Recenser des données, les identifier, les classer, les représenter, les stocker dans des fichiers, les retrouver dans une arborescence"
+        },
+        {
+         "code": "OST12.5.3",
+         "niveau": "5e",
+         "texte": "Identifier des règles permettant de sécuriser un environnement numérique (bases de la cybersécurité) et des règles de respect de la propriété intellectuelle"
+        },
+        {
+         "code": "OST12.5.4",
+         "niveau": "5e",
+         "texte": "Appréhender la responsabilité de chacun dans les dérives (cyberviolence, atteinte à la vie privée, aux données personnelles, usurpation d’identité)"
+        },
+        {
+         "code": "OST12.4.1",
+         "niveau": "4e",
+         "texte": "Identifier et appliquer les règles pour un usage raisonné des objets communicants et des environnements numériques (propriété intellectuelle, identité numérique, témoins de connexion, géolocalisation)"
+        },
+        {
+         "code": "OST12.3.1",
+         "niveau": "3e",
+         "texte": "Exprimer dans un argumentaire court le rôle du développement stratégique du numérique au sein de la société et des environnements professionnels (ou des métiers)"
+        }
+       ],
+       "connaissances": [
+        "Système d’information et stockage des données : — fichiers informatiques (fichier texte, fichier image, fichier de type tableur ou CSV) et dossiers, arborescence — extension et format de fichiers, droits d’écriture et de lecture sur les fichiers — unité de quantité d’information : bit, octet et leurs multiples — ordre de grandeur de la taille d’un fichier image, d’un fichier son, d’une vidéo — incidences liées au stockage, au flux des données et aux réseaux d’information",
+        "Cybersécurité : protection des données personnelles, traces numériques (témoins de connexion, géolocalisation), identification, authentification, respect de la propriété intellectuelle",
+        "Cyberviolence : usurpation d’identité, usage détourné"
+       ],
+       "remobiliser": []
+      }
+     ]
+    },
+    {
+     "code": "OST2",
+     "titre": "Décrire les interactions entre un objet ou un système technique, son environnement et les utilisateurs",
+     "sous": [
+      {
+       "code": "OST21",
+       "titre": "L’OST dans son environnement",
+       "capacites": [
+        {
+         "code": "OST21.5.1",
+         "niveau": "5e",
+         "texte": "Faire la liste des interacteurs extérieurs d’un OST"
+        },
+        {
+         "code": "OST21.5.2",
+         "niveau": "5e",
+         "texte": "Repérer et expliquer les choix de conception dans les domaines de l’ergonomie et de la sécurité ou en lien avec des objectifs de développement durable"
+        },
+        {
+         "code": "OST21.4.1",
+         "niveau": "4e",
+         "texte": "Décrire l’expérience de l’utilisateur (ressenti et facilité d’usage) d’un OST en partant du langage naturel (texte, croquis) pour aboutir aux schémas, graphiques, algorithmes"
+        },
+        {
+         "code": "OST21.4.2",
+         "niveau": "4e",
+         "texte": "Repérer et expliquer les contraintes, exigences prises en compte (sécurité, incidences environnementales, formes et fonctions, ergonomie, qualité, fiabilité) pour répondre aux attentes des utilisateurs"
+        },
+        {
+         "code": "OST21.3.1",
+         "niveau": "3e",
+         "texte": "Décrire l’expérience de l’utilisateur d’un OST à l’aide de modes de représentation choisis"
+        }
+       ],
+       "connaissances": [
+        "Les interacteurs extérieurs : usagers, données, autres objets, éléments de l’environnement ; les modes de représentation : croquis, schéma, graphique, algorithme, modélisation",
+        "Les contraintes : prise en compte des exigences issues des normes ou d’un cahier des charges , labels et certifications ; l’ergonomie liée à l’usage"
+       ],
+       "remobiliser": []
+      }
+     ]
+    },
+    {
+     "code": "OST3",
+     "titre": "Caractériser et choisir un objet ou un système technique selon différents critères",
+     "sous": [
+      {
+       "code": "OST31",
+       "titre": "Le choix d’un OST dans un contexte de développement durable",
+       "capacites": [
+        {
+         "code": "OST31.5.1",
+         "niveau": "5e",
+         "texte": "Repérer pour un OST les matériaux, les sources et les formes d’énergie, le traitement de l’information"
+        },
+        {
+         "code": "OST31.5.2",
+         "niveau": "5e",
+         "texte": "Identifier les étapes du cycle de vie d’un OST influencées par les choix de matériaux et d’énergie"
+        },
+        {
+         "code": "OST31.5.3",
+         "niveau": "5e",
+         "texte": "Choisir un OST parmi plusieurs propositions en vue de répondre à un besoin"
+        },
+        {
+         "code": "OST31.4.1",
+         "niveau": "4e",
+         "texte": "Identifier les caractéristiques à prendre en compte dans le choix d’un OST en vue de répondre à un besoin"
+        },
+        {
+         "code": "OST31.4.2",
+         "niveau": "4e",
+         "texte": "Comparer qualitativement et/ou quantitativement (incidences environnementales, bilan carbone, efficacité énergétique) plusieurs OST répondant au même besoin et arrêter un choix"
+        },
+        {
+         "code": "OST31.3.1",
+         "niveau": "3e",
+         "texte": "Établir une liste d’OST possibles en vue de répondre à un besoin"
+        },
+        {
+         "code": "OST31.3.2",
+         "niveau": "3e",
+         "texte": "Choisir un OST et argumenter ce choix en prenant en compte son cycle de vie et les trois piliers du développement durable"
+        },
+        {
+         "code": "OST31.3.3",
+         "niveau": "3e",
+         "texte": "Évaluer les OST selon des exigences ou des critères identifiés (caractéristiques, performances, coût, indice de réparabilité)"
+        }
+       ],
+       "connaissances": [
+        "Les composantes d’une notice et d’une documentation technique et leur organisation",
+        "L’indice énergétique et l’indice de réparabilité",
+        "Les impacts environnementaux (indicateurs : air, eau, sol et santé)",
+        "Les piliers du développement durable et les différentes étapes du cycle de vie d’un OST",
+        "Les critères de choix : la qualité, l’efficacité énergétique, la durabilité, la recyclabilité"
+       ],
+       "remobiliser": []
+      },
+      {
+       "code": "OST32",
+       "titre": "La performance des OST",
+       "capacites": [
+        {
+         "code": "OST32.5.1",
+         "niveau": "5e",
+         "texte": "Mesurer et comparer une performance d’un OST à partir d’un protocole fourni"
+        },
+        {
+         "code": "OST32.4.1",
+         "niveau": "4e",
+         "texte": "Choisir les appareils de mesure à utiliser pour mesurer une performance d’un OST à partir d’un protocole donné"
+        },
+        {
+         "code": "OST32.3.1",
+         "niveau": "3e",
+         "texte": "Définir et mettre en œuvre un protocole pour mesurer une caractéristique, une performance d’un OST"
+        }
+       ],
+       "connaissances": [
+        "Les critères de performance d’un OST (grandeurs mesurables : vitesse, autonomie énergétique, etc.)"
+       ],
+       "remobiliser": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "SFC",
+   "titre": "Structure, fonctionnement, comportement : des objets et des systèmes techniques à comprendre",
+   "technostudio": "T2",
+   "competences": [
+    {
+     "code": "SFC1",
+     "titre": "Définir et caractériser l’organisation interne d’un objet ou d’un système technique et ses échanges avec son environnement (énergies, données)",
+     "sous": [
+      {
+       "code": "SFC11",
+       "titre": "Fonctions, solutions, constituants de la chaine d’énergie",
+       "capacites": [
+        {
+         "code": "SFC11.5.1",
+         "niveau": "5e",
+         "texte": "Associer des solutions techniques à une ou des fonctions techniques"
+        },
+        {
+         "code": "SFC11.5.2",
+         "niveau": "5e",
+         "texte": "Identifier des constituants de la chaîne d’énergie d’un objet technique (l’organisation de la chaîne d’énergie étant fournie)"
+        },
+        {
+         "code": "SFC11.5.3",
+         "niveau": "5e",
+         "texte": "Indiquer la nature des énergies en entrée et en sortie des constituants de la chaîne d’énergie"
+        },
+        {
+         "code": "SFC11.4.1",
+         "niveau": "4e",
+         "texte": "Identifier les constituants d’une chaîne d’énergie et les associer à leurs fonctions"
+        },
+        {
+         "code": "SFC11.4.2",
+         "niveau": "4e",
+         "texte": "Repérer les transformations d’énergie et les flux d’énergie au sein de l’OST"
+        },
+        {
+         "code": "SFC11.3.1",
+         "niveau": "3e",
+         "texte": "Élaborer, à l’aide d’un schéma bloc, la chaîne d’énergie d’un OST"
+        }
+       ],
+       "connaissances": [
+        "Les différentes formes d’énergie : électrique, cinétique, potentielle, thermique, lumineuse",
+        "Les conversions d’énergie des constituants suivants : moteur électrique, lampe, radiateur, génératrice, vérin",
+        "Les fonctions des constituants suivants : batterie, relais/interrupteur",
+        "Les mécanismes de transmission et de transformation de mouvements (engrenages, courroies, chaînes)"
+       ],
+       "remobiliser": []
+      },
+      {
+       "code": "SFC12",
+       "titre": "Matériaux et procédés",
+       "capacites": [
+        {
+         "code": "SFC12.5.1",
+         "niveau": "5e",
+         "texte": "Identifier les principaux matériaux constitutifs d’un OST"
+        },
+        {
+         "code": "SFC12.4.1",
+         "niveau": "4e",
+         "texte": "Mettre en relation la forme d’une pièce avec le procédé de réalisation"
+        },
+        {
+         "code": "SFC12.3.1",
+         "niveau": "3e",
+         "texte": "Justifier le choix d’un matériau et de son procédé de mise en forme au regard des contraintes techniques et environnementales"
+        }
+       ],
+       "connaissances": [
+        "Les caractéristiques et les propriétés des principaux matériaux",
+        "Les caractéristiques des procédés de mise en forme disponibles dans le laboratoire",
+        "Les étapes du cycle de vie d’un OST : extraction, traitement, fabrication, assemblage, utilisation, fin de vie, transport ; l’incidence environnementale"
+       ],
+       "remobiliser": []
+      },
+      {
+       "code": "SFC13",
+       "titre": "Fonctions, solutions, constituants de la chaîne d’information",
+       "capacites": [
+        {
+         "code": "SFC13.5.1",
+         "niveau": "5e",
+         "texte": "Identifier des constituants de la chaîne d’information d’un OST (l’organisation de la chaîne d’information étant fournie)"
+        },
+        {
+         "code": "SFC13.4.1",
+         "niveau": "4e",
+         "texte": "Identifier les constituants de la chaîne d’information d’un objet réel et les associer à leur fonction"
+        },
+        {
+         "code": "SFC13.3.1",
+         "niveau": "3e",
+         "texte": "Décrire un OST en caractérisant sa chaîne d’information"
+        },
+        {
+         "code": "SFC13.3.2",
+         "niveau": "3e",
+         "texte": "Associer des grandeurs analogiques issues d’un OST à des données exploitables"
+        }
+       ],
+       "connaissances": [
+        "Les fonctions des constituants suivants : capteurs (température, présence, distance, etc.), microcontrôleur, composants d’une interface entre l’humain et la machine (IHM) : boutons, afficheurs, etc"
+       ],
+       "remobiliser": []
+      },
+      {
+       "code": "SFC14",
+       "titre": "Structuration et traitement des données",
+       "capacites": [
+        {
+         "code": "SFC14.5.1",
+         "niveau": "5e",
+         "texte": "Déterminer des descripteurs permettant de décrire des objets sous forme de données en précisant leurs types et leurs formats"
+        },
+        {
+         "code": "SFC14.4.1",
+         "niveau": "4e",
+         "texte": "Décrire et analyser la transformation des données téléversées ou issues d’un OST"
+        },
+        {
+         "code": "SFC14.4.2",
+         "niveau": "4e",
+         "texte": "Décrire et analyser la structuration d’une table de données qui permet une exploitation et une interprétation du comportement d’un OST"
+        },
+        {
+         "code": "SFC14.3.1",
+         "niveau": "3e",
+         "texte": "Représenter sous forme de données les informations de diverses natures utilisées par un OST"
+        },
+        {
+         "code": "SFC14.3.2",
+         "niveau": "3e",
+         "texte": "Identifier, selon les cas, leur mise en forme, leur transmission, ou leur stockage dans des fichiers (texte, image, nombre) afin de comprendre le fonctionnement de l’OST"
+        }
+       ],
+       "connaissances": [
+        "Vocabulaire des données : objet / descripteur / collection (liste) / type (mot/ chaîne de caractères, nombre et booléen) /données structurées",
+        "Représentation des données : — le bit : élément minimum d’information, représentation par les symboles 0 et 1 — représentation des booléens, des mots (code ASCII étendu), des nombres entiers naturels",
+        "Traitement des données : mise en forme et traitement de données (calculs, filtre, tri) dans un logiciel (tableur)"
+       ],
+       "remobiliser": []
+      },
+      {
+       "code": "SFC15",
+       "titre": "La circulation de l’information dans un réseau informatique",
+       "capacites": [
+        {
+         "code": "SFC15.5.1",
+         "niveau": "5e",
+         "texte": "Identifier les composants qui constituent un réseau local (terminaux, commutateurs, liaisons filaires et sans fil (WiFi)) et sa topologie"
+        },
+        {
+         "code": "SFC15.5.2",
+         "niveau": "5e",
+         "texte": "Justifier la nécessité d’identifier les terminaux pour communiquer sur un réseau local (activité débranchée et vérification par un outil de simulation)"
+        },
+        {
+         "code": "SFC15.4.1",
+         "niveau": "4e",
+         "texte": "Paramétrer une adresse IP fixe pour ajouter un objet connecté à un réseau local."
+        },
+        {
+         "code": "SFC15.4.2",
+         "niveau": "4e",
+         "texte": "Résoudre des problèmes pour assurer la communication entre les différents terminaux dans un réseau informatique (simulation ou réseau local déconnecté du réseau pédagogique)"
+        },
+        {
+         "code": "SFC15.4.3",
+         "niveau": "4e",
+         "texte": "Compléter une simulation fournie pour valider le comportement d’un réseau informatique"
+        },
+        {
+         "code": "SFC15.3.1",
+         "niveau": "3e",
+         "texte": "Identifier et représenter la circulation d’une information dans le réseau Internet"
+        },
+        {
+         "code": "SFC15.3.2",
+         "niveau": "3e",
+         "texte": "Justifier la nécessité d’un protocole de routage pour faire communiquer plusieurs réseaux (activité débranchée, table de routage donnée)"
+        }
+       ],
+       "connaissances": [
+        "Un réseau local, le réseau mondial (Internet)",
+        "Le rôle d’un terminal, d’une carte réseau, des liaisons (filaires ou non filaires), d’un commutateur, d’un routeur, d’un serveur",
+        "Le rôle et la structure d’une adresse IP, le rôle des tables de routage",
+        "Le débit et les ordres de grandeur associés"
+       ],
+       "remobiliser": []
+      }
+     ]
+    },
+    {
+     "code": "SFC2",
+     "titre": "Identifier un dysfonctionnement d’un objet technique et y remédier",
+     "sous": [
+      {
+       "code": "SFC21",
+       "titre": "Le dépannage et la réparation",
+       "capacites": [
+        {
+         "code": "SFC21.5.1",
+         "niveau": "5e",
+         "texte": "Repérer visuellement une pièce défectueuse"
+        },
+        {
+         "code": "SFC21.5.2",
+         "niveau": "5e",
+         "texte": "Réaliser une réparation en suivant un protocole fourni"
+        },
+        {
+         "code": "SFC21.5.3",
+         "niveau": "5e",
+         "texte": "Découvrir les procédés de réalisation présents dans un atelier de fabrication collaboratif"
+        },
+        {
+         "code": "SFC21.4.1",
+         "niveau": "4e",
+         "texte": "Proposer un protocole permettant de vérifier l’origine d’un dysfonctionnement"
+        },
+        {
+         "code": "SFC21.4.2",
+         "niveau": "4e",
+         "texte": "Remplacer une pièce défectueuse sans protocole fourni (la pièce de remplacement étant fournie)"
+        },
+        {
+         "code": "SFC21.4.3",
+         "niveau": "4e",
+         "texte": "Choisir les procédés de réalisation et les mettre en œuvre"
+        },
+        {
+         "code": "SFC21.3.1",
+         "niveau": "3e",
+         "texte": "Formuler des hypothèses expliquant le dysfonctionnement d’un objet technique"
+        },
+        {
+         "code": "SFC21.3.2",
+         "niveau": "3e",
+         "texte": "Proposer un protocole de dépannage puis de réparation"
+        },
+        {
+         "code": "SFC21.3.3",
+         "niveau": "3e",
+         "texte": "Réaliser le dépannage ou la réparation d’un système défectueux"
+        },
+        {
+         "code": "SFC21.3.4",
+         "niveau": "3e",
+         "texte": "Réaliser une pièce sur mesure pour réparer un objet technique"
+        }
+       ],
+       "connaissances": [
+        "La fiabilité, la durabilité, l’indice de réparabilité",
+        "Les règles usuelles de sécurité et de mise en œuvre des moyens de réalisation au sein d’un atelier de fabrication collaboratif — les équipements de protection individuelle — l’outillage manuel — l’appareillage de prototypage, de réalisation, de fabrication",
+        "La technologie et les caractéristiques des composants à remplacer : capteurs, actionneurs, composants, microcontrôleurs, générateurs",
+        "Les procédés d’obtention de pièce (ajout et enlèvement de matière), de mise en forme (pliage, thermoformage) et d’assemblage (fixe et démontable)",
+        "Les moyens de production : découpe au laser, centre d’usinage, fabrication additive (imprimante 3D)",
+        "Les moyens de prototypage électronique : plaque d’essai, fils, composants électroniques, générateurs",
+        "Les modes de sollicitation des matériaux (flexion, torsion)",
+        "Les conductibilités électrique et thermique ; la disponibilité, la valorisation, le recyclage des matériaux"
+       ],
+       "remobiliser": []
+      }
+     ]
+    },
+    {
+     "code": "SFC3",
+     "titre": "Comprendre et modifier un programme associé à une fonctionnalité d’un objet ou d’un système technique",
+     "sous": [
+      {
+       "code": "SFC31",
+       "titre": "La programmation d'une nouvelle fonctionnalité",
+       "capacites": [
+        {
+         "code": "SFC31.5.1",
+         "niveau": "5e",
+         "texte": "Identifier les données utilisées et produites par le programme associé à une fonctionnalité d’un OST (à partir d’un programme existant)"
+        },
+        {
+         "code": "SFC31.5.2",
+         "niveau": "5e",
+         "texte": "Comprendre et traduire en un algorithme en langage naturel le programme associé à une fonctionnalité d’un OST"
+        },
+        {
+         "code": "SFC31.5.3",
+         "niveau": "5e",
+         "texte": "Modifier les paramètres d’un programme et identifier ou évaluer ses effets en termes de fonctionnalité"
+        },
+        {
+         "code": "SFC31.4.1",
+         "niveau": "4e",
+         "texte": "Analyser les données et en déduire des modifications à apporter au programme"
+        },
+        {
+         "code": "SFC31.4.2",
+         "niveau": "4e",
+         "texte": "Compléter un programme pour répondre à une fonctionnalité d’un OST"
+        },
+        {
+         "code": "SFC31.4.3",
+         "niveau": "4e",
+         "texte": "Tester et valider, dans un environnement simulé ou réel, une modification du programme"
+        },
+        {
+         "code": "SFC31.3.1",
+         "niveau": "3e",
+         "texte": "Déterminer les données utilisées et produites par un programme associé à une fonctionnalité en vue de le modifier."
+        },
+        {
+         "code": "SFC31.3.2",
+         "niveau": "3e",
+         "texte": "Programmer un algorithme lié à une nouvelle fonctionnalité"
+        },
+        {
+         "code": "SFC31.3.3",
+         "niveau": "3e",
+         "texte": "Modifier et tester le programme associé à une nouvelle fonctionnalité d’un OST"
+        }
+       ],
+       "connaissances": [
+        "Algorithmique et programmation : — instruction d’affectation, variable (type mot, nombre et booléen) — opérateurs arithmétiques et logiques (ET, OU, NON) — instruction conditionnelle — instructions itératives — structure de données « listes » afin de stocker des données issues du programme pour les parcourir et les traiter — séquences (bloc) d’instructions — événement — déclenchement d’une séquence d’instructions par un événement — entrées ou sorties d’un programme (données issues par exemple de capteurs IHM et sorties pouvant être en lien avec un actionneur, fichiers)",
+        "Programmation graphique par blocs",
+        "Lien entre la programmation graphique par bloc et la programmation textuelle (fin de 3e)"
+       ],
+       "remobiliser": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "CCRI",
+   "titre": "Création, conception, réalisation, innovations : des objets à concevoir et à réaliser",
+   "technostudio": "T3",
+   "competences": [
+    {
+     "code": "CCRI1",
+     "titre": "Imaginer, concevoir et réaliser une ou des solutions en réponse à un besoin, à des exigences (de développement durable, par exemple) ou à la nécessité d’améliorations dans une démarche de créativité",
+     "sous": [
+      {
+       "code": "CCRI11",
+       "titre": "La gestion de projet technique",
+       "capacites": [
+        {
+         "code": "CCRI11.5.1",
+         "niveau": "5e",
+         "texte": "Suivre un processus de conception et de réalisation dans une durée, avec des tâches identifiées"
+        },
+        {
+         "code": "CCRI11.4.1",
+         "niveau": "4e",
+         "texte": "Organiser un processus de conception et de réalisation dans une durée, avec des tâches identifiées"
+        },
+        {
+         "code": "CCRI11.3.1",
+         "niveau": "3e",
+         "texte": "Élaborer un processus de conception et de réalisation dans une durée, avec des tâches identifiées"
+        }
+       ],
+       "connaissances": [
+        "Le diagramme de planification des tâches : notion de tâches, durée et contraintes entre tâches",
+        "Les étapes d’un projet, le rôle d’une revue de projet",
+        "L’écoconception"
+       ],
+       "remobiliser": [
+        "Les différentes étapes du cycle de vie d’un OST",
+        "Les contraintes sociétales",
+        "L’incidence environnementale",
+        "Les piliers du développement durable"
+       ]
+      },
+      {
+       "code": "CCRI12",
+       "titre": "Le prototypage de solutions",
+       "capacites": [
+        {
+         "code": "CCRI12.5.1",
+         "niveau": "5e",
+         "texte": "Fabriquer une solution pour améliorer un OST existant"
+        },
+        {
+         "code": "CCRI12.4.1",
+         "niveau": "4e",
+         "texte": "Proposer et fabriquer une solution pour ajouter une nouvelle fonction à un OST (croquis, schéma, graphique, algorithme, modélisation)"
+        },
+        {
+         "code": "CCRI12.3.1",
+         "niveau": "3e",
+         "texte": "Proposer et fabriquer un ensemble de solutions pour produire un nouvel OST (croquis, schéma, graphique, algorithme, modélisation)"
+        }
+       ],
+       "connaissances": [],
+       "remobiliser": [
+        "Les modes de représentation (croquis, schéma, graphique, algorithme, modélisation)",
+        "Les mécanismes de transmission et de transformation de mouvements",
+        "Les procédés d’obtention de pièce (ajout et enlèvement de matière), de mise en forme (pliage, thermoformage) et d’assemblage (fixe et démontable)",
+        "L’ergonomie liée à l’usage",
+        "Les règles usuelles de sécurité et de mise en œuvre des moyens de réalisation dans un atelier de fabrication collaboratif ; les exigences, les interacteurs, les critères"
+       ]
+      },
+      {
+       "code": "CCRI13",
+       "titre": "Le choix des matériaux",
+       "capacites": [
+        {
+         "code": "CCRI13.5.1",
+         "niveau": "5e",
+         "texte": "Choisir un matériau parmi plusieurs proposés en fonction de leurs caractéristiques"
+        },
+        {
+         "code": "CCRI13.4.1",
+         "niveau": "4e",
+         "texte": "Comparer différents matériaux pour choisir le plus adapté"
+        },
+        {
+         "code": "CCRI13.3.1",
+         "niveau": "3e",
+         "texte": "Choisir un matériau constitutif d’un objet et/ou système technique"
+        }
+       ],
+       "connaissances": [],
+       "remobiliser": [
+        "Les modes de sollicitation des matériaux (flexion, torsion)",
+        "Les conductibilités électrique et thermique",
+        "La disponibilité, la valorisation, le recyclage des matériaux",
+        "Les différentes étapes du cycle de vie d’un OST",
+        "L’empreinte carbone"
+       ]
+      },
+      {
+       "code": "CCRI14",
+       "titre": "Le choix d’une source d’énergie",
+       "capacites": [
+        {
+         "code": "CCRI14.5.1",
+         "niveau": "5e",
+         "texte": "Choisir une source d’énergie parmi plusieurs proposées et une forme d’énergie possible"
+        },
+        {
+         "code": "CCRI14.4.1",
+         "niveau": "4e",
+         "texte": "Comparer différentes sources d’énergie pour choisir la plus adaptée"
+        },
+        {
+         "code": "CCRI14.3.1",
+         "niveau": "3e",
+         "texte": "Choisir une source d’énergie pour un OST"
+        }
+       ],
+       "connaissances": [],
+       "remobiliser": [
+        "Les différentes formes d’énergie : électrique, cinétique, thermique, lumineuse",
+        "Les conversions d’énergie des constituants suivants : moteur électrique, lampe, radiateur, génératrice, vérin"
+       ]
+      },
+      {
+       "code": "CCRI15",
+       "titre": "L’assemblage de constituants",
+       "capacites": [
+        {
+         "code": "CCRI15.5.1",
+         "niveau": "5e",
+         "texte": "Assembler les constituants fournis pour réaliser un prototype"
+        },
+        {
+         "code": "CCRI15.4.1",
+         "niveau": "4e",
+         "texte": "Identifier les constituants manquants dans un prototype et le compléter"
+        },
+        {
+         "code": "CCRI15.3.1",
+         "niveau": "3e",
+         "texte": "Choisir les constituants et assembler un prototype"
+        }
+       ],
+       "connaissances": [
+        "Les instruments de mesure"
+       ],
+       "remobiliser": [
+        "Les règles usuelles de sécurité et de mise en œuvre des moyens de réalisation au sein d’un atelier de fabrication collaboratif",
+        "Les moyens de production : découpe au laser, centre d’usinage, fabrication additive (imprimante 3D)"
+       ]
+      },
+      {
+       "code": "CCRI16",
+       "titre": "La modélisation et la fabrication",
+       "capacites": [
+        {
+         "code": "CCRI16.5.1",
+         "niveau": "5e",
+         "texte": "Mettre en œuvre les moyens pour réaliser une forme selon une procédure fournie"
+        },
+        {
+         "code": "CCRI16.4.1",
+         "niveau": "4e",
+         "texte": "Modifier une forme à l’aide d’une modélisation"
+        },
+        {
+         "code": "CCRI16.4.2",
+         "niveau": "4e",
+         "texte": "Choisir les moyens et produire la forme voulue"
+        },
+        {
+         "code": "CCRI16.3.1",
+         "niveau": "3e",
+         "texte": "Modéliser une forme voulue"
+        },
+        {
+         "code": "CCRI16.3.2",
+         "niveau": "3e",
+         "texte": "Choisir les moyens et produire la forme voulue"
+        }
+       ],
+       "connaissances": [
+        "Les instruments de mesure"
+       ],
+       "remobiliser": [
+        "Les règles usuelles de sécurité et de mise en œuvre des moyens de réalisation au sein d’un atelier de fabrication collaboratif",
+        "Les moyens de production : découpe au laser, centre d’usinage, fabrication additive (imprimante 3D)"
+       ]
+      },
+      {
+       "code": "CCRI17",
+       "titre": "Les objets communicants",
+       "capacites": [
+        {
+         "code": "CCRI17.4.1",
+         "niveau": "4e",
+         "texte": "Interfacer un objet technique avec un réseau"
+        },
+        {
+         "code": "CCRI17.3.1",
+         "niveau": "3e",
+         "texte": "Interfacer deux objets techniques communicants"
+        }
+       ],
+       "connaissances": [],
+       "remobiliser": [
+        "Le rôle d’un terminal, d’une carte réseau, des liaisons (filaires ou non filaires), d’un commutateur, d’un routeur, d’un serveur",
+        "Les composants d’une interface entre l’humain et la machine (IHM) : boutons, afficheurs, etc"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "CCRI2",
+     "titre": "Valider des solutions techniques par des simulations ou par des protocoles de tests",
+     "sous": [
+      {
+       "code": "CCRI21",
+       "titre": "La validation du comportement mécanique d’un matériau",
+       "capacites": [
+        {
+         "code": "CCRI21.5.1",
+         "niveau": "5e",
+         "texte": "Utiliser une simulation fournie pour valider la tenue mécanique d’un matériau"
+        },
+        {
+         "code": "CCRI21.5.2",
+         "niveau": "5e",
+         "texte": "Mettre en œuvre un protocole de test fourni pour valider la tenue mécanique d’un matériau"
+        },
+        {
+         "code": "CCRI21.4.1",
+         "niveau": "4e",
+         "texte": "Paramétrer une simulation fournie pour valider la tenue mécanique d’un matériau"
+        },
+        {
+         "code": "CCRI21.4.2",
+         "niveau": "4e",
+         "texte": "Proposer un protocole de test pour valider la tenue mécanique d’un matériau"
+        },
+        {
+         "code": "CCRI21.3.1",
+         "niveau": "3e",
+         "texte": "Mettre en œuvre une simulation pour valider la tenue mécanique d’un matériau"
+        },
+        {
+         "code": "CCRI21.3.2",
+         "niveau": "3e",
+         "texte": "Proposer un protocole de test pour valider la tenue mécanique d’un matériau"
+        }
+       ],
+       "connaissances": [],
+       "remobiliser": [
+        "Les modes de sollicitation des matériaux (flexion, torsion)",
+        "L’indice énergétique et l’indice de réparabilité"
+       ]
+      },
+      {
+       "code": "CCRI22",
+       "titre": "La validation des performances d’un OST",
+       "capacites": [
+        {
+         "code": "CCRI22.5.1",
+         "niveau": "5e",
+         "texte": "Vérifier le comportement et les performances d’un objet technique en suivant un protocole fourni"
+        },
+        {
+         "code": "CCRI22.4.1",
+         "niveau": "4e",
+         "texte": "Proposer un protocole de test pour valider le comportement et les performances d’un objet technique"
+        },
+        {
+         "code": "CCRI22.3.1",
+         "niveau": "3e",
+         "texte": "Proposer un protocole de test pour valider le comportement et les performances d’un objet technique"
+        }
+       ],
+       "connaissances": [],
+       "remobiliser": [
+        "Les paramètres et les grandeurs mesurées, associés à un protocole",
+        "Les exigences, les contraintes issues des normes ou d’un cahier des charges"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "CCRI3",
+     "titre": "Concevoir, écrire, tester et mettre au point un programme",
+     "sous": [
+      {
+       "code": "CCRI31",
+       "titre": "La programmation des OST",
+       "capacites": [
+        {
+         "code": "CCRI31.5.1",
+         "niveau": "5e",
+         "texte": "Analyser un programme simple fourni et tester s’il répond au besoin ou au problème posé"
+        },
+        {
+         "code": "CCRI31.5.2",
+         "niveau": "5e",
+         "texte": "Modifier un programme fourni pour répondre au besoin ou à un problème posé"
+        },
+        {
+         "code": "CCRI31.5.3",
+         "niveau": "5e",
+         "texte": "Réaliser et mettre au point un programme simple commandant un OST"
+        },
+        {
+         "code": "CCRI31.4.1",
+         "niveau": "4e",
+         "texte": "Modifier un algorithme permettant de répondre au besoin ou au problème posé"
+        },
+        {
+         "code": "CCRI31.4.2",
+         "niveau": "4e",
+         "texte": "Traduire un algorithme permettant de répondre à un besoin ou à un problème simple en un programme."
+        },
+        {
+         "code": "CCRI31.4.3",
+         "niveau": "4e",
+         "texte": "Réaliser et mettre au point un programme commandant un système réel incluant éventuellement une interaction entre un humain et une machine"
+        },
+        {
+         "code": "CCRI31.3.1",
+         "niveau": "3e",
+         "texte": "Élaborer ou concevoir un algorithme permettant de répondre au besoin visé, puis le traduire en un programme structuré (appel de sous-programmes ou de fonctions), le tester et le mettre au point"
+        },
+        {
+         "code": "CCRI31.3.2",
+         "niveau": "3e",
+         "texte": "Réaliser et mettre au point un programme commandant un système réel incluant une interaction entre un humain et une machine"
+        }
+       ],
+       "connaissances": [
+        "La modularité : sous-programme, fonction",
+        "La structuration d’un programme (organisation, modularité, commentaires)"
+       ],
+       "remobiliser": [
+        "Algorithmique et programmation : — instruction d’affectation, variable (type mot, nombre et booléen) — opérateurs arithmétiques et logiques (ET, OU, NON) — instruction conditionnelle — instructions itératives — structure de données « listes » afin de stocker des données issues du programme pour les parcourir et les traiter — séquences (bloc) d’instructions — événement — déclenchement d’une séquence d’instructions par un événement — entrées ou sorties d’un programme (données issues par exemple de capteurs IHM et sorties pouvant être en lien avec un actionneur, fichiers)",
+        "Programmation graphique par blocs",
+        "Lien entre la programmation graphique par bloc et la programmation textuelle (fin de 3e)"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

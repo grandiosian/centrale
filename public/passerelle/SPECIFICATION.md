@@ -150,6 +150,19 @@ Le descripteur le déclare dans `centrale.parcours` :
 
 La Centrale affiche ces informations sur la fiche de la passerelle, et signale une application qui utilise le dossier de projet sans `avant_de_quitter`.
 
+### 2.7 Compétences
+
+La Centrale publie le référentiel commun à l'adresse **`/passerelle/competences.json`** (format `referentiel.competences` v1) :
+
+- thèmes `OST`, `SFC`, `CCRI` ;
+- compétences (`OST1`) et sous-compétences (`OST11`) ;
+- capacités par niveau (`OST11.5.2` = OST11, 5e, capacité n° 2), avec leurs connaissances ;
+- l'échelle de maîtrise (1 MI, 2 MF, 3 MS, 4 TBM).
+
+Une application qui évalue des compétences utilise **ces codes**. Ils ne changent jamais.
+
+Aujourd'hui, l'enseignant note les compétences d'une étape de parcours en la validant. À venir : l'application déclarera dans `activites.liste` les capacités travaillées par chaque activité (champ facultatif `competences`). Elle joindra aussi à `Centrale.progression` des constats `{ competence, reussi, indices, essais }`.
+
 ## 3. Règles
 
 1. **Ce que déclare `centrale.json` correspond à ce que l'application envoie réellement.** Le plus sûr est de produire le fichier à partir du code, comme TechnoStudio, ou de le vérifier contre l'application, comme le fait l'outil de vérification de NetSim.

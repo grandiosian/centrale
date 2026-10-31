@@ -18,6 +18,7 @@ require __DIR__ . '/../../lib/admin_passerelles.php';
 require __DIR__ . '/../../lib/admin_bibliotheque.php';
 require __DIR__ . '/../../lib/admin_import.php';
 require __DIR__ . '/../../lib/admin_tester.php';
+require __DIR__ . '/../../lib/admin_competences.php';
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
@@ -677,6 +678,7 @@ match ($page) {
     'edt'      => page_edt(),
     'salle'    => page_salle((int) ($_GET['id'] ?? 0)),
     'projets' => page_projets(),
+    'competences' => page_competences(),
     'projet_fichier' => telecharger_fichier_projet('projet', (int) ($_GET['id'] ?? 0)),
     'fourni' => telecharger_fichier_projet('fournis', (int) ($_GET['id'] ?? 0)),
     'placement' => page_placement((int) ($_GET['classe'] ?? 0), (int) ($_GET['salle'] ?? 0), (int) ($_GET['groupe'] ?? 0)),
@@ -1205,6 +1207,7 @@ function page_eleve(int $id): void
             · Espace : <?= format_taille($usage) ?> sur <?= format_taille($quota) ?></p>
         <?= jauge($usage, $quota) ?>
         <?php messages(); ?>
+        <?php section_competences_eleve($id); ?>
         <?php section_avancement_eleve($id); ?>
         <?php section_connexions_eleve($id); ?>
 
@@ -1430,7 +1433,7 @@ function messages(): void
 function barre(string $actif = 'classes'): void
 {
     $liens = ['accueil' => ['./', 'Accueil'], 'classes' => ['./?p=classes', 'Classes'], 'edt' => ['./?p=edt', 'Emploi du temps'], 'etablissements' => ['./?p=etablissements', 'Établissements'],
-              'bibliotheque' => ['./?p=bibliotheque', 'Bibliothèque'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'suivi' => ['./?p=suivi', 'Suivi'],
+              'bibliotheque' => ['./?p=bibliotheque', 'Bibliothèque'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'competences' => ['./?p=competences', 'Compétences'], 'suivi' => ['./?p=suivi', 'Suivi'],
               'fichiers' => ['./?p=fichiers', 'Fichiers'], 'reglages' => ['./?p=reglages', 'Réglages']];
     ?>
     <header class="barre">

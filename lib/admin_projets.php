@@ -40,39 +40,52 @@ function dossiers_classe(array $parcours, int $classe_id): array
     foreach ($lignes as &$l) {
         $l['etats'] = etapes_projet($parcours, $l['proprio'], $prog, $catalogue);
         $l['fichiers'] = fichiers_projet((int) $parcours['id'], $l['cle']);
-        $l['attentes'] = attentes_validation($parcours, $l['etats'], $l['fichiers']);
+        $l['attentes'] = attentes_validation($parcours, $l['etats'], $l['fichiers'], $l['proprio']['membres']);
     }
     unset($l);
     return ['eleves' => $eleves, 'lignes' => $lignes];
 }
 
 /**
- * Étapes d'un dossier qui attendent la validation de l'enseignant (mode « après validation ») :
- * étape ouverte, terminée, pas encore validée, et pas la dernière. [ordre => terminée depuis (horodatage ou 0)]
+ * Étapes terminées d'un dossier qui attendent l'enseignant :
+ * - à valider (mode « après validation ») : ouverte, pas encore validée, pas la dernière ;
+ * - à évaluer : l'étape porte des compétences que l'enseignant n'a pas encore notées pour ce dossier.
+ * [ordre => ['depuis' => terminée depuis (horodatage ou 0), 'valider' => bool, 'noter' => bool]]
  */
-function attentes_validation(array $parcours, array $etats, array $fichiers): array
+function attentes_validation(array $parcours, array $etats, array $fichiers, array $membres = []): array
 {
-    if ($parcours['deblocage'] !== 'validation') {
-        return [];
-    }
     $res = [];
     foreach ($etats as $i => $e) {
-        if ($i < count($etats) - 1 && $e['ouverte'] && $e['statut'] === 'termine' && $e['validee'] === null) {
-            $depuis = (int) ($e['maj'] ?? 0);
-            foreach ($e['deposees'] as $n) {
-                $depuis = max($depuis, (int) ($fichiers[$n]['maj'] ?? 0));
-            }
-            $res[$i] = $depuis;
+        if ($e['statut'] !== 'termine' || !$e['ouverte']) {
+            continue;
         }
+        $valider = $parcours['deblocage'] === 'validation' && $i < count($etats) - 1 && $e['validee'] === null;
+        $codes = liste_codes_competences((string) ($parcours['etapes'][$i]['competences'] ?? ''));
+        $noter = $codes && $membres && !notes_etape((int) $parcours['id'], $i, $membres);
+        if (!$valider && !$noter) {
+            continue;
+        }
+        $depuis = (int) ($e['maj'] ?? 0);
+        foreach ($e['deposees'] as $n) {
+            $depuis = max($depuis, (int) ($fichiers[$n]['maj'] ?? 0));
+        }
+        $res[$i] = ['depuis' => $depuis, 'valider' => $valider, 'noter' => $noter];
     }
     return $res;
+}
+
+/** Le parcours a-t-il une file « À valider / À évaluer » ? (étapes après validation, ou compétences à noter) */
+function parcours_a_traiter(array $parcours): bool
+{
+    return $parcours['deblocage'] === 'validation'
+        || (bool) array_filter($parcours['etapes'] ?? [], fn($e) => ($e['competences'] ?? '') !== '');
 }
 
 /** Tout ce qui attend une validation dans un parcours, toutes classes confondues, le plus ancien d'abord. */
 function a_valider_parcours(array $parcours): array
 {
     $res = [];
-    if ($parcours['deblocage'] !== 'validation') {
+    if (!parcours_a_traiter($parcours)) {
         return $res;
     }
     foreach (db()->query('SELECT id, nom, etablissement_id FROM classes ORDER BY nom')->fetchAll() as $c) {
@@ -80,8 +93,8 @@ function a_valider_parcours(array $parcours): array
             continue;
         }
         foreach (dossiers_classe($parcours, (int) $c['id'])['lignes'] as $l) {
-            foreach ($l['attentes'] as $i => $depuis) {
-                $res[] = ['classe' => $c, 'ligne' => $l, 'ordre' => $i, 'depuis' => $depuis];
+            foreach ($l['attentes'] as $i => $a) {
+                $res[] = ['classe' => $c, 'ligne' => $l, 'ordre' => $i] + $a;
             }
         }
     }
@@ -118,7 +131,8 @@ function page_projets(): void
         $classe_id = (int) (array_key_first($classes) ?? 0);
     }
     $a_valider = $parcours ? a_valider_parcours($parcours) : [];
-    $vue = ($_GET['vue'] ?? '') === 'a_valider' && $parcours && $parcours['deblocage'] === 'validation' ? 'a_valider' : 'tous';
+    $vue = ($_GET['vue'] ?? '') === 'a_valider' && $parcours && parcours_a_traiter($parcours) ? 'a_valider' : 'tous';
+    $libelle_file = $parcours && $parcours['deblocage'] === 'validation' ? 'À valider' : 'À évaluer';
     entete('Dossiers de projet');
     barre('parcours');
     ?>
@@ -138,9 +152,9 @@ function page_projets(): void
             <noscript><button>Afficher</button></noscript>
         </form>
         <p class="sous"><?= h(MODES_PARCOURS[$parcours['mode']]) ?> · <?= h(DEBLOCAGES[$parcours['deblocage']]) ?></p>
-        <?php if ($parcours['deblocage'] === 'validation'): $base = './?p=projets&parcours=' . (int) $parcours['id']; ?>
+        <?php if (parcours_a_traiter($parcours)): $base = './?p=projets&parcours=' . (int) $parcours['id']; ?>
             <nav class="onglets-vue" aria-label="Affichage">
-                <a href="<?= $base ?>&vue=a_valider" class="<?= $vue === 'a_valider' ? 'actif' : '' ?><?= $a_valider ? ' urgent' : '' ?>">À valider<?= $a_valider ? ' <span class="compte">' . count($a_valider) . '</span>' : '' ?></a>
+                <a href="<?= $base ?>&vue=a_valider" class="<?= $vue === 'a_valider' ? 'actif' : '' ?><?= $a_valider ? ' urgent' : '' ?>"><?= $libelle_file ?><?= $a_valider ? ' <span class="compte">' . count($a_valider) . '</span>' : '' ?></a>
                 <a href="<?= $base ?>&classe=<?= $classe_id ?>" class="<?= $vue === 'tous' ? 'actif' : '' ?>">Tous les dossiers</a>
             </nav>
         <?php endif; ?>
@@ -182,7 +196,7 @@ function page_projets(): void
                             <?php if (!$l['membres']): ?><span class="discret">aucun membre</span><?php endif; ?>
                         </td>
                         <?php foreach ($etats as $i => $e): ?>
-                            <td class="etape-projet st-<?= h($e['statut']) ?><?= $e['ouverte'] ? '' : ' verrouillee' ?><?= isset($l['attentes'][$i]) ? ' a-valider' : '' ?>">
+                            <td class="etape-projet st-<?= h($e['statut']) ?><?= $e['ouverte'] ? '' : ' verrouillee' ?><?= isset($l['attentes'][$i]) ? ($l['attentes'][$i]['valider'] ? ' a-valider' : ' a-noter') : '' ?>">
                                 <span class="statut"><?= ['a_faire' => $e['ouverte'] ? 'À faire' : '🔒', 'commence' => 'En cours', 'termine' => '✓ Terminé'][$e['statut']] ?></span>
                                 <?php if ($e['texte'] !== ''): ?><small><?= h($e['texte']) ?></small><?php endif; ?>
                                 <?php if ($parcours['deblocage'] === 'validation' && $i < count($etats) - 1 && $e['ouverte']): ?>
@@ -209,32 +223,64 @@ function page_projets(): void
     pied();
 }
 
-/** Vue « À valider » : toutes classes confondues, le plus ancien d'abord, avec les fichiers et le bouton Valider. */
+/**
+ * Vue « À valider » / « À évaluer » : toutes classes confondues, le plus ancien d'abord, avec les fichiers de l'étape,
+ * la grille des compétences de l'étape (MI · MF · MS · TBM) et le bouton Valider ou Enregistrer.
+ */
 function liste_a_valider(array $parcours, array $items): void
 {
     if (!$items) {
-        echo '<p class="message ok" style="margin-top:16px">Rien à valider pour l’instant : aucun élève n’attend l’ouverture d’une étape.</p>';
+        echo '<p class="message ok" style="margin-top:16px">Rien à traiter pour l’instant : aucun élève n’attend de validation ni d’évaluation.</p>';
         return;
     }
+    $index = index_competences();
+    $echelle = echelle_maitrise();
     ?>
-    <p class="aide" style="margin-top:12px">Les élèves ou équipes qui ont terminé une étape et attendent que vous ouvriez la suivante,
-        le plus ancien en premier. Ouvrez leurs fichiers, puis « Valider ».</p>
+    <p class="aide" style="margin-top:12px">Les élèves ou équipes qui ont terminé une étape, le plus ancien en premier. Ouvrez leurs fichiers,
+        notez les compétences de l’étape si elle en a (un clic par compétence, facultatif), puis « Valider » (ouvre l’étape suivante) ou « Enregistrer ».
+        En équipe, la note va à chaque membre.</p>
     <div class="defile"><table class="table-a-valider" id="a-valider">
-        <thead><tr><th>Terminé</th><th>Classe</th><th><?= $parcours['mode'] === 'equipe' ? 'Équipe' : 'Élève' ?></th><th>Étape terminée</th><th>Fichiers de l’étape</th><th></th></tr></thead>
+        <thead><tr><th>Terminé</th><th>Classe</th><th><?= $parcours['mode'] === 'equipe' ? 'Équipe' : 'Élève' ?></th><th>Étape terminée</th><th>Fichiers</th><th>Compétences</th><th></th></tr></thead>
         <tbody>
-        <?php foreach ($items as $it): $l = $it['ligne']; $e = $l['etats'][$it['ordre']]; $et = $parcours['etapes'][$it['ordre']]; $suivante = $parcours['etapes'][$it['ordre'] + 1] ?? null; ?>
+        <?php foreach ($items as $n => $it):
+            $l = $it['ligne']; $e = $l['etats'][$it['ordre']]; $et = $parcours['etapes'][$it['ordre']];
+            $suivante = $parcours['etapes'][$it['ordre'] + 1] ?? null;
+            $codes = liste_codes_competences((string) ($et['competences'] ?? ''));
+            $notes = notes_etape((int) $parcours['id'], $it['ordre'], $l['proprio']['membres']);
+            $form = 'f-av-' . $n; ?>
             <tr>
                 <td class="discret" title="<?= h(quand($it['depuis'] ?: null)) ?>"><?= h(depuis_texte($it['depuis'])) ?></td>
                 <td><?= pastille_classe($it['classe']) ?></td>
                 <td><?php if ($l['titre'] !== ''): ?><strong><?= h($l['titre']) ?></strong><br><?php endif; ?>
                     <?php foreach ($l['membres'] as $m): ?><span class="membre"><span class="numero"><?= h($m['etiquette']) ?></span> <?= nom_eleve($it['classe']['nom'], $m['etiquette']) ?></span> <?php endforeach; ?></td>
                 <td><span class="num-etape"><?= $it['ordre'] + 1 ?></span> <?= h($et['titre']) ?><?= $e['texte'] !== '' ? ' <small class="discret">' . h($e['texte']) . '</small>' : '' ?></td>
-                <td class="fichiers-projet"><?php $vus = 0; foreach ($e['deposees'] as $n): if (!isset($l['fichiers'][$n])) continue; $vus++; ?>
-                    <a href="./?p=projet_fichier&id=<?= (int) $l['fichiers'][$n]['id'] ?>"><?= h($n) ?></a>
+                <td class="fichiers-projet"><?php $vus = 0; foreach ($e['deposees'] as $nom): if (!isset($l['fichiers'][$nom])) continue; $vus++; ?>
+                    <a href="./?p=projet_fichier&id=<?= (int) $l['fichiers'][$nom]['id'] ?>"><?= h($nom) ?></a>
                 <?php endforeach; ?><?= $vus ? '' : '<span class="discret">—</span>' ?></td>
-                <td class="actions"><?= bouton('valider_etape', 'Valider', ['parcours_id' => $parcours['id'], 'proprietaire' => $l['cle'],
-                    'ordre' => $it['ordre'], 'classe_id' => $it['classe']['id'], 'retour' => 'a_valider'], '', '',
-                    $suivante ? 'Ouvrir l’étape ' . ($it['ordre'] + 2) . ' : ' . $suivante['titre'] : '') ?></td>
+                <td class="grille-notes"><?php if (!$codes): ?><span class="discret">—</span><?php endif; ?>
+                    <?php foreach ($codes as $code): $k = $index[$code] ?? null; ?>
+                        <div class="note-ligne">
+                            <span class="code-comp" title="<?= h($k ? $k['texte'] : 'Code inconnu du référentiel') ?>"><?= h($code) ?></span>
+                            <span class="choix-maitrise" role="radiogroup" aria-label="<?= h($code) ?>">
+                                <?php foreach ($echelle as $niv => $m): ?>
+                                    <label title="<?= h($m['libelle']) ?>" style="--m:<?= h($m['couleur']) ?>"><input type="radio" form="<?= $form ?>" name="notes[<?= h($code) ?>]" value="<?= $niv ?>"
+                                        <?= ($notes[$code] ?? 0) === $niv ? 'checked' : '' ?>><span><?= h($m['code']) ?></span></label>
+                                <?php endforeach; ?>
+                            </span>
+                        </div>
+                    <?php endforeach; ?></td>
+                <td class="actions">
+                    <form method="post" id="<?= $form ?>"><?= csrf() ?>
+                        <input type="hidden" name="action" value="valider_etape">
+                        <input type="hidden" name="parcours_id" value="<?= (int) $parcours['id'] ?>">
+                        <input type="hidden" name="proprietaire" value="<?= h($l['cle']) ?>">
+                        <input type="hidden" name="ordre" value="<?= (int) $it['ordre'] ?>">
+                        <input type="hidden" name="classe_id" value="<?= (int) $it['classe']['id'] ?>">
+                        <input type="hidden" name="retour" value="a_valider">
+                        <?php if (!$it['valider']): ?><input type="hidden" name="noter_seulement" value="1"><?php endif; ?>
+                        <button class="petit" title="<?= h($it['valider'] ? ($suivante ? 'Enregistrer les notes et ouvrir l’étape ' . ($it['ordre'] + 2) . ' : ' . $suivante['titre'] : '') : 'Enregistrer les notes de cette étape') ?>"><?= $it['valider'] ? 'Valider' : 'Enregistrer' ?></button>
+                    </form>
+                </td>
             </tr>
         <?php endforeach; ?>
         </tbody>

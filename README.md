@@ -318,6 +318,25 @@ Onglet **Suivi** : une classe, et au choix un parcours ou un atelier.
 
 ---
 
+## 4 bis. Compétences
+
+Le référentiel est celui du programme de technologie du cycle 4 (BO du 29 février 2024) : thèmes **OST**, **SFC**, **CCRI**, compétences (OST1), sous-compétences (OST11) et **114 capacités** différentes en 5e, 4e et 3e, avec leurs connaissances.
+
+- **Codes** : `OST11.5.2` = sous-compétence OST11, niveau 5e, capacité n° 2. Ils ne changent jamais.
+- **Fichier** : `public/passerelle/competences.json`, servi à `/passerelle/competences.json`. Les applications lisent le même fichier. TechnoStudio code T1 = OST, T2 = SFC, T3 = CCRI.
+- **Mise à jour** : il est produit à partir des tableaux du programme (CSV OST, SFC, CCRI) :
+  `python3 outils/referentiel_csv.py OST.csv SFC.csv CCRI.csv > public/passerelle/competences.json`
+- **Onglet Compétences** de l'espace enseignant :
+  - le référentiel, filtrable par niveau et par texte ;
+  - un clic sur un code le copie ;
+  - pour chaque capacité, les parcours qui l'évaluent et le nombre de notes.
+- **Dans un parcours**, sous une étape : `compétences : SFC15.5.1, CCRI16.5.1`. La carte « Enchaînement » signale un code inconnu ou une capacité d'un autre niveau que les classes du parcours.
+- **Notation** (page Dossiers de projet, onglet « À valider » ou « À évaluer ») :
+  - chaque étape terminée qui porte des compétences affiche une grille **MI · MF · MS · TBM** (échelle du LSU), un clic par compétence ;
+  - « Valider » enregistre les notes et ouvre l'étape suivante ; « Enregistrer » note seulement (parcours sans validation, ou dernière étape) ;
+  - en équipe, la note va à chaque membre.
+- **Page Travail de l'élève**, section **Compétences** : la dernière note de chaque capacité, avec la date, le parcours et l'historique. Les notes sont des constats datés : rien n'est effacé.
+
 ## 5. Organisation : établissements, emploi du temps, plans de classe
 
 ### Établissements

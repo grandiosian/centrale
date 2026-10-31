@@ -398,6 +398,44 @@
     });
   }
 
+  // Onglet Compétences : filtre par niveau, recherche, « seulement celles évaluées », copie des codes au clic
+  var ref = document.getElementById('referentiel');
+  if (ref && document.getElementById('ref-recherche')) {
+    var niveau = '', champ = document.getElementById('ref-recherche'), seules = document.getElementById('ref-utilisees');
+    var filtrer = function () {
+      var q = champ.value.trim().toLowerCase(), visibles = 0;
+      ref.querySelectorAll('.sous-ref').forEach(function (s) {
+        var dansSous = q !== '' && s.dataset.texte.indexOf(q) >= 0, n = 0;
+        s.querySelectorAll('tr[data-niveau]').forEach(function (tr) {
+          var ok = (!niveau || tr.dataset.niveau === niveau) && (!seules.checked || tr.dataset.utilisee) && (!q || dansSous || tr.dataset.texte.indexOf(q) >= 0);
+          tr.hidden = !ok; if (ok) n++;
+        });
+        s.hidden = n === 0; visibles += n;
+      });
+      ref.querySelectorAll('.competence-ref').forEach(function (c) { c.hidden = !c.querySelector('.sous-ref:not([hidden])'); });
+      ref.querySelectorAll('.theme-ref').forEach(function (t) { t.hidden = !t.querySelector('.competence-ref:not([hidden])'); });
+      document.getElementById('ref-rien').hidden = visibles > 0;
+    };
+    ref.querySelectorAll('[data-niveau]').forEach(function (b) {
+      if (b.tagName !== 'BUTTON') return;
+      b.addEventListener('click', function () {
+        niveau = b.dataset.niveau;
+        ref.querySelectorAll('.seg-niveaux button').forEach(function (x) { x.classList.toggle('actif', x === b); });
+        filtrer();
+      });
+    });
+    champ.addEventListener('input', filtrer);
+    seules.addEventListener('change', filtrer);
+    ref.addEventListener('click', function (ev) {
+      var c = ev.target.closest('.copier');
+      if (!c) return;
+      var code = c.textContent.trim();
+      (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(function () {
+        c.classList.add('copie'); setTimeout(function () { c.classList.remove('copie'); }, 1200);
+      }).catch(function () { window.prompt('Code à copier :', code); });
+    });
+  }
+
   document.querySelectorAll('form[data-confirmer]').forEach(function (f) {
     f.addEventListener('submit', function (ev) {
       var b = ev.submitter || f.querySelector('button');

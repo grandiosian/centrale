@@ -226,10 +226,12 @@ function carte_enchainement(int $parcours_id): void
     $st->execute([$parcours_id]);
     $etapes = $st->fetchAll();
     $rem = verifier_enchainement($etapes, array_keys(fichiers_fournis($parcours_id)));
+    $p = parcours_par_id($parcours_id);
+    $rem = array_merge($rem, verifier_competences_etapes($etapes, (string) ($p['classes'] ?? '')));
     $sans = array_values(array_unique(array_filter(array_map(fn($e) => descripteur_complet($e['app']) ? null : $e['app'], $etapes))));
     if (!$rem && !$sans) {
-        if (array_filter($etapes, fn($e) => $e['entrees'] !== '' || $e['sorties'] !== '')) {
-            echo '<p class="message ok" style="margin-top:12px">Enchaînement des fichiers vérifié avec les passerelles des ateliers : rien à signaler.</p>';
+        if (array_filter($etapes, fn($e) => $e['entrees'] !== '' || $e['sorties'] !== '' || ($e['competences'] ?? '') !== '')) {
+            echo '<p class="message ok" style="margin-top:12px">Enchaînement des fichiers et compétences vérifiés : rien à signaler.</p>';
         }
         return;
     }

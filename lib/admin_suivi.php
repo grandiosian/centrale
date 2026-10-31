@@ -41,9 +41,9 @@ function action_suivi(string $action): bool
                     ->execute([$nom, $description, $classes, $mode, $deblocage, time()]);
                 $id = (int) $pdo->lastInsertId();
             }
-            $ins = $pdo->prepare('INSERT INTO parcours_etapes (parcours_id, ordre, titre, app, activite, url, consigne, entrees, sorties) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $ins = $pdo->prepare('INSERT INTO parcours_etapes (parcours_id, ordre, titre, app, activite, url, consigne, entrees, sorties, competences) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             foreach ($etapes as $i => $et) {
-                $ins->execute([$id, $i, $et['titre'], $et['app'], $et['activite'], $et['url'], $et['consigne'], $et['entrees'], $et['sorties']]);
+                $ins->execute([$id, $i, $et['titre'], $et['app'], $et['activite'], $et['url'], $et['consigne'], $et['entrees'], $et['sorties'], $et['competences']]);
             }
             $pdo->commit();
             flash("Parcours « $nom » enregistré (" . count($etapes) . ' étapes).');
@@ -86,16 +86,38 @@ function action_suivi(string $action): bool
             $id = (int) ($_POST['parcours_id'] ?? 0);
             $proprio = (string) ($_POST['proprietaire'] ?? '');
             $ordre = (int) ($_POST['ordre'] ?? -1);
-            if (preg_match('/^[eq]\d+$/', $proprio) && $ordre >= 0) {
+            $notees = 0;
+            if (preg_match('/^([eq])(\d+)$/', $proprio, $mp) && $ordre >= 0) {
+                // Notes des compétences de l'étape (grille MI · MF · MS · TBM) : à l'élève, ou à chaque membre de l'équipe
+                $p = parcours_par_id($id);
+                $codes = liste_codes_competences((string) ($p['etapes'][$ordre]['competences'] ?? ''));
+                $notes = array_intersect_key(array_map('intval', (array) ($_POST['notes'] ?? [])), array_flip($codes));
+                if ($notes) {
+                    if ($mp[1] === 'e') {
+                        $membres = [(int) $mp[2]];
+                    } else {
+                        $st = $pdo->prepare('SELECT id FROM eleves WHERE equipe_id = ? AND actif = 1');
+                        $st->execute([(int) $mp[2]]);
+                        $membres = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+                    }
+                    $deja = notes_etape($id, $ordre, $membres);
+                    foreach ($notes as $code => $niveau) {
+                        if (($deja[$code] ?? 0) !== $niveau) {   // on n'empile pas deux fois la même note
+                            noter_competence($membres, $code, $niveau, $id, $ordre);
+                        }
+                        $notees++;
+                    }
+                }
                 if (!empty($_POST['annuler'])) {
                     $pdo->prepare('DELETE FROM parcours_validations WHERE parcours_id = ? AND proprietaire = ? AND ordre = ?')->execute([$id, $proprio, $ordre]);
-                } else {
+                } elseif (empty($_POST['noter_seulement'])) {
                     $pdo->prepare('INSERT OR REPLACE INTO parcours_validations (parcours_id, proprietaire, ordre, valide_le) VALUES (?, ?, ?, ?)')
                         ->execute([$id, $proprio, $ordre, time()]);
                 }
             }
-            if (($_POST['retour'] ?? '') === 'a_valider') {   // validé depuis la liste « À valider »
-                flash('Étape validée : l’étape suivante est ouverte.');
+            if (($_POST['retour'] ?? '') === 'a_valider') {   // depuis la liste « À valider / À évaluer »
+                $n = $notees ? " ($notees compétence" . ($notees > 1 ? 's notées' : ' notée') . ')' : '';
+                flash(empty($_POST['noter_seulement']) ? "Étape validée$n : l’étape suivante est ouverte." : "Évaluation enregistrée$n.");
                 rediriger('./?p=projets&parcours=' . $id . '&vue=a_valider');
             }
             rediriger('./?p=projets&parcours=' . $id . '&classe=' . (int) ($_POST['classe_id'] ?? 0) . '#' . $proprio);
@@ -260,6 +282,12 @@ function lire_etapes(string $texte): array
             }
             continue;
         }
+        if (preg_match('/^(comp[ée]tences?|[ée]value)\s*:\s*(.*)$/iu', $ligne, $m)) {
+            if ($dernier >= 0) {
+                $etapes[$dernier]['competences'] = implode(', ', liste_codes_competences($m[2]));
+            }
+            continue;
+        }
         $champs = array_map('trim', explode('|', $ligne));
         $titre = mb_substr($champs[0] ?? '', 0, 120);
         $app = normaliser_app($champs[1] ?? '');
@@ -273,7 +301,7 @@ function lire_etapes(string $texte): array
             $erreurs[] = 'Ligne ' . ($n + 1) . ' : l\'adresse doit commencer par https://';
             continue;
         }
-        $etapes[] = ['titre' => $titre, 'app' => $app, 'activite' => $activite, 'url' => $url, 'consigne' => '', 'entrees' => '', 'sorties' => ''];
+        $etapes[] = ['titre' => $titre, 'app' => $app, 'activite' => $activite, 'url' => $url, 'consigne' => '', 'entrees' => '', 'sorties' => '', 'competences' => ''];
     }
     if (count($etapes) > 100) {
         $erreurs[] = '100 étapes maximum.';
@@ -294,6 +322,9 @@ function etapes_en_texte(array $etapes): string
         }
         if (($e['sorties'] ?? '') !== '') {
             $lignes[] = '  produit : ' . $e['sorties'];
+        }
+        if (($e['competences'] ?? '') !== '') {
+            $lignes[] = '  compétences : ' . $e['competences'];
         }
     }
     return implode("\n", $lignes);
@@ -569,13 +600,15 @@ function page_parcours(): void
                     <span class="aide"><code>Titre | atelier | activité | adresse</code> — l'activité est facultative (vide = tout l'atelier),
                         l'adresse est celle du logiciel à ouvrir. Sous une étape, facultatif :
                         <code>&gt; consigne</code>, <code>reçoit : fichier1, fichier2</code> (ce que l'étape lit dans le dossier de projet),
-                        <code>produit : fichier</code> (ce qu'elle doit y déposer ; l'étape est terminée quand tout est déposé).</span>
+                        <code>produit : fichier</code> (ce qu'elle doit y déposer ; l'étape est terminée quand tout est déposé),
+                        <code>compétences : SFC15.5.1, CCRI16.5.1</code> (ce que vous évaluez à cette étape : codes de l'onglet <a href="./?p=competences" target="_blank">Compétences</a>).</span>
                     <textarea name="etapes" rows="12" class="mono" placeholder="Câbler le réseau de la salle | netsim | e5-1 | https://grandiosian.github.io/NetSim/
   > Branche les ordinateurs de la salle.
 Modéliser le support de la lampe | etabli3d | | https://grandiosian.github.io/etabli3d/
   > Pars du gabarit fourni et adapte-le.
   reçoit : support.etabli3d.json
   produit : support.etabli3d.json, support.stl
+  compétences : CCRI16.5.1, CCRI12.5.1
 Programmer la lampe | technostudio | charte-lampe-de-poche/P1 | https://grandiosian.github.io/TechnoStudio/"><?= h($courant['etapes']) ?></textarea>
                 </label>
                 <?php if ($catalogue): ?>
@@ -608,9 +641,9 @@ Programmer la lampe | technostudio | charte-lampe-de-poche/P1 | https://grandios
                         <td><?= (int) $p['nb'] ?></td>
                         <td class="actions">
                             <?= $avec_test ? bouton_tester('parcours:' . (int) $p['id'], 'Ouvrir le portail de l’élève test choisi au-dessus, pour suivre ce parcours à sa place') : '' ?>
-                            <?php $nb_av = $p['deblocage'] === 'validation' ? count(a_valider_parcours(parcours_par_id((int) $p['id']) ?? [])) : 0; ?>
+                            <?php $nb_av = count(a_valider_parcours(parcours_par_id((int) $p['id']) ?? ['deblocage' => '', 'etapes' => []])); ?>
                             <?php if ($nb_av): ?><a class="btn petit urgent" href="./?p=projets&parcours=<?= (int) $p['id'] ?>&vue=a_valider"
-                                title="Élèves ou équipes qui attendent que vous ouvriez l’étape suivante"><?= $nb_av ?> à valider</a><?php endif; ?>
+                                title="Élèves ou équipes qui ont terminé une étape et vous attendent (validation ou évaluation)"><?= $nb_av ?> <?= $p['deblocage'] === 'validation' ? 'à valider' : 'à évaluer' ?></a><?php endif; ?>
                             <a class="btn petit" href="./?p=projets&parcours=<?= (int) $p['id'] ?>">Dossiers de projet</a>
                             <a class="btn petit secondaire" href="./?p=suivi&vue=parcours:<?= (int) $p['id'] ?>">Suivi</a>
                             <a class="btn petit secondaire" href="./?p=parcours&modifier=<?= (int) $p['id'] ?>">Modifier</a>

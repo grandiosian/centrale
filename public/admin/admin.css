@@ -518,3 +518,36 @@ pre.json { background: var(--code-fond); padding: 12px; border-radius: 8px; over
 td.etape-projet.a-valider { box-shadow: inset 0 0 0 2px #f59e0b; }
 td.etape-projet.a-valider .statut::after { content: " · à valider"; color: #b45309; font-weight: 600; }
 .table-a-valider td { vertical-align: top; }
+
+/* Compétences : référentiel, niveaux de maîtrise, grille de notation */
+.maitrise { display: inline-block; min-width: 2.6em; padding: 1px 6px; border-radius: 999px; background: var(--m); color: #fff; font-size: .75rem; font-weight: 700; text-align: center; }
+.code-comp { font: 600 .82rem ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; background: var(--code-fond, #eef1f4); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+.code-comp.copier { cursor: copy; }
+.code-comp.copie { background: #2e7d32; color: #fff; }
+.filtres-ref { align-items: center; }
+.seg-niveaux { display: flex; gap: 4px; }
+.seg-niveaux button.actif { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
+label.case { display: flex; gap: 6px; align-items: center; font-weight: 500; }
+.theme-ref { margin-top: 18px; }
+.theme-ref h2 { margin-top: 0; }
+.code-theme { font: 700 .9rem ui-monospace, Menlo, Consolas, monospace; background: var(--texte); color: var(--surface); border-radius: 6px; padding: 2px 8px; margin-right: 6px; }
+.competence-ref h3 { margin: 16px 0 6px; font-size: 1.02rem; }
+.sous-ref { margin: 0 0 12px 14px; }
+.sous-ref h4 { margin: 10px 0 4px; font-size: .95rem; }
+.table-ref { width: 100%; }
+.table-ref td { padding: 5px 8px; vertical-align: top; border-top: 1px solid var(--bord); }
+.table-ref .col-code { width: 8.5em; } .table-ref .col-niv { width: 3.5em; } .table-ref .col-usage { width: 28%; font-size: .85rem; }
+.niv-ref { display: inline-block; padding: 0 6px; border-radius: 5px; font-weight: 700; font-size: .8rem; color: #1d1f24; }
+.niv-ref.n5 { background: #c8e6c9; } .niv-ref.n4 { background: #fff3b0; } .niv-ref.n3 { background: #ffcdd2; }
+a.usage { display: block; }
+details.connaissances { margin: 4px 0 0 8px; font-size: .88rem; }
+td.grille-notes { min-width: 260px; }
+.note-ligne { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+.choix-maitrise { display: inline-flex; gap: 3px; }
+.choix-maitrise label { margin: 0; cursor: pointer; }
+.choix-maitrise input { position: absolute; opacity: 0; pointer-events: none; }
+.choix-maitrise span { display: inline-block; min-width: 2.5em; padding: 2px 5px; border: 1.5px solid var(--m); border-radius: 999px; color: var(--m); font-size: .74rem; font-weight: 700; text-align: center; }
+.choix-maitrise input:checked + span { background: var(--m); color: #fff; }
+.choix-maitrise input:focus-visible + span { outline: 2px solid var(--texte); outline-offset: 1px; }
+td.etape-projet.a-noter { box-shadow: inset 0 0 0 2px #7c8cf8; }
+td.etape-projet.a-noter .statut::after { content: " · à évaluer"; color: #4f5bd5; font-weight: 600; }
