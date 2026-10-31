@@ -62,13 +62,24 @@ jobs:
 
       - name: Installer ou mettre à jour (arduino-cli, cœurs, MicroPython)
         if: steps.config.outputs.pret == 'true'
-        run: ssh ad 'bash technostudio-compilation/code/installer-centrale.sh'
+        run: |
+          # Résultats en annotations : lisibles dans l'onglet Actions et par l'API
+          a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
+          ssh ad 'bash technostudio-compilation/code/installer-centrale.sh' > installation.log 2>&1; r=$?
+          a notice installation "$(grep -E '^(== |arduino-cli|Version|espace|déjà|!!|[0-9.]+[MG]\s)' installation.log | tail -c 3000)"
+          a notice etat "$(tail -n 1 installation.log)"
+          [ $r -eq 0 ] || { a error installation "$(tail -c 3000 installation.log)"; exit 1; }
 
       - name: Essais de compilation sur le serveur
         if: steps.config.outputs.pret == 'true'
         run: |
-          ssh ad 'C=~/technostudio-compilation; N=$(sed -n "s/.*\"node\": *\"\([^\"]*\)\".*/\1/p" $C/config.json); ko=0
-            for c in uno nano microbit esp32; do "$N" $C/code/compiler-cli.js essai $c --dossier $C/travail || ko=1; done; exit $ko'
+          a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
+          ko=0
+          for c in uno nano microbit esp32; do
+            out=$(ssh ad "C=~/technostudio-compilation; N=\$(sed -n 's/.*\"node\": *\"\\([^\"]*\\)\".*/\\1/p' \$C/config.json); \$N \$C/code/compiler-cli.js essai $c --dossier \$C/travail" 2>&1); r=$?
+            if [ $r -eq 0 ]; then a notice "serveur $c" "$out"; else a error "serveur $c" "$out"; ko=1; fi
+          done
+          exit $ko
 
       - name: API en ligne (api/compilation.php)
         if: steps.config.outputs.pret == 'true'
@@ -84,12 +95,18 @@ jobs:
           for i in $(seq 1 30); do
             code=$(curl -s -o etat.json -w '%{http_code}' "$API"); [ "$code" = 200 ] && break; sleep 10
           done
-          echo "État ($code) :"; cat etat.json; echo
-          [ "$code" = 200 ] || { echo "::error::$API ne répond pas"; exit 1; }
-          echo "Sans connexion (attendu : 401) : $(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"carte":"uno","code":"void setup(){}"}' "$API")"
-          for c in uno microbit; do
-            [ $c = uno ] && prog='void setup(){pinMode(13,OUTPUT);}\nvoid loop(){digitalWrite(13,!digitalRead(13));delay(300);}' || prog='from microbit import *\ndisplay.scroll("Centrale")'
-            r=$(curl -s -X POST -H 'Content-Type: application/json' -H "X-Cle: $CLE" -d "{\"carte\":\"$c\",\"code\":\"$prog\"}" "$API")
-            echo "$c : $(echo "$r" | head -c 160)…"
-            echo "$r" | grep -q '"ok":true' || { echo "::error::compilation $c par l'API en échec"; exit 1; }
+          echo "::notice title=API état ($code)::$(head -c 1500 etat.json)"
+          [ "$code" = 200 ] || { echo "::error title=API::$API ne répond pas ($code)"; exit 1; }
+          echo "::notice title=API sans connexion::$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"carte":"uno","code":"void setup(){}"}' "$API") (attendu : 401)"
+          ko=0
+          for c in uno microbit esp32; do
+            case $c in uno) prog='void setup(){pinMode(13,OUTPUT);}\nvoid loop(){digitalWrite(13,!digitalRead(13));delay(300);}';;
+              esp32) prog='void setup(){pinMode(2,OUTPUT);}\nvoid loop(){digitalWrite(2,!digitalRead(2));delay(300);}';;
+              *) prog='from microbit import *\ndisplay.scroll(\"Centrale\")';; esac
+            r=$(curl -s -m 60 -X POST -H 'Content-Type: application/json' -H "X-Cle: $CLE" -d "{\"carte\":\"$c\",\"code\":\"$prog\"}" "$API")
+            id=$(echo "$r" | sed -n 's/.*"travail":"\([a-f0-9]*\)".*/\1/p')
+            for i in $(seq 1 90); do [ -z "$id" ] && break; sleep 4; r=$(curl -s -H "X-Cle: $CLE" "$API?travail=$id"); echo "$r" | grep -q '"enCours":true' || break; done
+            res=$(echo "$r" | sed 's/"hex":"[^"]*"/"hex":"…"/; s/"donnees":"[^"]*"/"donnees":"…"/g' | head -c 2500)
+            if echo "$r" | grep -q '"format"'; then echo "::notice title=API $c::$res"; else echo "::error title=API $c::$res"; ko=1; fi
           done
+          exit $ko
