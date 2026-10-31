@@ -1,6 +1,7 @@
 # Applications copiées sur ce serveur, en secours de leur hébergement principal.
 # Une par ligne : <nom du dossier> <adresse du dépôt Git public> [<dossier à publier> [<commande de construction>]]
 #   (dossier et commande : pour une application à assembler avant d'être servie, comme Établi 3D)
+#   (dossier « . » : tout le dépôt, quand seule une commande est nécessaire, comme TechnoStudio)
 # Chaque application sera servie à l'adresse  https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/
 # La copie est mise à jour à chaque déploiement de la Centrale et toutes les heures.
 netsim https://github.com/grandiosian/NetSim

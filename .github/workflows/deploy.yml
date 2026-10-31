@@ -38,7 +38,7 @@ jobs:
           mkdir -p public/miroir
           # Pas de PHP dans les copies : ce sont des applications statiques
           printf '<FilesMatch "\\.(php|phtml|phar)$">\n  Require all denied\n</FilesMatch>\n' > public/miroir/.htaccess
-          # Une ligne : <nom> <dépôt> [<dossier publié> [<commande de construction…>]]
+          # Une ligne : <nom> <dépôt> [<dossier publié, « . » pour tout le dépôt> [<commande de construction…>]]
           grep -vE '^\s*(#|$)' miroirs.txt | while read -r nom depot dossier commande; do
             case "$nom" in *[!A-Za-z0-9_-]*) echo "Nom invalide : $nom"; exit 1;; esac
             case "${dossier:-}" in /*|*..*) echo "Dossier invalide : $dossier"; exit 1;; esac
@@ -46,7 +46,7 @@ jobs:
             src="$RUNNER_TEMP/miroir-$nom"
             git clone --quiet --depth 1 "$depot" "$src"
             if [ -n "${commande:-}" ]; then (cd "$src" && bash -c "$commande"); fi
-            if [ -n "${dossier:-}" ]; then src="$src/$dossier"; fi
+            if [ -n "${dossier:-}" ] && [ "$dossier" != "." ]; then src="$src/$dossier"; fi   # « . » : tout le dépôt (utile avant une commande)
             rm -rf "$src/.git" "$src/.github"
             mv "$src" "public/miroir/$nom"
             echo "$(date -u +%FT%TZ) $(git ls-remote "$depot" HEAD | cut -c1-7)" > "public/miroir/$nom/.copie"
