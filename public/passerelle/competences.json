@@ -49,6 +49,7 @@
    "code": "OST",
    "titre": "Les objets et les systèmes techniques : leurs usages et leurs interactions à découvrir et à analyser",
    "technostudio": "T1",
+   "couleur": "#30B34A",
    "competences": [
     {
      "code": "OST1",
@@ -291,6 +292,7 @@
    "code": "SFC",
    "titre": "Structure, fonctionnement, comportement : des objets et des systèmes techniques à comprendre",
    "technostudio": "T2",
+   "couleur": "#C45CCE",
    "competences": [
     {
      "code": "SFC1",
@@ -625,6 +627,7 @@
    "code": "CCRI",
    "titre": "Création, conception, réalisation, innovations : des objets à concevoir et à réaliser",
    "technostudio": "T3",
+   "couleur": "#E8B624",
    "competences": [
     {
      "code": "CCRI1",

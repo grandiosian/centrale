@@ -401,8 +401,15 @@ function page_suivi(): void
                         <?php foreach ($apps as $a): ?>
                             <option value="app:<?= h($a) ?>" <?= $vue === 'app:' . $a ? 'selected' : '' ?>><?= h($a) ?></option>
                         <?php endforeach; ?></optgroup><?php endif; ?>
+                    <optgroup label="Compétences (bilan : moyenne haute)">
+                        <?php foreach (options_vue_competences() as $v => $t): ?>
+                            <option value="<?= h($v) ?>" <?= $vue === $v ? 'selected' : '' ?>><?= h($t) ?></option>
+                        <?php endforeach; ?></optgroup>
                 </select>
             </label>
+            <?php if (str_starts_with($vue, 'comp:')): ?>
+                <label class="case"><input type="checkbox" name="detail" value="1" <?= !empty($_GET['detail']) ? 'checked' : '' ?> onchange="this.form.submit()"> Détail par capacité</label>
+            <?php endif; ?>
             <noscript><button>Afficher</button></noscript>
         </form>
         <?php liste_locale(); ?>
@@ -411,6 +418,12 @@ function page_suivi(): void
         if (!$classe || $vue === '') {
             echo '<p class="vide" style="margin-top:24px">Rien à afficher pour l\'instant : il faut une classe, et au moins une application '
                 . 'qui envoie de la progression (ou un parcours).</p></main>';
+            pied();
+            return;
+        }
+        if (str_starts_with($vue, 'comp:')) {
+            tableau_suivi_competences($classe, $groupe_id, $vue, !empty($_GET['detail']));
+            echo '</main>';
             pied();
             return;
         }

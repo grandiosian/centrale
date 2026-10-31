@@ -258,6 +258,7 @@ if ($action !== null) {
     action_groupes($action);      // groupes d'une classe (GR1, GR2…)
     action_bibliotheque($action); // propositions aux classes, ajout aux parcours, essai
     action_tester($action);       // élèves test : tester à leur place
+    action_competences($action);  // progression par séquence
 
     switch ($action) {
         case 'deconnexion':

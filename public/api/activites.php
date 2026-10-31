@@ -4,7 +4,8 @@
  * Sert à afficher, dans le tableau de suivi, les colonnes des activités pas encore commencées.
  * En-tête obligatoire : X-Jeton.
  *
- * POST { app, activites: [ { id, titre, groupe?, total? }, … ] }   (dans l'ordre souhaité)
+ * POST { app, activites: [ { id, titre, groupe?, total?, competences? }, … ] }   (dans l'ordre souhaité)
+ *      competences : codes du référentiel (/passerelle/competences.json) travaillés par l'activité, ex. ["SFC15.5.1"]
  *      Remplace le catalogue de l'atelier. Une liste identique à la précédente ne fait rien.
  */
 declare(strict_types=1);
@@ -41,6 +42,7 @@ foreach (array_values($liste) as $i => $a) {
         'titre'  => mb_substr(trim((string) ($a['titre'] ?? $id)), 0, 120),
         'groupe' => mb_substr(trim((string) ($a['groupe'] ?? '')), 0, 80),
         'total'  => isset($a['total']) && is_numeric($a['total']) ? max(0, min(1000, (int) $a['total'])) : null,
+        'competences' => implode(', ', codes_valides(is_array($a['competences'] ?? null) ? $a['competences'] : (string) ($a['competences'] ?? ''))),
         'ordre'  => $i,
     ];
 }
@@ -57,9 +59,9 @@ if (reglage('catalogue:' . $app) === $empreinte) {
 $pdo = db();
 $pdo->beginTransaction();
 $pdo->prepare('DELETE FROM activites WHERE app = ?')->execute([$app]);
-$ins = $pdo->prepare('INSERT INTO activites (app, activite, titre, groupe, total, ordre) VALUES (?, ?, ?, ?, ?, ?)');
+$ins = $pdo->prepare('INSERT INTO activites (app, activite, titre, groupe, total, ordre, competences) VALUES (?, ?, ?, ?, ?, ?, ?)');
 foreach ($propres as $id => $a) {
-    $ins->execute([$app, $id, $a['titre'], $a['groupe'], $a['total'], $a['ordre']]);
+    $ins->execute([$app, $id, $a['titre'], $a['groupe'], $a['total'], $a['ordre'], $a['competences']]);
 }
 $pdo->commit();
 definir_reglage('catalogue:' . $app, $empreinte);

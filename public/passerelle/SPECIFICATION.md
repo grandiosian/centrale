@@ -161,7 +161,30 @@ La Centrale publie le référentiel commun à l'adresse **`/passerelle/competenc
 
 Une application qui évalue des compétences utilise **ces codes**. Ils ne changent jamais.
 
-Aujourd'hui, l'enseignant note les compétences d'une étape de parcours en la validant. À venir : l'application déclarera dans `activites.liste` les capacités travaillées par chaque activité (champ facultatif `competences`). Elle joindra aussi à `Centrale.progression` des constats `{ competence, reussi, indices, essais }`.
+**Déclarer** les capacités de chaque activité (champ facultatif `competences` de `activites.liste`, et de `Centrale.init({ activites })`) :
+
+```json
+{ "id": "e5-1", "titre": "Brancher la salle", "groupe": "5e", "total": 5, "competences": ["SFC15.5.1"] }
+```
+
+La Centrale les montre dans l'onglet Compétences (« travaillée dans »). Les codes inconnus sont ignorés.
+
+**Envoyer des constats** avec la progression, au moment où l'application sait juger, par exemple quand un critère est réussi ou que l'activité est terminée :
+
+```js
+Centrale.progression('exo-plaque', { statut: 'termine', faites: 3, total: 3,
+  constats: [ { competence: 'CCRI16.5.1', reussi: true, indices: 0, essais: 1, preuve: '3 critères sur 3' } ] });
+```
+
+- `reussi` (oui / non), `indices` (aides utilisées), `essais` (tentatives) : la Centrale en tire le niveau.
+  - Pas réussi : MI.
+  - Réussi du premier coup, sans indice : TBM.
+  - Au plus 1 indice et 3 essais : MS.
+  - Davantage d'aide : MF.
+- `niveau` (1 à 4) à la place de `reussi` : l'application fixe elle-même le niveau.
+- Chaque constat compte. Il est gardé, même hors ligne : le module les met en file d'attente sans les perdre ni les doubler.
+
+**Bilan** : moyenne haute de tous les constats d'une capacité (ceux de l'enseignant et ceux des applications), c'est-à-dire la moyenne arrondie au niveau supérieur.
 
 ## 3. Règles
 

@@ -225,6 +225,7 @@ function ecrire_catalogue(string $app, array $liste, bool $remplacer = true): in
             'titre'  => mb_substr(trim((string) ($a['titre'] ?? $id)), 0, 120),
             'groupe' => mb_substr(trim((string) ($a['groupe'] ?? '')), 0, 80),
             'total'  => isset($a['total']) && is_numeric($a['total']) ? max(0, min(1000, (int) $a['total'])) : null,
+            'competences' => implode(', ', codes_valides(is_array($a['competences'] ?? null) ? $a['competences'] : (string) ($a['competences'] ?? ''))),
             'ordre'  => $i,
         ];
     }
@@ -233,11 +234,11 @@ function ecrire_catalogue(string $app, array $liste, bool $remplacer = true): in
     if ($remplacer) {
         $pdo->prepare('DELETE FROM activites WHERE app = ?')->execute([$app]);
     }
-    $ins = $pdo->prepare('INSERT INTO activites (app, activite, titre, groupe, total, ordre) VALUES (?, ?, ?, ?, ?, ?)
+    $ins = $pdo->prepare('INSERT INTO activites (app, activite, titre, groupe, total, ordre, competences) VALUES (?, ?, ?, ?, ?, ?, ?)
                           ON CONFLICT (app, activite) DO UPDATE SET titre = excluded.titre, groupe = excluded.groupe,
-                          total = excluded.total, ordre = excluded.ordre');
+                          total = excluded.total, ordre = excluded.ordre, competences = excluded.competences');
     foreach ($propres as $id => $a) {
-        $ins->execute([$app, $id, $a['titre'], $a['groupe'], $a['total'], $a['ordre']]);
+        $ins->execute([$app, $id, $a['titre'], $a['groupe'], $a['total'], $a['ordre'], $a['competences']]);
     }
     $pdo->commit();
     return count($propres);

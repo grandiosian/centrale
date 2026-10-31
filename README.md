@@ -335,7 +335,14 @@ Le référentiel est celui du programme de technologie du cycle 4 (BO du 29 fév
   - chaque étape terminée qui porte des compétences affiche une grille **MI · MF · MS · TBM** (échelle du LSU), un clic par compétence ;
   - « Valider » enregistre les notes et ouvre l'étape suivante ; « Enregistrer » note seulement (parcours sans validation, ou dernière étape) ;
   - en équipe, la note va à chaque membre.
-- **Page Travail de l'élève**, section **Compétences** : la dernière note de chaque capacité, avec la date, le parcours et l'historique. Les notes sont des constats datés : rien n'est effacé.
+- **Constats des applications** : chaque activité déclare ses capacités (`competences`). L'application envoie des constats avec sa progression (`constats: [{ competence, reussi, indices, essais }]`), voir la spécification de la passerelle, § 2.7.
+- **Bilan = moyenne haute** de tous les constats d'une capacité (les vôtres et ceux des applications), arrondie au niveau supérieur. Une sous-compétence prend la moyenne haute des constats de ses capacités.
+- **Suivi → Compétences 5e / 4e / 3e** :
+  - élèves × sous-compétences (ou × capacités avec « Détail par capacité ») ;
+  - couleurs des thèmes : OST vert, SFC rose, CCRI jaune orangé ;
+  - limitable à une séquence de la progression.
+- **Onglet Compétences → Progression 5e / 4e / 3e** : vos 8 séquences (thème, support) et les capacités travaillées dans chacune, comme vos tableaux de progression. Les capacités placées dans aucune séquence sont signalées.
+- **Page Travail de l'élève**, section **Compétences** : le bilan de chaque capacité, le nombre de constats, et le détail (vous ou application, indices, essais). Rien n'est effacé.
 
 ## 5. Organisation : établissements, emploi du temps, plans de classe
 

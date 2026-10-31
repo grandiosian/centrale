@@ -8,6 +8,7 @@
  *      Le serveur garde le MEILLEUR résultat : une activité terminée le reste,
  *      faites et score ne baissent jamais si l'élève recommence.
  * GET  ?app=netsim     → { ok, progression: [ { activite, titre, statut, faites, total, score, score_max, debut, maj, fin } ] }
+ * POST … constats: [ { competence: "SFC15.5.1", reussi, indices?, essais?, preuve? } ]  → évaluations (source = l'application)
  * GET  (sans app)      → { ok, progression: { app: [ … ] } }
  */
 declare(strict_types=1);
@@ -111,6 +112,9 @@ $pdo->prepare('INSERT INTO progression (eleve_id, app, activite, titre, statut, 
     ->execute([$eleve['id'], $app, $activite, $final['titre'], $final['statut'], $final['faites'], $final['total'],
         $final['score'], $final['score_max'], $final['details'], $final['debut'], $maintenant, $final['fin']]);
 
-envoyer_json(200, ['ok' => true, 'progression' => ligne_publique($final + [
+// Constats de compétences joints par l'application : [{ competence, reussi, indices, essais, preuve } | { competence, niveau }]
+$constats = is_array($e['constats'] ?? null) ? enregistrer_constats($eleve['id'], $app, $activite, $e['constats']) : 0;
+
+envoyer_json(200, ['ok' => true, 'constats' => $constats, 'progression' => ligne_publique($final + [
     'activite' => $activite, 'maj' => $maintenant,
 ])]);

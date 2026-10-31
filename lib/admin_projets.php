@@ -260,7 +260,7 @@ function liste_a_valider(array $parcours, array $items): void
                 <td class="grille-notes"><?php if (!$codes): ?><span class="discret">—</span><?php endif; ?>
                     <?php foreach ($codes as $code): $k = $index[$code] ?? null; ?>
                         <div class="note-ligne">
-                            <span class="code-comp" title="<?= h($k ? $k['texte'] : 'Code inconnu du référentiel') ?>"><?= h($code) ?></span>
+                            <?= puce_competence($code) ?>
                             <span class="choix-maitrise" role="radiogroup" aria-label="<?= h($code) ?>">
                                 <?php foreach ($echelle as $niv => $m): ?>
                                     <label title="<?= h($m['libelle']) ?>" style="--m:<?= h($m['couleur']) ?>"><input type="radio" form="<?= $form ?>" name="notes[<?= h($code) ?>]" value="<?= $niv ?>"

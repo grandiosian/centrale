@@ -29,6 +29,16 @@ function creer_tables_competences(PDO $pdo): void
     )");
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_evaluations_eleve ON evaluations (eleve_id, code)');
     ajouter_colonne($pdo, 'parcours_etapes', 'competences', "TEXT NOT NULL DEFAULT ''");   // « SFC15.5.1, CCRI16.5.1 »
+    ajouter_colonne($pdo, 'activites', 'competences', "TEXT NOT NULL DEFAULT ''");         // capacités travaillées, déclarées par l'application
+    // Progression de l'enseignant : thème et support de chaque séquence, capacités travaillées
+    $pdo->exec("CREATE TABLE IF NOT EXISTS sequences (
+        niveau  TEXT NOT NULL,                  -- 5e, 4e, 3e
+        numero  INTEGER NOT NULL,               -- 1 à 8
+        theme   TEXT NOT NULL DEFAULT '',
+        support TEXT NOT NULL DEFAULT '',
+        codes   TEXT NOT NULL DEFAULT '',       -- « SFC15.5.1, CCRI16.5.1 »
+        PRIMARY KEY (niveau, numero)
+    )");
 }
 
 /** Référentiel décodé (une seule lecture par requête). */
@@ -170,4 +180,151 @@ function verifier_competences_etapes(array $etapes, string $classes): array
         }
     }
     return $rem;
+}
+
+/* ---------- Couleurs des thèmes : thème 1 (OST) vert, thème 2 (SFC) rose, thème 3 (CCRI) jaune orangé ---------- */
+
+function couleur_theme(?string $theme): string
+{
+    foreach (referentiel()['themes'] ?? [] as $t) {
+        if ($t['code'] === $theme) {
+            return (string) ($t['couleur'] ?? '#888888');
+        }
+    }
+    return '#888888';
+}
+
+/** Puce d'un code, à la couleur de son thème, avec l'intitulé en bulle. $classes : « copier »… */
+function puce_competence(string $code, string $classes = ''): string
+{
+    $k = index_competences()[$code] ?? null;
+    return '<span class="code-comp th ' . h($classes) . '" style="--t:' . h(couleur_theme($k['theme'] ?? null)) . '" title="'
+        . h($k ? $k['texte'] : 'Code inconnu du référentiel') . '">' . h($code) . '</span>';
+}
+
+/** Ne garde que les codes du référentiel (capacités ou sous-compétences), normalisés. */
+function codes_valides(array|string $codes): array
+{
+    $liste = is_array($codes) ? array_map(fn($c) => code_competence_propre((string) $c), $codes) : liste_codes_competences($codes);
+    $index = index_competences();
+    return array_values(array_unique(array_filter($liste, fn($c) => isset($index[$c]) && $index[$c]['type'] !== 'competence')));
+}
+
+/* ---------- Constats envoyés par les applications ---------- */
+
+/**
+ * Niveau de maîtrise d'un constat d'application :
+ * - « niveau » donné (1 à 4) : gardé tel quel ;
+ * - pas réussi : 1 (insuffisante) ;
+ * - réussi du premier coup sans indice : 4 ; avec au plus 1 indice et 3 essais : 3 ; avec plus d'aide : 2.
+ */
+function niveau_constat(array $c): int
+{
+    if (isset($c['niveau']) && is_numeric($c['niveau'])) {
+        return max(1, min(4, (int) $c['niveau']));
+    }
+    if (empty($c['reussi'])) {
+        return 1;
+    }
+    $indices = max(0, (int) ($c['indices'] ?? 0));
+    $essais = max(1, (int) ($c['essais'] ?? 1));
+    return $indices === 0 && $essais <= 1 ? 4 : ($indices <= 1 && $essais <= 3 ? 3 : 2);
+}
+
+/** Enregistre les constats joints à une progression (50 au plus). Renvoie le nombre gardé. */
+function enregistrer_constats(int $eleve_id, string $app, string $activite, array $constats): int
+{
+    $ins = db()->prepare('INSERT INTO evaluations (eleve_id, code, niveau, source, details, cree_le) VALUES (?, ?, ?, ?, ?, ?)');
+    $n = 0;
+    foreach (array_slice($constats, 0, 50) as $c) {
+        if (!is_array($c)) {
+            continue;
+        }
+        $code = codes_valides([(string) ($c['competence'] ?? $c['code'] ?? '')])[0] ?? null;
+        if (!$code) {
+            continue;
+        }
+        $details = json_encode(array_filter([
+            'activite' => $activite, 'reussi' => isset($c['reussi']) ? (bool) $c['reussi'] : null,
+            'indices' => isset($c['indices']) ? (int) $c['indices'] : null, 'essais' => isset($c['essais']) ? (int) $c['essais'] : null,
+            'preuve' => isset($c['preuve']) ? mb_substr((string) $c['preuve'], 0, 200) : null,
+        ], fn($v) => $v !== null), JSON_UNESCAPED_UNICODE);
+        $ins->execute([$eleve_id, $code, niveau_constat($c), $app, $details, time()]);
+        $n++;
+    }
+    return $n;
+}
+
+/* ---------- Bilan : « moyenne haute » ---------- */
+
+/** Moyenne des niveaux, arrondie au niveau supérieur (2 et 3 → 3 ; 3, 3 et 4 → 4). */
+function moyenne_haute(array $niveaux): int
+{
+    return $niveaux ? (int) ceil(array_sum($niveaux) / count($niveaux) - 1e-9) : 0;
+}
+
+/**
+ * Bilan d'un ensemble d'élèves : [eleve_id][code] => ['niveau' (moyenne haute), 'n' (constats), 'prof' (dont notes du prof), 'maj'].
+ * Les codes sont les capacités notées ET leurs sous-compétences (moyenne haute de tous les constats de la sous-compétence).
+ */
+function bilans_eleves(array $eleve_ids): array
+{
+    if (!$eleve_ids) {
+        return [];
+    }
+    $st = db()->prepare('SELECT eleve_id, code, niveau, source, cree_le FROM evaluations WHERE eleve_id IN ('
+        . implode(',', array_fill(0, count($eleve_ids), '?')) . ')');
+    $st->execute(array_values(array_map('intval', $eleve_ids)));
+    $index = index_competences();
+    $brut = [];
+    foreach ($st->fetchAll() as $r) {
+        $k = $index[$r['code']] ?? null;
+        if (!$k) {
+            continue;
+        }
+        foreach (array_unique([$r['code'], (string) $k['sous']]) as $c) {
+            if ($c === '') {
+                continue;
+            }
+            $b = &$brut[(int) $r['eleve_id']][$c];
+            $b['niveaux'][] = (int) $r['niveau'];
+            $b['prof'] = ($b['prof'] ?? 0) + ($r['source'] === 'prof' ? 1 : 0);
+            $b['maj'] = max($b['maj'] ?? 0, (int) $r['cree_le']);
+            unset($b);
+        }
+    }
+    $res = [];
+    foreach ($brut as $e => $codes) {
+        foreach ($codes as $c => $b) {
+            $res[$e][$c] = ['niveau' => moyenne_haute($b['niveaux']), 'moyenne' => array_sum($b['niveaux']) / count($b['niveaux']),
+                            'n' => count($b['niveaux']), 'prof' => $b['prof'], 'maj' => $b['maj']];
+        }
+    }
+    return $res;
+}
+
+/** Cellule de bilan : pastille MI/MF/MS/TBM + nombre de constats en bulle. */
+function cellule_bilan(?array $b): string
+{
+    if (!$b) {
+        return '<td class="cellule"></td>';
+    }
+    $titre = echelle_maitrise()[$b['niveau']]['libelle'] . ' — moyenne haute de ' . $b['n'] . ' constat' . ($b['n'] > 1 ? 's' : '')
+        . ($b['prof'] ? ' (dont ' . $b['prof'] . ' de vous)' : '');
+    return '<td class="cellule">' . pastille_maitrise($b['niveau'], $titre) . '</td>';
+}
+
+/** Progression d'un niveau : numéro => [theme, support, codes[]] (8 séquences). */
+function sequences_niveau(string $niveau): array
+{
+    $res = [];
+    for ($i = 1; $i <= 8; $i++) {
+        $res[$i] = ['theme' => '', 'support' => '', 'codes' => []];
+    }
+    $st = db()->prepare('SELECT * FROM sequences WHERE niveau = ?');
+    $st->execute([$niveau]);
+    foreach ($st->fetchAll() as $r) {
+        $res[(int) $r['numero']] = ['theme' => $r['theme'], 'support' => $r['support'], 'codes' => liste_codes_competences($r['codes'])];
+    }
+    return $res;
 }

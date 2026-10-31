@@ -734,6 +734,8 @@
       if (a[k] != null && b[k] != null) m[k] = Math.max(a[k], b[k]);
     });
     if (a.statut === 'termine') m.statut = 'termine';
+    // Constats de compétences : on les garde tous (chacun compte dans le bilan), 50 au plus en attente
+    if (a.constats || b.constats) m.constats = (a.constats || []).concat(b.constats || []).slice(-50);
     return m;
   }
 
@@ -769,6 +771,11 @@
           });
           var actuelle = lireFile();
           if (JSON.stringify(actuelle[ids[i]]) === JSON.stringify(envoye)) delete actuelle[ids[i]];
+          else if (actuelle[ids[i]] && envoye.constats && actuelle[ids[i]].constats) {
+            // Arrivés pendant l'envoi : on ne garde que les constats pas encore envoyés
+            actuelle[ids[i]].constats = actuelle[ids[i]].constats.slice(envoye.constats.length);
+            if (!actuelle[ids[i]].constats.length) delete actuelle[ids[i]].constats;
+          }
           ecrireFile(actuelle);
         } catch (e) {
           if (e.horsLigne || e.statut === 401) { setTimeout(viderFileProgression, DELAI_REESSAI); break; }

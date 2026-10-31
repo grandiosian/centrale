@@ -551,3 +551,25 @@ td.grille-notes { min-width: 260px; }
 .choix-maitrise input:focus-visible + span { outline: 2px solid var(--texte); outline-offset: 1px; }
 td.etape-projet.a-noter { box-shadow: inset 0 0 0 2px #7c8cf8; }
 td.etape-projet.a-noter .statut::after { content: " · à évaluer"; color: #4f5bd5; font-weight: 600; }
+
+/* Couleurs des thèmes : OST vert, SFC rose, CCRI jaune orangé (--t posé par la page) */
+.code-comp.th { border-left: 4px solid var(--t, #888); background: color-mix(in srgb, var(--t, #888) 14%, var(--surface)); }
+.code-theme { background: var(--t, var(--texte)); color: #fff; }
+.theme-ref { border-top: 5px solid var(--t, var(--bord)); }
+.pastille-theme { display: inline-block; padding: 0 8px; border-radius: 6px; background: var(--t); color: #fff; font-weight: 700; font-size: .8rem; }
+th.entete-theme { background: var(--t); color: #fff; text-align: center; font-weight: 700; }
+th.col-comp { border-bottom: 3px solid var(--t); }
+a.usage.app { color: var(--doux); }
+a.usage.app::before { content: "⚙ "; }
+.table-competences td.cellule { text-align: center; }
+/* Progression par séquence */
+.table-progression { border-collapse: collapse; }
+.table-progression th, .table-progression td { border: 1px solid var(--bord); padding: 4px 6px; vertical-align: middle; }
+.table-progression thead input { width: 100%; min-width: 7em; font-size: .82rem; padding: 3px 5px; }
+.table-progression .col-seq { min-width: 7.5em; font-size: .82rem; }
+.table-progression .ligne-competence th { background: color-mix(in srgb, var(--t) 22%, var(--surface)); text-align: left; }
+.table-progression .ligne-sous th { background: var(--fond); text-align: left; font-weight: 600; font-size: .9rem; }
+.table-progression .cap-progression { min-width: 340px; max-width: 520px; font-size: .86rem; }
+.table-progression .case-seq { text-align: center; }
+.table-progression .case-seq input { width: 18px; height: 18px; }
+.table-progression tr.non-placee .cap-progression { box-shadow: inset 4px 0 0 #f0a030; }

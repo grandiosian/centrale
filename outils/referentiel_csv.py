@@ -16,6 +16,7 @@ import csv, io, json, re, sys
 
 NIVEAUX = {'5ème': '5e', '4ème': '4e', '3ème': '3e'}
 THEMES_TS = {'OST': 'T1', 'SFC': 'T2', 'CCRI': 'T3'}   # codes utilisés par TechnoStudio (T2C11 ≈ SFC11)
+COULEURS = {'OST': '#30B34A', 'SFC': '#C45CCE', 'CCRI': '#E8B624'}   # thème 1 vert, thème 2 rose, thème 3 jaune orangé (mêmes que TechnoStudio)
 COUPURE = re.compile(r'([a-zàâçéèêëîïôûùüÿœ])- ([a-zàâçéèêëîïôûùüÿœ])')
 
 
@@ -77,7 +78,7 @@ def theme(chemin):
     code_t = code_t.strip()
     entete = next(l for l in lignes if any(c.strip() == '5ème' for c in l))
     col = {NIVEAUX.get(c.strip(), c.strip()): i for i, c in enumerate(entete) if c.strip() in NIVEAUX or c.strip() == 'Connaissances'}
-    t = {'code': code_t, 'titre': intitule.strip(), 'technostudio': THEMES_TS.get(code_t), 'competences': []}
+    t = {'code': code_t, 'titre': intitule.strip(), 'technostudio': THEMES_TS.get(code_t), 'couleur': COULEURS.get(code_t, '#888888'), 'competences': []}
     comp, sous = None, None
     for l in lignes[lignes.index(entete) + 1:]:
         cellules = [propre(c) for c in l]
