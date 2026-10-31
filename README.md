@@ -155,6 +155,8 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 | `Centrale.lien(url, { activite })` / `Centrale.ouvrir(url, { activite })` | Ouvre une autre application (et une activité) sans retaper le code |
 | `Centrale.activiteDemandee()` | Activité demandée par le portail, à ouvrir directement |
 | `Centrale.retour()` | Revient au portail (bouton « ← Mes ateliers » ajouté automatiquement) |
+| `await Centrale.etapeSuivante()` | Dans un parcours : `{ numero, etape, fin, raison }` de l'étape suivante (`raison` si elle est verrouillée), `null` hors parcours |
+| `await Centrale.allerEtapeSuivante()` | Enregistre tout et ouvre l'étape suivante (bouton « Étape suivante → » ajouté automatiquement) ; `false` si elle est verrouillée |
 | `await Centrale.ateliers()` | Ateliers proposés à la classe, avec l'avancement |
 | `await Centrale.propositions()` | Activités proposées par le professeur à l'élève (classe ou groupe) : date, consigne, avancement |
 
@@ -280,7 +282,16 @@ Programmer le capteur       | blocs    |          | https://…
 - **Activité vide** = tout l'atelier. L'étape est terminée quand toutes ses activités déclarées le sont.
 - **Classes concernées** : vide = toutes.
 - Sur le **portail élève** (`https://VOTRECOMPTE.alwaysdata.net/`), l'élève voit ses parcours, l'étape suivante, et clique sur **Commencer** ou **Continuer**. Le logiciel s'ouvre déjà connecté : le jeton passe dans l'adresse (`#centrale=…`) et le module le retire aussitôt.
-- Entre vos propres applications, `Centrale.ouvrir(url)` fait la même chose (bouton « Étape suivante », par exemple).
+- **Bouton « Étape N : titre → »** : le module l'ajoute dans toute application ouverte depuis une étape de parcours, en bas à gauche, à côté de « ← Mes ateliers ».
+  - Au clic, il enregistre tout, puis ouvre directement l'étape suivante : la bonne application, la bonne activité, le même dossier de projet, sans repasser par le portail.
+  - Si l'étape suivante est verrouillée (« dans l'ordre » ou « après validation »), il affiche un 🔒 et explique pourquoi.
+  - À la dernière étape, il devient « Parcours terminé → Mes ateliers ».
+  - Il se met à jour tout seul après chaque progression ou dépôt de fichier.
+- **Côté application** (détails : spécification de la passerelle, § 2.6) :
+  - `Centrale.init({ avantDeQuitter: async () => … })` : dépose ce qui attend encore, avant « ← Mes ateliers » ou « Étape suivante » (5 s au plus) ;
+  - `Centrale.init({ boutonSuivant: false })` masque le bouton, pour placer le sien avec `Centrale.etapeSuivante()` et `Centrale.allerEtapeSuivante()` ;
+  - le descripteur le déclare dans `centrale.parcours` (`bouton_suivant`, `avant_de_quitter`).
+- Entre vos propres applications, `Centrale.ouvrir(url)` ouvre une autre application déjà connectée.
 
 ### Tableau de suivi
 

@@ -53,6 +53,10 @@
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', afficherBoutonRetour);
       else afficherBoutonRetour();
     }
+    if (config.boutonSuivant !== false && contexteAtelier()) {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrerBoutonSuivant);
+      else demarrerBoutonSuivant();
+    }
     return Centrale;
   }
 
@@ -66,10 +70,24 @@
   function retour() {
     var r = adresseRetour();
     if (!r) return false;
-    toutEnvoyer();
-    viderFileProgression();
-    location.href = r;
+    avantDeQuitter().then(function () {
+      toutEnvoyer();
+      viderFileProgression();
+      location.href = r;
+    });
     return true;
+  }
+
+  /**
+   * Option avantDeQuitter de Centrale.init : fonction (éventuellement asynchrone) appelée avant de quitter
+   * l'application par « ← Mes ateliers » ou « Étape suivante », pour déposer ce qui attend encore
+   * (ex. le projet dans le dossier de projet). 5 s au plus.
+   */
+  function avantDeQuitter() {
+    if (typeof config.avantDeQuitter !== 'function') return Promise.resolve();
+    var fin = new Promise(function (ok) { setTimeout(ok, 5000); });
+    var travail = Promise.resolve().then(config.avantDeQuitter).catch(function () { /* on part quand même */ });
+    return Promise.race([travail, fin]);
   }
 
   /** Petit bouton « ← Mes ateliers » en bas à gauche, quand l'application a été ouverte depuis le portail. */
@@ -85,6 +103,111 @@
       + 'box-shadow:0 4px 14px rgba(0,0,0,.2)';
     b.onclick = retour;
     document.body.appendChild(b);
+  }
+
+  /* ---------- Parcours : passer à l'étape suivante sans repasser par le portail ---------- */
+
+  var suivant = { bouton: null, info: null, minuteur: 0, message: 0 };
+
+  /**
+   * Étape suivante du parcours ouvert dans cet onglet, ou null hors parcours :
+   * { numero, etape: { titre, app, activite, url, ouverte, statut… } | null (fin du parcours),
+   *   actuelle, fin, raison: texte si l'étape suivante n'est pas encore ouverte }.
+   */
+  async function etapeSuivante() {
+    var d = await etape();
+    if (!d) return null;
+    var n = d.numero + 1;
+    var e = d.etapes[n] || null;
+    var raison = '';
+    if (e && !e.ouverte) {
+      raison = d.parcours.deblocage === 'validation'
+        ? 'Ton professeur doit d’abord valider cette étape.'
+        : 'Termine d’abord cette étape.';
+    } else if (e && !e.url) {
+      raison = 'Pas d’adresse pour l’étape suivante : passe par « Mes ateliers ».';
+    }
+    return { numero: n, etape: e, actuelle: d.etape, fin: !e, raison: raison, parcours: d.parcours };
+  }
+
+  /**
+   * Ouvre l'étape suivante (bonne application, bonne activité, même dossier de projet), après avoir
+   * tout enregistré. À la fin du parcours, revient au portail. Renvoie false si l'étape est verrouillée.
+   */
+  async function allerEtapeSuivante() {
+    var info = await etapeSuivante();
+    if (!info) return false;
+    if (info.fin) return retour();
+    if (info.raison) return false;
+    await avantDeQuitter();
+    toutEnvoyer();
+    await viderFileProgression();
+    var e = info.etape;
+    var cible = lien(e.url, { activite: e.activite || undefined, parcours: info.parcours.id, etape: info.numero });
+    var sansHash = function (u) { return u.replace(/#.*$/, ''); };
+    var memePage = sansHash(new URL(cible, location.href).href) === sansHash(location.href);
+    location.href = cible;
+    if (memePage) location.reload();   // même application : le changement de # ne recharge pas la page
+    return true;
+  }
+
+  function demarrerBoutonSuivant() {
+    majBoutonSuivant();
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') majBoutonSuivant(); });
+    setInterval(function () { if (document.visibilityState === 'visible') majBoutonSuivant(); }, 60000);
+  }
+
+  /** Recalcule le bouton « Étape suivante » (après une progression, un dépôt, une connexion…). */
+  function majBoutonSuivant(delai) {
+    if (config.boutonSuivant === false || !contexteAtelier()) return;
+    clearTimeout(suivant.minuteur);
+    suivant.minuteur = setTimeout(async function () {
+      if (!connecte()) { suivant.minuteur = setTimeout(function () { majBoutonSuivant(); }, 3000); return; }
+      try { suivant.info = await etapeSuivante(); } catch (e) { return; }
+      dessinerBoutonSuivant();
+    }, delai == null ? 300 : delai);
+  }
+
+  function dessinerBoutonSuivant() {
+    var info = suivant.info;
+    var b = suivant.bouton;
+    if (!info) { if (b) b.remove(); suivant.bouton = null; return; }
+    if (!b) {
+      b = suivant.bouton = document.createElement('button');
+      b.id = 'centrale-suivant';
+      b.type = 'button';
+      b.onclick = async function () {
+        var i = suivant.info;
+        if (i && i.raison) { montrerMessageSuivant(i.raison); return; }
+        b.disabled = true;
+        b.textContent = 'Enregistrement…';
+        var parti = await allerEtapeSuivante().catch(function () { return false; });
+        if (!parti) { b.disabled = false; majBoutonSuivant(0); }
+      };
+      document.body.appendChild(b);
+    }
+    var r = document.getElementById('centrale-retour');
+    var gauche = r ? Math.round(r.getBoundingClientRect().right) + 8 : 12;
+    var verrou = !!info.raison;
+    b.textContent = info.fin ? 'Parcours terminé → Mes ateliers'
+      : (verrou ? '🔒 ' : '') + 'Étape ' + (info.numero + 1) + ' : ' + info.etape.titre + (verrou ? '' : ' →');
+    b.title = info.fin ? 'Dernière étape : revenir à la liste de tes ateliers'
+      : verrou ? info.raison : 'Enregistrer et ouvrir l’étape suivante du parcours';
+    b.style.cssText = 'position:fixed;bottom:12px;left:' + gauche + 'px;z-index:2147483000;'
+      + 'max-width:min(420px,calc(100vw - ' + (gauche + 12) + 'px));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+      + 'font:600 14px/1 system-ui,-apple-system,"Segoe UI",sans-serif;padding:10px 14px;border-radius:999px;cursor:pointer;'
+      + 'box-shadow:0 4px 14px rgba(0,0,0,.2);border:1px solid ' + (verrou ? 'rgba(0,0,0,.18)' : '#1a7f4b') + ';'
+      + 'background:' + (verrou ? '#eceae4' : '#1f8a52') + ';color:' + (verrou ? '#4a4d55' : '#fff');
+  }
+
+  function montrerMessageSuivant(texte) {
+    var b = suivant.bouton;
+    if (!b) return;
+    var avant = b.textContent;
+    b.textContent = texte;
+    clearTimeout(suivant.message);
+    suivant.message = setTimeout(function () { dessinerBoutonSuivant(); }, 3500);
+    return avant;
   }
 
   /** Activité demandée par le portail (ex. "e5-1"), à ouvrir directement. Ne sert qu'une fois. */
@@ -621,7 +744,7 @@
           var f2 = lireFile(); delete f2[ids[i]]; ecrireFile(f2); // donnée refusée : on l'abandonne
         }
       }
-    })().finally(function () { envoiFileEnCours = null; });
+    })().finally(function () { envoiFileEnCours = null; majBoutonSuivant(800); });
     return envoiFileEnCours;
   }
 
@@ -876,6 +999,7 @@
         throw err;
       }
       versionsProjet[nom] = d.fichier.version;
+      majBoutonSuivant(800);   // une sortie déposée peut terminer l'étape
       return d.fichier;
     },
     supprimer: async function (nom, options) {
@@ -998,6 +1122,8 @@
     ouvrir: ouvrir,
     retour: retour,
     activiteDemandee: activiteDemandee,
+    etapeSuivante: etapeSuivante,
+    allerEtapeSuivante: allerEtapeSuivante,
     reprendreSession: reprendreSession,
     afficherConnexion: afficherConnexion,
     identifiant: identifiant,

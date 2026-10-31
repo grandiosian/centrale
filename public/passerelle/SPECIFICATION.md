@@ -42,7 +42,7 @@ Toutes les sections obligatoires sont présentes, même vides. Une application p
 | `progression` | oui | `champs` : sens de `faites`, `total`, `statut`, et de `score`, `score_max`, `details` s'ils sont utilisés |
 | `donnees` | oui | une entrée par clé passée à `Centrale.sauver` (`{}` si aucune) |
 | `fichiers` | oui | `utilises: false`, ou ce que l'application reçoit, produit et attend en ressources |
-| `centrale` | non | module chargé, serveur par défaut, sites à autoriser, mode de connexion, fonctions du module utilisées |
+| `centrale` | non | module chargé, serveur par défaut, sites à autoriser, mode de connexion, fonctions du module utilisées, navigation dans les parcours (`parcours`, § 2.6) |
 | `stockage_local` | non | clés gardées dans le navigateur (dépannage) |
 | `acces_javascript` | non | `objet` (`window.X`) et `membres` |
 | `enums` | non | listes de valeurs et libellés |
@@ -112,6 +112,41 @@ Le format est fixé une fois pour toutes. Il est commun aux ateliers transversau
 - `dossier_projet: true` si l'application lit ou écrit dans le dossier de projet (`Centrale.etape`, `Centrale.projet`).
 - Les noms de `recoit` et `produit` correspondent aux lignes « reçoit : … » et « produit : … » des étapes de parcours. La Centrale peut ainsi proposer, ou vérifier, l'enchaînement de deux applications.
 
+### 2.6 `centrale.parcours` : passer d'une étape à l'autre
+
+Quand l'élève ouvre une application depuis une étape d'un parcours, le module `centrale-client.js` le sait (`Centrale.contexteAtelier()`) et ajoute en bas à gauche, à côté de « ← Mes ateliers », un bouton **« Étape N : titre → »** :
+
+- au clic, il enregistre tout, puis ouvre directement l'étape suivante : la bonne application, sur la bonne activité, avec le même dossier de projet ;
+- si l'étape suivante est verrouillée (mode « dans l'ordre » ou « après validation »), le bouton porte un 🔒 et explique pourquoi au lieu d'ouvrir ;
+- à la dernière étape, il devient « Parcours terminé → Mes ateliers » ;
+- il se met à jour après chaque `Centrale.progression`, chaque dépôt `Centrale.projet.sauver` et au retour sur l'onglet.
+
+Ce que l'application doit faire pour que cela marche bien :
+
+1. **Tout déposer avant de partir.** Si elle attend avant de déposer (minuteur, bouton « Déposer »), elle passe `avantDeQuitter` à `Centrale.init`. Le module attend cette fonction (5 s au plus) avant « ← Mes ateliers » et « Étape suivante » :
+   ```js
+   Centrale.init({ app: 'etabli3d', avantDeQuitter: () => deposerProjet() });
+   ```
+2. **Laisser la place en bas à gauche** (environ 600 × 50 px), ou placer son propre bouton : `Centrale.init({ boutonSuivant: false })`, puis :
+   - `await Centrale.etapeSuivante()` renvoie `{ numero, etape, fin, raison }`, ou `null` hors parcours ;
+   - `await Centrale.allerEtapeSuivante()` ouvre l'étape, et renvoie `false` si elle est verrouillée.
+3. **Signaler la fin de l'étape** (`Centrale.progression(id, { statut: 'termine' })` ou dépôt des fichiers `produit`) : c'est ce qui ouvre l'étape suivante en mode « dans l'ordre ».
+4. **Accepter d'être rouvert sur la même page** avec une autre étape : le module recharge la page quand deux étapes de suite sont dans la même application ; `Centrale.etape()` donne alors la nouvelle étape.
+
+Le descripteur le déclare dans `centrale.parcours` :
+
+```json
+"parcours": {
+  "bouton_suivant": "module",
+  "avant_de_quitter": "Dépose le projet (.json) dans le dossier de projet."
+}
+```
+
+- `bouton_suivant` : `"module"` (bouton du module, par défaut), `"application"` (l'application place le sien et appelle `Centrale.allerEtapeSuivante()`) ou `"aucun"`.
+- `avant_de_quitter` : ce que fait la fonction `avantDeQuitter`, ou `""` si l'application enregistre tout immédiatement.
+
+La Centrale affiche ces informations sur la fiche de la passerelle, et signale une application qui utilise le dossier de projet sans `avant_de_quitter`.
+
 ## 3. Règles
 
 1. **Ce que déclare `centrale.json` correspond à ce que l'application envoie réellement.** Le plus sûr est de produire le fichier à partir du code, comme TechnoStudio, ou de le vérifier contre l'application, comme le fait l'outil de vérification de NetSim.
@@ -129,6 +164,7 @@ Le format est fixé une fois pour toutes. Il est commun aux ateliers transversau
 - **Fiche de la passerelle** (`admin/?p=passerelle&app=…`) : activités par groupe, champs de progression, clés de données, fichiers lus / reçus / produits, remarques de vérification, descripteur complet.
 - **Sites à autoriser** : chaque `centrale.sites_a_autoriser` absent des origines autorisées est signalé, avec un bouton pour l'ajouter.
 - **Parcours** : l'enchaînement des étapes est vérifié avec les `fichiers` déclarés : fichier qu'un atelier ne déclare pas recevoir ou produire (motifs `*` acceptés), fichier reçu que rien ne produit ni ne fournit, atelier qui n'utilise pas encore le dossier de projet (`fichiers.utilises: false` ou `dossier_projet: false`).
+- **Navigation dans les parcours** : `centrale.parcours` est affiché sur la fiche de la passerelle (§ 2.6).
 - **Manifeste `postMessage`** : si l'adresse n'a pas de `centrale.json` mais publie `passerelle/manifest.json` (`"protocol": "passerelle"`, cas d'Établi 3D), la Centrale en tire seulement la fiche (nom, adresse, description) et le signale.
 
 Pistes non encore faites : valider les valeurs des clés de `donnees` avec leur schéma dans la page Travail, signaler dans le suivi les activités hors `liste` et hors `dynamiques`.

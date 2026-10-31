@@ -188,6 +188,13 @@ function verifier_descripteur(array $d): array
         }
     }
     $f = is_array($d['fichiers'] ?? null) ? $d['fichiers'] : [];
+    $nav = $d['centrale']['parcours'] ?? null;
+    if ($nav !== null && !in_array($nav['bouton_suivant'] ?? 'module', ['module', 'application', 'aucun'], true)) {
+        $av[] = '« centrale.parcours.bouton_suivant » : module, application ou aucun.';
+    }
+    if (!empty($f['dossier_projet']) && !isset($nav['avant_de_quitter'])) {
+        $av[] = '« centrale.parcours » non décrit : l’application utilise le dossier de projet, dit-elle ce qu’elle dépose avant de passer à l’étape suivante (avantDeQuitter) ?';
+    }
     if (!array_key_exists('utilises', $f)) {
         $av[] = '« fichiers.utilises » manquant (true ou false).';
     }

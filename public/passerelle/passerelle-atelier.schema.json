@@ -127,7 +127,20 @@
       "then": { "anyOf": [{ "required": ["recoit"] }, { "required": ["produit"] }, { "required": ["ressources"] }] }
     },
 
-    "centrale": { "type": "object" },
+    "centrale": {
+      "type": "object",
+      "properties": {
+        "sites_a_autoriser": { "type": "array", "items": { "type": "string", "pattern": "^https?://[^/]+$" } },
+        "parcours": {
+          "type": "object",
+          "description": "Passage d'une étape de parcours à la suivante (§ 2.6).",
+          "properties": {
+            "bouton_suivant": { "enum": ["module", "application", "aucun"] },
+            "avant_de_quitter": { "type": "string" }
+          }
+        }
+      }
+    },
     "stockage_local": { "type": "object" },
     "acces_javascript": {
       "type": "object",

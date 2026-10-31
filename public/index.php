@@ -254,7 +254,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
   const PORTAIL = location.origin + location.pathname;   // adresse du bouton « ← Mes ateliers »
   // « Voir comme un élève » depuis l'espace enseignant : jeton transmis dans l'adresse (#centrale=…)
   const jetonApercu = decodeURIComponent((location.hash.match(/(?:^#|&)centrale=([^&]+)/) || [])[1] || '');
-  Centrale.init({ api: 'api/', app: 'portail', boutonRetour: false, surDeconnexion: () => location.reload() });
+  Centrale.init({ api: 'api/', app: 'portail', boutonRetour: false, boutonSuivant: false, surDeconnexion: () => location.reload() });
   if (jetonApercu) {
     Centrale.reprendreSession(jetonApercu).then(demarrer).catch(() => { $('ecran-connexion').hidden = false; });
   } else if (Centrale.connecte()) {

@@ -124,6 +124,20 @@ function page_passerelle(): void
             </section>
         <?php endif; ?>
 
+        <?php $nav = is_array($d['centrale']['parcours'] ?? null) ? $d['centrale']['parcours'] : null; if (!isset($d['_converti'])): ?>
+            <section class="carte">
+                <h2>Dans un parcours</h2>
+                <?php $bs = $nav['bouton_suivant'] ?? null; ?>
+                <p><?= match ($bs) {
+                    'application' => 'L’application place elle-même son bouton « Étape suivante » (Centrale.allerEtapeSuivante).',
+                    'aucun' => 'Pas de bouton « Étape suivante » : l’élève repasse par « ← Mes ateliers ».',
+                    'module' => 'Bouton « Étape suivante → » du module, en bas à gauche, à côté de « ← Mes ateliers ».',
+                    default => 'Non précisé par la passerelle : le module ajoute le bouton « Étape suivante → » en bas à gauche.',
+                } ?></p>
+                <?php if ($nav && ($nav['avant_de_quitter'] ?? '') !== ''): ?><p class="discret">Avant de changer d’étape : <?= h((string) $nav['avant_de_quitter']) ?></p><?php endif; ?>
+            </section>
+        <?php endif; ?>
+
         <?php if ($acts): ?>
             <section class="carte">
                 <h2>Activités (<?= count($acts) ?>)</h2>

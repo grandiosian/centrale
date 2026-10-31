@@ -18,19 +18,36 @@
  "centrale": {
   "module": "js/centrale-client.js",
   "serveur_par_defaut": "https://technoversailles.alwaysdata.net/",
-  "sites_a_autoriser": ["https://VOTREPSEUDO.github.io"],
+  "sites_a_autoriser": [
+   "https://VOTREPSEUDO.github.io"
+  ],
   "connexion": {
    "bouton": "Où l'élève trouve « Mon code » (formulaire Centrale.afficherConnexion).",
    "depuis_le_portail": "Jeton #centrale=… : connexion automatique.",
    "activite_directe": "Ce que fait l'application avec Centrale.activiteDemandee().",
    "retour": "Bouton « ← Mes ateliers » du module, ou équivalent."
   },
-  "fonctions_utilisees": ["init", "afficherConnexion", "charger", "sauver", "progression"]
+  "fonctions_utilisees": [
+   "init",
+   "afficherConnexion",
+   "charger",
+   "sauver",
+   "progression"
+  ],
+  "parcours": {
+   "bouton_suivant": "module",
+   "avant_de_quitter": "Ce que fait Centrale.init({ avantDeQuitter }) avant de changer d'étape, ou \"\" si tout est enregistré tout de suite."
+  }
  },
  "activites": {
   "identifiants_stables": true,
   "liste": [
-   { "id": "a1", "titre": "Première activité", "groupe": "5e", "total": 3 }
+   {
+    "id": "a1",
+    "titre": "Première activité",
+    "groupe": "5e",
+    "total": 3
+   }
   ]
  },
  "progression": {
@@ -41,15 +58,23 @@
    "total": "nombre d'éléments à faire",
    "statut": "commence | termine"
   },
-  "champs_non_utilises": ["score", "score_max", "details"],
-  "format": { "$ref": "#/$defs/Progression" }
+  "champs_non_utilises": [
+   "score",
+   "score_max",
+   "details"
+  ],
+  "format": {
+   "$ref": "#/$defs/Progression"
+  }
  },
  "donnees": {
   "projet": {
    "description": "Le travail de l'élève, enregistré par Centrale.sauver(\"projet\", …).",
    "sauvegarde": "À chaque modification.",
    "chargement": "À la connexion.",
-   "format": { "$ref": "#/$defs/Projet" }
+   "format": {
+    "$ref": "#/$defs/Projet"
+   }
   }
  },
  "fichiers": {
@@ -68,12 +93,29 @@
  "$defs": {
   "Progression": {
    "type": "object",
-   "required": ["faites", "total", "statut"],
+   "required": [
+    "faites",
+    "total",
+    "statut"
+   ],
    "properties": {
-    "titre": { "type": "string" },
-    "faites": { "type": "integer", "minimum": 0 },
-    "total": { "type": "integer", "minimum": 1 },
-    "statut": { "enum": ["commence", "termine"] }
+    "titre": {
+     "type": "string"
+    },
+    "faites": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "total": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "statut": {
+     "enum": [
+      "commence",
+      "termine"
+     ]
+    }
    }
   },
   "Projet": {
