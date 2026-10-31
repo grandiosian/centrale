@@ -51,8 +51,32 @@ function groupe_seance(array $s): string
     return str_contains($s['classe'], ' · ') ? explode(' · ', $s['classe'], 2)[1] : '';
 }
 
-/** Données d'un plan de classe (salle + élèves placés) pour une séance, ou null si pas de salle / plan. */
-function donnees_plan_seance(array $s): ?array
+/** Liste « élèves à valider » d'une classe (réutilisée par « En cours » réel et simulé). */
+function rendu_file_valider(array $items): void
+{
+    if (!$items) {
+        echo '<p class="vide" style="margin:0">Rien à valider pour cette classe.</p>';
+        return;
+    }
+    echo '<ol class="file-valider">';
+    foreach (array_slice($items, 0, 6) as $it) {
+        $l = $it['ligne'];
+        $qui = ($l['titre'] ?? '') !== '' ? $l['titre'] : implode(', ', array_map(fn($m) => $m['etiquette'], $l['membres'] ?? []));
+        printf('<li><a href="./?p=projets&amp;parcours=%d&amp;vue=a_valider"><span class="qui">%s</span> <span class="quoi">%s · ét. %d</span> <span class="quand discret">%s</span> <span class="tag %s">%s</span></a></li>',
+            (int) $it['pid'], h($qui), h($it['pnom']), (int) $it['ordre'] + 1, h(depuis_texte((int) $it['depuis'])),
+            $it['valider'] ? 't-valider' : 't-noter', $it['valider'] ? 'à valider' : 'à évaluer');
+    }
+    echo '</ol>';
+    if (count($items) > 6) {
+        printf('<p class="discret" style="margin:4px 0 0">+ %d autre(s).</p>', count($items) - 6);
+    }
+}
+
+/**
+ * Données d'un plan de classe (salle + élèves placés) pour une séance, ou null si pas de salle.
+ * $exiger_placement = false : renvoie quand même la salle (pièce) si aucun élève n'y est placé (simulation).
+ */
+function donnees_plan_seance(array $s, bool $exiger_placement = true): ?array
 {
     $salle_id = (int) ($s['salle_id'] ?? 0);
     if (!$salle_id) {
@@ -73,7 +97,7 @@ function donnees_plan_seance(array $s): ?array
     $st = db()->prepare('SELECT place, eleve_id FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?');
     $st->execute([$classe_id, $groupe_id, $salle_id]);
     $placement = array_map('intval', array_column($st->fetchAll(), 'eleve_id', 'place'));
-    if (!$placement) {
+    if ($exiger_placement && !$placement) {
         return null;   // salle sans plan de classe enregistré pour cette classe : rien à montrer
     }
     return [
@@ -142,6 +166,31 @@ function page_tableau_de_bord(): void
         }
     }
 
+    // « Simuler un cours » : une vraie classe au hasard, de préférence avec un plan de classe (élèves placés),
+    // sinon une classe qui a un cours dans une salle dessinée (on montre la pièce), sinon n'importe quelle classe.
+    $simulation = null;
+    $exige_plac = true;
+    $cand = $pdo->query("SELECT classe_id, salle_id, groupe_id FROM placements GROUP BY classe_id, salle_id, groupe_id ORDER BY RANDOM() LIMIT 1")->fetch();
+    if (!$cand) {
+        $exige_plac = false;
+        $cand = $pdo->query("SELECT DISTINCT c.classe_id, c.salle_id, COALESCE(c.groupe_id, 0) AS groupe_id
+                             FROM cours c JOIN salles s ON s.id = c.salle_id WHERE COALESCE(s.plan, '') <> '' ORDER BY RANDOM() LIMIT 1")->fetch();
+    }
+    if (!$cand) {
+        $c = $pdo->query("SELECT id FROM classes WHERE nom <> 'TEST' ORDER BY RANDOM() LIMIT 1")->fetch();
+        if ($c) {
+            $cand = ['classe_id' => (int) $c['id'], 'salle_id' => 0, 'groupe_id' => 0];
+        }
+    }
+    if ($cand) {
+        $simulation = [
+            'classe_id' => (int) $cand['classe_id'],
+            'groupe_id' => (int) $cand['groupe_id'],
+            'plan'      => donnees_plan_seance(['classe_id' => (int) $cand['classe_id'], 'salle_id' => (int) $cand['salle_id'], 'groupe_id' => (int) $cand['groupe_id']], $exige_plac),
+            'a_valider' => array_values(array_filter($a_valider_tous, fn($it) => (int) $it['classe']['id'] === (int) $cand['classe_id'])),
+        ];
+    }
+
     entete('Accueil');
     barre('accueil');
     ?>
@@ -163,6 +212,33 @@ function page_tableau_de_bord(): void
                 <button type="button" id="simuler-cours" class="btn petit secondaire" aria-pressed="false"
                     title="Afficher un cours de démonstration avec un compte à rebours, sans toucher à l'emploi du temps">Simuler un cours</button>
             </div>
+            <?php if ($simulation): ?>
+            <div class="ec-bloc" id="demo-bloc" hidden style="--etab:var(--accent)">
+                <div class="ec-ligne">
+                    <?= pastille_classe($simulation['classe_id']) ?>
+                    <span class="intitule">Cours simulé</span>
+                    <span class="ou"><?= $simulation['plan'] ? 'Salle ' . h($simulation['plan']['salle']) . ' · ' : '' ?>démonstration (55 min)</span>
+                    <span class="rebours" id="rebours-demo">—</span>
+                </div>
+                <div class="ec-details">
+                    <?php if ($simulation['plan']): ?>
+                        <div class="ec-plan">
+                            <div class="ec-sous-titre">Plan de classe · <?= h($simulation['plan']['salle']) ?>
+                                <a class="btn petit secondaire" href="./?p=placement&classe=<?= (int) $simulation['classe_id'] ?>&salle=<?= (int) $simulation['plan']['salle_id'] ?><?= $simulation['plan']['groupe_id'] ? '&groupe=' . (int) $simulation['plan']['groupe_id'] : '' ?>">Ouvrir</a></div>
+                            <svg class="plan-svg apercu-plan" id="plan-demo" xmlns="http://www.w3.org/2000/svg"></svg>
+                            <script type="application/json" class="plan-data" data-cible="plan-demo"><?= json_encode($simulation['plan'], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+                        </div>
+                    <?php endif; ?>
+                    <div class="ec-valider">
+                        <div class="ec-sous-titre">Élèves à valider<?= $simulation['a_valider'] ? ' · ' . count($simulation['a_valider']) : '' ?></div>
+                        <?php rendu_file_valider($simulation['a_valider']); ?>
+                    </div>
+                </div>
+                <?php if ($suivant): ?>
+                    <p class="ec-prochain">➡ Prochain cours : <strong><?= h(quand_seance($suivant['date'], $aujourdhui)) ?></strong> à <?= h($suivant['debut']) ?> — <?= pastille_classe($suivant['classe_id'], groupe_seance($suivant)) ?> <?= h($suivant['intitule'] ?: 'Cours') ?>.</p>
+                <?php endif; ?>
+            </div>
+            <?php else: ?>
             <ul class="en-cours-liste" id="demo-cours" hidden>
                 <li style="--etab:var(--accent)">
                     <span class="pastille-classe">DÉMO</span>
@@ -171,6 +247,8 @@ function page_tableau_de_bord(): void
                     <span class="rebours" id="rebours-demo">—</span>
                 </li>
             </ul>
+            <?php endif; ?>
+            <div id="en-cours-reel">
             <?php if ($en_cours_maintenant): ?>
                 <?php foreach ($en_cours_maintenant as $i => $s):
                     $reste = max(0, (new DateTimeImmutable($aujourdhui . ' ' . $s['fin'], fuseau()))->getTimestamp() - $maintenant->getTimestamp());
@@ -195,22 +273,7 @@ function page_tableau_de_bord(): void
                             <?php endif; ?>
                             <div class="ec-valider">
                                 <div class="ec-sous-titre">Élèves à valider<?= $av_classe ? ' · ' . count($av_classe) : '' ?></div>
-                                <?php if ($av_classe): ?>
-                                    <ol class="file-valider">
-                                        <?php foreach (array_slice($av_classe, 0, 6) as $it): $l = $it['ligne'];
-                                            $qui = ($l['titre'] ?? '') !== '' ? $l['titre'] : implode(', ', array_map(fn($m) => $m['etiquette'], $l['membres'] ?? [])); ?>
-                                            <li><a href="./?p=projets&amp;parcours=<?= (int) $it['pid'] ?>&amp;vue=a_valider">
-                                                <span class="qui"><?= h($qui) ?></span>
-                                                <span class="quoi"><?= h($it['pnom']) ?> · ét. <?= (int) $it['ordre'] + 1 ?></span>
-                                                <span class="quand discret"><?= h(depuis_texte((int) $it['depuis'])) ?></span>
-                                                <span class="tag <?= $it['valider'] ? 't-valider' : 't-noter' ?>"><?= $it['valider'] ? 'à valider' : 'à évaluer' ?></span>
-                                            </a></li>
-                                        <?php endforeach; ?>
-                                    </ol>
-                                    <?php if (count($av_classe) > 6): ?><p class="discret" style="margin:4px 0 0">+ <?= count($av_classe) - 6 ?> autre(s).</p><?php endif; ?>
-                                <?php else: ?>
-                                    <p class="vide" style="margin:0">Rien à valider pour cette classe.</p>
-                                <?php endif; ?>
+                                <?php rendu_file_valider($av_classe); ?>
                             </div>
                         </div>
                     </div>
@@ -221,6 +284,7 @@ function page_tableau_de_bord(): void
             <?php else: ?>
                 <p class="vide" style="margin:0">Pas de cours en ce moment.<?php if ($suivant): ?> Prochain : <strong><?= h(quand_seance($suivant['date'], $aujourdhui)) ?></strong> à <?= h($suivant['debut']) ?> — <?= pastille_classe($suivant['classe_id'], groupe_seance($suivant)) ?> <?= h($suivant['intitule'] ?: 'Cours') ?>.<?php endif; ?></p>
             <?php endif; ?>
+            </div>
         </section>
         <script>
         (function () {
@@ -234,11 +298,14 @@ function page_tableau_de_bord(): void
                 })();
             });
             // Bouton « Simuler un cours » : affiche un cours de démonstration avec compte à rebours.
-            var b = document.getElementById('simuler-cours'), demo = document.getElementById('demo-cours'),
+            var b = document.getElementById('simuler-cours'),
+                demo = document.getElementById('demo-bloc') || document.getElementById('demo-cours'),
+                reel = document.getElementById('en-cours-reel'),
                 eld = document.getElementById('rebours-demo'), tdemo;
-            if (b) b.addEventListener('click', function () {
+            if (b && demo) b.addEventListener('click', function () {
                 if (demo.hidden) {
-                    demo.hidden = false; b.textContent = 'Arrêter la simulation'; b.setAttribute('aria-pressed', 'true');
+                    demo.hidden = false; if (reel) reel.hidden = true;
+                    b.textContent = 'Arrêter la simulation'; b.setAttribute('aria-pressed', 'true');
                     eld.classList.remove('fini');
                     var r = 55 * 60;
                     (function tick() {
@@ -246,13 +313,13 @@ function page_tableau_de_bord(): void
                         eld.textContent = fmt(r) + ' restantes'; r--; tdemo = setTimeout(tick, 1000);
                     })();
                 } else {
-                    clearTimeout(tdemo); demo.hidden = true;
+                    clearTimeout(tdemo); demo.hidden = true; if (reel) reel.hidden = false;
                     b.textContent = 'Simuler un cours'; b.setAttribute('aria-pressed', 'false');
                 }
             });
         })();
         </script>
-        <?php if ($en_cours_maintenant): ?>
+        <?php if ($en_cours_maintenant || ($simulation && $simulation['plan'])): ?>
         <script src="plan.js?v=<?= @filemtime(__DIR__ . '/../public/admin/plan.js') ?: 1 ?>"></script>
         <script>
         document.querySelectorAll('.plan-data').forEach(function (s) {
