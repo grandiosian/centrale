@@ -194,7 +194,7 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
   Des « autres adresses » (une par ligne) peuvent s'ajouter ; elles sont essayées après.
 - **Ordre de préférence** (carte « Ordre des emplacements », en bas de l'onglet Ateliers) :
   - Centrale **en local** (localhost, 127.0.0.1, adresse 192.168… / 10…, nom en .local) : local → GitHub → GitLab → alwaysdata ;
-  - Centrale **en ligne** : GitHub → GitLab → alwaysdata (le local est ignoré : les élèves ne peuvent pas joindre l'ordinateur du professeur).
+  - Centrale **en ligne** : alwaysdata (la copie `/miroir/…` de ce serveur) → GitHub → GitLab (le local est ignoré : les élèves ne peuvent pas joindre l'ordinateur du professeur).
   La détection est automatique ; on peut forcer « en local » ou « en ligne », et changer chaque ordre.
 - La Centrale vérifie elle-même quelles adresses répondent (cache de 5 minutes ; la copie `/miroir/` est vérifiée directement sur le disque). Le portail, les propositions, les parcours et « Tester comme élève » ouvrent **le premier emplacement qui répond** ; si aucun ne répond, la première adresse publique. Les liens des étapes de parcours (souvent vers GitHub) sont redirigés de la même façon. Dans l'onglet Ateliers, ● veut dire que l'adresse répond, ○ qu'elle ne répond pas, – qu'elle n'est pas utilisée ici ; « ← ouvert par le portail » montre le choix actuel.
 - À la mise à jour, les anciennes « adresse principale » et « adresses de secours » sont rangées automatiquement dans les emplacements. L'import d'un `centrale.json` (`url`, `urls_secours`) remplit aussi les emplacements vides.

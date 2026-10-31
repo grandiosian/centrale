@@ -499,7 +499,7 @@ const EMPLACEMENTS = [
 /** Ordre de préférence par défaut, selon l'endroit où tourne la Centrale. */
 const ORDRE_EMPLACEMENTS = [
     'local'    => 'local,github,gitlab,alwaysdata',
-    'en_ligne' => 'github,gitlab,alwaysdata',
+    'en_ligne' => 'alwaysdata,github,gitlab',   // d'abord la copie de ce serveur : l'app y parle à cette Centrale
 ];
 
 /** Type d'emplacement d'une adresse, d'après son hôte (« autre » si inconnu). */
@@ -610,8 +610,13 @@ function emplacements_atelier(array $atelier): array
             $res[] = ['type' => $type, 'url' => $u, 'utilise' => $utilise];
         }
     };
+    $local = (string) ($atelier['url_local'] ?? '');
     foreach ($ordre as $t) {
-        $ajouter($t, (string) ($atelier['url_' . $t] ?? ''), true);
+        $u = (string) ($atelier['url_' . $t] ?? '');
+        if ($t === 'alwaysdata' && $u === '' && str_starts_with($local, '/') && lieu_centrale() === 'en_ligne') {
+            $u = $local;   // Centrale en ligne : sa copie /miroir/<app>/ est la copie « serveur »
+        }
+        $ajouter($t, $u, true);
     }
     // Adresse principale et adresses de secours non rangées : après les emplacements choisis
     $autres = array_merge([(string) $atelier['url']], preg_split('/\R/', (string) ($atelier['urls_secours'] ?? '')) ?: []);
