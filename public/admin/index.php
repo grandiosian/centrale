@@ -15,6 +15,7 @@ require __DIR__ . '/../../lib/admin_groupes.php';
 require __DIR__ . '/../../lib/admin_projets.php';
 require __DIR__ . '/../../lib/admin_accueil.php';
 require __DIR__ . '/../../lib/admin_passerelles.php';
+require __DIR__ . '/../../lib/admin_bibliotheque.php';
 require __DIR__ . '/../../lib/admin_import.php';
 
 header('X-Frame-Options: DENY');
@@ -61,6 +62,37 @@ function quand(?int $ts): string
 function id_post(string $champ): int
 {
     return (int) ($_POST[$champ] ?? 0);
+}
+
+/**
+ * Compte « élève test » (classe TEST, élève 01) : session de 2 h pour voir le portail ou un atelier comme un élève,
+ * sans taper de code. Seul un jeton de session est transmis, dans l'adresse.
+ */
+function jeton_compte_test(): string
+{
+    $pdo = db();
+    $st = $pdo->prepare('SELECT * FROM classes WHERE nom = ? COLLATE NOCASE');
+    $st->execute(['TEST']);
+    $classe = $st->fetch();
+    if (!$classe) {
+        $pdo->prepare('INSERT INTO classes (nom, cree_le) VALUES (?, ?)')->execute(['TEST', time()]);
+        $classe = classe_par_id((int) $pdo->lastInsertId());
+        oublier_renommage('TEST');
+    }
+    $st = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ? ORDER BY id LIMIT 1');
+    $st->execute([$classe['id']]);
+    $eid = (int) $st->fetchColumn();
+    if (!$eid) {
+        $pdo->prepare('INSERT INTO eleves (classe_id, etiquette, code_hash, cree_le) VALUES (?, ?, ?, ?)')
+            ->execute([$classe['id'], '01', hash_code(generer_code(prefixe_codes($classe))), time()]);
+        $eid = (int) $pdo->lastInsertId();
+        attribuer_surnom($eid, (int) $classe['id']);
+    }
+    $pdo->prepare('UPDATE eleves SET actif = 1 WHERE id = ?')->execute([$eid]);
+    $jeton = bin2hex(random_bytes(32));
+    $pdo->prepare('INSERT INTO sessions (jeton_hash, eleve_id, expire) VALUES (?, ?, ?)')
+        ->execute([hash('sha256', $jeton), $eid, time() + 2 * 3600]);
+    return $jeton;
 }
 
 /** Petit formulaire POST d'une ligne (bouton d'action). */
@@ -175,7 +207,7 @@ if ($action !== null) {
     $retour_eleve = './?p=eleve&id=' . $eleve_id;
 
     // Sans la clé secrète, aucun code ne peut être créé ni vérifié : on l'explique au lieu de planter
-    $actions_codes = ['generer', 'regenerer', 'regenerer_classe', 'reinitialiser_tous_codes', 'apercu_eleve', 'verifier_codes', 'import_classe'];
+    $actions_codes = ['generer', 'regenerer', 'regenerer_classe', 'reinitialiser_tous_codes', 'apercu_eleve', 'essayer_activite', 'verifier_codes', 'import_classe'];
     if (in_array($action, $actions_codes, true) && etat_cle() !== 'ok') {
         if (in_array($action, ['reinitialiser_tous_codes', 'verifier_codes', 'import_classe'], true)) {
             header('Content-Type: application/json; charset=utf-8');
@@ -191,6 +223,7 @@ if ($action !== null) {
     action_fichiers($action);     // fichiers du serveur
     action_import($action);       // import Pronote (réponse JSON)
     action_groupes($action);      // groupes d'une classe (GR1, GR2…)
+    action_bibliotheque($action); // propositions aux classes, ajout aux parcours, essai
 
     switch ($action) {
         case 'deconnexion':
@@ -244,30 +277,7 @@ if ($action !== null) {
             rediriger($retour_classe . '#nouveaux');
 
         case 'apercu_eleve':
-            // Compte « élève test » (classe TEST, élève 01) : l'enseignant ouvre le portail tel qu'un élève le voit,
-            // sans taper de code. Rien n'est envoyé d'autre qu'un jeton de session, dans l'adresse.
-            $st = $pdo->prepare('SELECT * FROM classes WHERE nom = ? COLLATE NOCASE');
-            $st->execute(['TEST']);
-            $classe = $st->fetch();
-            if (!$classe) {
-                $pdo->prepare('INSERT INTO classes (nom, cree_le) VALUES (?, ?)')->execute(['TEST', time()]);
-                $classe = classe_par_id((int) $pdo->lastInsertId());
-                oublier_renommage('TEST');
-            }
-            $st = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ? ORDER BY id LIMIT 1');
-            $st->execute([$classe['id']]);
-            $eid = (int) $st->fetchColumn();
-            if (!$eid) {
-                $pdo->prepare('INSERT INTO eleves (classe_id, etiquette, code_hash, cree_le) VALUES (?, ?, ?, ?)')
-                    ->execute([$classe['id'], '01', hash_code(generer_code(prefixe_codes($classe))), time()]);
-                $eid = (int) $pdo->lastInsertId();
-                attribuer_surnom($eid, (int) $classe['id']);
-            }
-            $pdo->prepare('UPDATE eleves SET actif = 1 WHERE id = ?')->execute([$eid]);
-            $jeton = bin2hex(random_bytes(32));
-            $pdo->prepare('INSERT INTO sessions (jeton_hash, eleve_id, expire) VALUES (?, ?, ?)')
-                ->execute([hash('sha256', $jeton), $eid, time() + 2 * 3600]);
-            rediriger('../#centrale=' . $jeton);
+            rediriger('../#centrale=' . jeton_compte_test());
 
         case 'telecharger_cle':
             $cle = cle_secrete();
@@ -637,6 +647,7 @@ match ($page) {
     'parcours' => page_parcours(),
     'ateliers' => page_ateliers(),
     'passerelle' => page_passerelle(),
+    'bibliotheque' => page_bibliotheque(),
     'etablissements' => page_etablissements(),
     'edt'      => page_edt(),
     'salle'    => page_salle((int) ($_GET['id'] ?? 0)),
@@ -1394,7 +1405,7 @@ function messages(): void
 function barre(string $actif = 'classes'): void
 {
     $liens = ['accueil' => ['./', 'Accueil'], 'classes' => ['./?p=classes', 'Classes'], 'edt' => ['./?p=edt', 'Emploi du temps'], 'etablissements' => ['./?p=etablissements', 'Établissements'],
-              'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'suivi' => ['./?p=suivi', 'Suivi'],
+              'bibliotheque' => ['./?p=bibliotheque', 'Bibliothèque'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'suivi' => ['./?p=suivi', 'Suivi'],
               'fichiers' => ['./?p=fichiers', 'Fichiers'], 'reglages' => ['./?p=reglages', 'Réglages']];
     ?>
     <header class="barre">

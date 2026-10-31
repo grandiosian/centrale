@@ -136,6 +136,19 @@ button[disabled] { opacity: .45; cursor: default; }
 .act.commence .puce { border-color: var(--encours); }
 .act .etat { font-size: .8rem; color: var(--doux); }
 .act.commence .etat { color: var(--encours); }
+.afaire { padding: 4px 16px; margin-bottom: 14px; }
+.afaire ol { list-style: none; margin: 0; padding: 0; }
+.afaire li { display: grid; grid-template-columns: 46px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--bord); }
+.afaire li:first-child { border-top: 0; }
+.afaire .icone { width: 40px; height: 40px; font-size: 1.3rem; }
+.afaire .titre-act { font-weight: 600; }
+.afaire .de { font-size: .85rem; color: var(--doux); }
+.afaire .pour { font-size: .85rem; font-weight: 600; color: var(--encre); }
+.afaire .pour.retard { color: var(--erreur); }
+.afaire .consigne-prof { font-size: .92rem; margin: 2px 0 0; white-space: pre-line; }
+.afaire li.termine { opacity: .7; }
+.afaire li.termine .pour { color: var(--ok); }
+.afaire li.commence .de::after { content: ' · en cours'; color: var(--encours); }
 .parcours { margin-bottom: 14px; }
 .parcours-tete { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
 .parcours-tete h3 { margin: 0; font-size: 1.15rem; }
@@ -177,6 +190,8 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     .cotes { padding: 0 12px; }
     ol.etapes li { grid-template-columns: 30px 1fr; }
     ol.etapes li .action { grid-column: 2; }
+    .afaire li { grid-template-columns: 40px 1fr; }
+    .afaire li > button { grid-column: 2; justify-self: start; }
 }
 </style>
 </head>
@@ -219,11 +234,15 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
         <h1>Mes ateliers</h1>
         <p class="sous">Choisis un atelier. Ton travail y est enregistré automatiquement ; reviens ici avec « ← Mes ateliers ».</p>
         <div class="carte identite" id="identite"></div>
+        <div id="bloc-afaire" hidden>
+            <h2 class="section">À faire</h2>
+            <div class="carte afaire"><ol id="liste-afaire"></ol></div>
+        </div>
         <div id="bloc-parcours" hidden>
             <h2 class="section">Mes parcours</h2>
             <div id="liste-parcours"></div>
-            <h2 class="section">Tous les ateliers</h2>
         </div>
+        <h2 class="section" id="titre-ateliers" hidden>Tous les ateliers</h2>
         <div class="grille" id="liste-ateliers"></div>
     </section>
 </main>
@@ -293,15 +312,44 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
   }
 
   async function rafraichir() {
-    let ateliers = [], parcours = [];
+    let ateliers = [], parcours = [], propositions = [];
     try {
-      [ateliers, parcours] = await Promise.all([Centrale.ateliers(), Centrale.parcours()]);
+      [ateliers, parcours, propositions] = await Promise.all([Centrale.ateliers(), Centrale.parcours(),
+        Centrale.propositions().catch(() => [])]);   // serveur plus ancien : pas de propositions
     } catch (e) {
       $('liste-ateliers').replaceChildren(el('p', { class: 'vide' }, e.message));
       return;
     }
+    afficherAFaire(propositions);
     afficherParcours(parcours, ateliers);
     afficherAteliers(ateliers);
+    $('titre-ateliers').hidden = !propositions.length && !parcours.length;
+  }
+
+  /* ---------- À faire : activités proposées par le professeur ---------- */
+  function dateCourte(iso) {
+    return new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+  function afficherAFaire(liste) {
+    $('bloc-afaire').hidden = !liste.length;
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+    // ce qui reste à faire d'abord, ce qui est terminé à la fin
+    const tri = [...liste.filter((p) => p.statut !== 'termine'), ...liste.filter((p) => p.statut === 'termine')];
+    $('liste-afaire').replaceChildren(...tri.map((p) => {
+      const fini = p.statut === 'termine';
+      const b = el('button', { class: fini ? 'secondaire' : '' }, fini ? 'Revoir' : p.statut === 'commence' ? 'Continuer' : 'Commencer');
+      b.onclick = () => ouvrir(p.url, p.activite);
+      const retard = !fini && p.pour_le && p.pour_le < aujourdhui;
+      return el('li', { class: p.statut },
+        el('div', { class: 'icone' }, p.icone || '🧩'),
+        el('div', {},
+          el('div', { class: 'titre-act' }, p.titre),
+          el('div', { class: 'de' }, p.atelier + (p.groupe ? ' · ' + p.groupe : '') + (p.texte && !fini ? ' · ' + p.texte : '')),
+          p.pour_le || fini ? el('div', { class: 'pour' + (retard ? ' retard' : '') },
+            fini ? 'Terminé ✓' : (retard ? 'À rendre (en retard) : ' : 'Pour ') + dateCourte(p.pour_le)) : null,
+          p.consigne ? el('div', { class: 'consigne-prof' }, p.consigne) : null),
+        b);
+    }));
   }
 
   /* ---------- Ateliers ---------- */

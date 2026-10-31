@@ -74,6 +74,9 @@ function action_groupes(string $action): bool
         case 'groupe_supprimer':
             if ($groupe) {
                 $pdo->prepare('DELETE FROM placements WHERE groupe_id = ?')->execute([$groupe['id']]);
+                // activités proposées au groupe : elles passent à la classe entière
+                $pdo->prepare('UPDATE OR IGNORE propositions SET groupe_id = 0 WHERE groupe_id = ?')->execute([$groupe['id']]);
+                $pdo->prepare('DELETE FROM propositions WHERE groupe_id = ?')->execute([$groupe['id']]);
                 $pdo->prepare('DELETE FROM groupes WHERE id = ?')->execute([$groupe['id']]);   // élèves et cours : groupe retiré
                 flash("Groupe « {$groupe['nom']} » supprimé. Ses élèves n'ont plus de groupe ; ses cours sont maintenant ceux de la classe entière.");
             }

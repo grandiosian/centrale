@@ -156,6 +156,7 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 | `Centrale.activiteDemandee()` | Activité demandée par le portail, à ouvrir directement |
 | `Centrale.retour()` | Revient au portail (bouton « ← Mes ateliers » ajouté automatiquement) |
 | `await Centrale.ateliers()` | Ateliers proposés à la classe, avec l'avancement |
+| `await Centrale.propositions()` | Activités proposées par le professeur à l'élève (classe ou groupe) : date, consigne, avancement |
 
 ### Ce qui est géré automatiquement
 
@@ -196,6 +197,26 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 
 - **Onglet Ateliers** : nombre d'ouvertures sur 7 jours par hébergement.
 - **Page Travail d'un élève** : ses 30 dernières connexions, avec l'atelier, l'hébergement, et s'il est passé par le portail ou a tapé son code.
+
+### Bibliothèque des activités
+
+L'onglet **Bibliothèque** de l'espace enseignant réunit toutes les activités de toutes les applications : celles déclarées par les passerelles (`centrale.json`) et celles déclarées à la connexion des élèves.
+
+- **Rangement** : par application, puis par groupe.
+- **Filtres** :
+  - par niveau (6ᵉ, 5ᵉ, 4ᵉ, 3ᵉ, Lycée / Pro, deviné d'après le groupe ou le titre) ;
+  - par application ;
+  - par texte ;
+  - « Déjà proposées » ou « Proposées à 5A ».
+- **Essayer** : ouvre l'activité avec le compte test (classe TEST), dans un nouvel onglet.
+- **Proposer** : cochez des activités, puis choisissez des classes ou des groupes, une date « pour le » et une consigne (les deux facultatives).
+  - La pastille de la classe apparaît alors sur l'activité ; × retire la proposition.
+  - Si un groupe est supprimé, ses propositions passent à la classe entière.
+- **Ajouter au parcours** : les activités cochées deviennent des étapes, soit d'un nouveau parcours (le formulaire est prérempli), soit à la fin d'un parcours existant.
+- **Côté élève** :
+  - en haut du portail, la section **À faire** liste les activités proposées à sa classe ou à son groupe, avec la date (signalée si elle est dépassée), la consigne et un bouton Commencer / Continuer / Revoir ;
+  - dans la carte de chaque atelier, seules les activités proposées et celles déjà commencées apparaissent. Un réglage en bas de la Bibliothèque permet de les montrer toutes ;
+  - dans l'application elle-même, l'élève peut toujours tout ouvrir.
 
 ### Ateliers du portail
 

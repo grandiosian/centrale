@@ -324,6 +324,18 @@ function creer_tables(PDO $pdo): void
         etape       INTEGER,
         UNIQUE (parcours_id, proprietaire, nom)
     )");
+    // Bibliothèque : activités proposées par l'enseignant à une classe (groupe_id 0 = classe entière) ou à un groupe
+    $pdo->exec("CREATE TABLE IF NOT EXISTS propositions (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        app       TEXT NOT NULL,
+        activite  TEXT NOT NULL,
+        classe_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        groupe_id INTEGER NOT NULL DEFAULT 0,
+        pour_le   TEXT NOT NULL DEFAULT '',
+        consigne  TEXT NOT NULL DEFAULT '',
+        cree_le   INTEGER NOT NULL,
+        UNIQUE (app, activite, classe_id, groupe_id)
+    )");
     $pdo->exec("CREATE TABLE IF NOT EXISTS parcours_validations (
         parcours_id  INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
         proprietaire TEXT NOT NULL,
@@ -1371,3 +1383,4 @@ function url_base(): string
 
 require_once __DIR__ . '/projets.php';
 require_once __DIR__ . '/passerelles.php';
+require_once __DIR__ . '/bibliotheque.php';

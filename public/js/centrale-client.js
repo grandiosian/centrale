@@ -657,6 +657,11 @@
     return (await requeteJSON('ateliers.php', { method: 'GET' })).ateliers;
   }
 
+  /** Activités proposées par le professeur à l'élève (classe ou groupe), avec son avancement. */
+  async function propositions() {
+    return (await requeteJSON('propositions.php', { method: 'GET' })).propositions;
+  }
+
   /** Parcours de la classe avec l'avancement de l'élève à chaque étape. */
   async function parcours() {
     return (await requeteJSON('parcours.php', { method: 'GET' })).parcours;
@@ -988,6 +993,7 @@
     declarerActivites: declarerActivites,
     parcours: parcours,
     ateliers: ateliers,
+    propositions: propositions,
     lien: lien,
     ouvrir: ouvrir,
     retour: retour,
