@@ -94,6 +94,10 @@ function action_suivi(string $action): bool
                         ->execute([$id, $proprio, $ordre, time()]);
                 }
             }
+            if (($_POST['retour'] ?? '') === 'a_valider') {   // validé depuis la liste « À valider »
+                flash('Étape validée : l’étape suivante est ouverte.');
+                rediriger('./?p=projets&parcours=' . $id . '&vue=a_valider');
+            }
             rediriger('./?p=projets&parcours=' . $id . '&classe=' . (int) ($_POST['classe_id'] ?? 0) . '#' . $proprio);
 
         case 'supprimer_parcours':
@@ -604,6 +608,9 @@ Programmer la lampe | technostudio | charte-lampe-de-poche/P1 | https://grandios
                         <td><?= (int) $p['nb'] ?></td>
                         <td class="actions">
                             <?= $avec_test ? bouton_tester('parcours:' . (int) $p['id'], 'Ouvrir le portail de l’élève test choisi au-dessus, pour suivre ce parcours à sa place') : '' ?>
+                            <?php $nb_av = $p['deblocage'] === 'validation' ? count(a_valider_parcours(parcours_par_id((int) $p['id']) ?? [])) : 0; ?>
+                            <?php if ($nb_av): ?><a class="btn petit urgent" href="./?p=projets&parcours=<?= (int) $p['id'] ?>&vue=a_valider"
+                                title="Élèves ou équipes qui attendent que vous ouvriez l’étape suivante"><?= $nb_av ?> à valider</a><?php endif; ?>
                             <a class="btn petit" href="./?p=projets&parcours=<?= (int) $p['id'] ?>">Dossiers de projet</a>
                             <a class="btn petit secondaire" href="./?p=suivi&vue=parcours:<?= (int) $p['id'] ?>">Suivi</a>
                             <a class="btn petit secondaire" href="./?p=parcours&modifier=<?= (int) $p['id'] ?>">Modifier</a>

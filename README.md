@@ -371,6 +371,7 @@ Un parcours peut enchaîner plusieurs applications : NetSim → Établi 3D → T
   Une étape est terminée quand tous les fichiers de sa ligne « produit » sont déposés, ou quand l'application déclare l'activité terminée.
 - **Fichiers fournis** : vos gabarits et fichiers de départ, visibles dans tous les dossiers. Si l'élève dépose un fichier du même nom, c'est le sien qui est lu.
 - **Dossiers de projet** : l'avancement de chaque élève ou équipe étape par étape, la validation des étapes, et le téléchargement de leurs fichiers.
+- **À valider** (parcours « après validation ») : onglet de la page Dossiers de projet, et pastille « N à valider » sur la ligne du parcours. Toutes les classes du parcours réunies, l'élève ou l'équipe qui attend depuis le plus longtemps en premier, avec les fichiers de l'étape et le bouton Valider. Dans le tableau complet, les cases en attente sont encadrées en orange.
 
 **Côté élève** (portail) :
 
