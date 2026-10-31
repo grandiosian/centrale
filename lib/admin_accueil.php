@@ -56,7 +56,7 @@ function page_tableau_de_bord(): void
     $pdo = db();
     $aujourdhui = aujourd_hui();
     $lundi = lundi_de(date_valide((string) ($_GET['semaine'] ?? '')) ? (string) $_GET['semaine'] : $aujourdhui);
-    $etabs = $pdo->query('SELECT id, nom, ab_actif, ref_semaine_a FROM etablissements ORDER BY nom')->fetchAll();
+    $etabs = $pdo->query('SELECT * FROM etablissements ORDER BY nom')->fetchAll();
     $sem = seances_semaine_tous($lundi);
     $maintenant = new DateTimeImmutable('now', fuseau());
     $heure = $maintenant->format('H:i');
