@@ -17,23 +17,10 @@ $eleve = eleve_connecte();
 $prog = progression_eleves([$eleve['id']])[$eleve['id']] ?? [];
 $catalogue = catalogue_activites();
 
-// Adresse de secours : si une étape pointe vers un atelier dont l'adresse principale ne répond plus,
-// on la remplace par la première adresse de secours qui répond.
-$remplacements = [];
-foreach (db()->query('SELECT * FROM ateliers')->fetchAll() as $a) {
-    $meilleure = meilleure_adresse($a);
-    if ($meilleure !== $a['url']) {
-        $remplacements[$a['url']] = $meilleure;
-    }
-}
-$adresse = function (string $url) use ($remplacements): string {
-    foreach ($remplacements as $de => $vers) {
-        if ($url !== '' && str_starts_with($url, $de)) {
-            return $vers . substr($url, strlen($de));
-        }
-    }
-    return $url;
-};
+// Les étapes pointent vers une adresse d'atelier (souvent GitHub) : on la remplace par le meilleur emplacement
+// (copie locale si la Centrale tourne en local, sinon le premier qui répond dans l'ordre de préférence).
+$ateliers = db()->query('SELECT * FROM ateliers')->fetchAll();
+$adresse = fn(string $url): string => lien_vers_meilleure_adresse($url, $ateliers);
 
 $res = [];
 foreach (parcours_pour_classe($eleve['classe']) as $p) {

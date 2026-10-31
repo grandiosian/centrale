@@ -138,7 +138,6 @@ function action_suivi(string $action): bool
             $id = (int) ($_POST['atelier_id'] ?? 0);
             $app = normaliser_app((string) ($_POST['app'] ?? ''));
             $nom = mb_substr(trim((string) ($_POST['nom'] ?? '')), 0, 80);
-            $url = trim((string) ($_POST['url'] ?? ''));
             $erreurs = [];
             if ($app === '*') {
                 $erreurs[] = "Identifiant de l'atelier manquant : c'est le nom donné à app dans Centrale.init (ex. netsim).";
@@ -146,8 +145,15 @@ function action_suivi(string $action): bool
             if ($nom === '') {
                 $erreurs[] = "Donnez un nom à l'atelier.";
             }
-            if (!preg_match('#^https?://\S+$#', $url)) {
-                $erreurs[] = "L'adresse doit commencer par https://";
+            // Emplacements : local (chemin /miroir/… ou adresse), GitHub Pages, GitLab Pages, alwaysdata
+            $emplacements = [];
+            foreach (EMPLACEMENTS as $type => $libelle) {
+                $u = trim((string) ($_POST['url_' . $type] ?? ''));
+                $permis = $type === 'local' ? '#^(https?://\S+|/\S*)$#' : '#^https?://\S+$#';
+                if ($u !== '' && !preg_match($permis, $u)) {
+                    $erreurs[] = "$libelle : l'adresse doit commencer par https://" . ($type === 'local' ? ' ou par / (ex. /miroir/netsim/)' : '');
+                }
+                $emplacements[$type] = $u;
             }
             $secours = [];
             foreach (preg_split('/\R/', (string) ($_POST['urls_secours'] ?? '')) ?: [] as $u) {
@@ -156,10 +162,21 @@ function action_suivi(string $action): bool
                     continue;
                 }
                 if (!preg_match('#^https?://\S+$#', $u)) {
-                    $erreurs[] = "Adresse de secours invalide : $u";
-                } elseif ($u !== $url) {
+                    $erreurs[] = "Autre adresse invalide : $u";
+                } elseif (!in_array($u, $emplacements, true)) {
                     $secours[] = $u;
                 }
+            }
+            // Adresse de référence (descripteur, liens des parcours) : la première adresse publique
+            $url = '';
+            foreach (['github', 'gitlab', 'alwaysdata', 'local'] as $type) {
+                if ($url === '' && $emplacements[$type] !== '') {
+                    $url = adresse_complete($emplacements[$type]);
+                }
+            }
+            $url = $url !== '' ? $url : ($secours[0] ?? '');
+            if ($url === '') {
+                $erreurs[] = "Indiquez au moins un emplacement pour l'application.";
             }
             if ($erreurs) {
                 $_SESSION['brouillon_atelier'] = $_POST;
@@ -171,13 +188,16 @@ function action_suivi(string $action): bool
             $champs = [$app, $nom, mb_substr(trim((string) ($_POST['description'] ?? '')), 0, 300), $url,
                 mb_substr(trim((string) ($_POST['icone'] ?? '')), 0, 4),
                 implode(',', array_filter(array_map('trim', explode(',', (string) ($_POST['classes'] ?? ''))))),
-                (int) ($_POST['ordre'] ?? 0), empty($_POST['actif']) ? 0 : 1, implode("\n", array_unique($secours))];
+                (int) ($_POST['ordre'] ?? 0), empty($_POST['actif']) ? 0 : 1, implode("\n", array_unique($secours)),
+                $emplacements['local'], $emplacements['github'], $emplacements['gitlab'], $emplacements['alwaysdata']];
             try {
                 if ($id) {
-                    $pdo->prepare('UPDATE ateliers SET app = ?, nom = ?, description = ?, url = ?, icone = ?, classes = ?, ordre = ?, actif = ?, urls_secours = ? WHERE id = ?')
+                    $pdo->prepare('UPDATE ateliers SET app = ?, nom = ?, description = ?, url = ?, icone = ?, classes = ?, ordre = ?, actif = ?, urls_secours = ?,
+                                   url_local = ?, url_github = ?, url_gitlab = ?, url_alwaysdata = ? WHERE id = ?')
                         ->execute([...$champs, $id]);
                 } else {
-                    $pdo->prepare('INSERT INTO ateliers (app, nom, description, url, icone, classes, ordre, actif, urls_secours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    $pdo->prepare('INSERT INTO ateliers (app, nom, description, url, icone, classes, ordre, actif, urls_secours,
+                                   url_local, url_github, url_gitlab, url_alwaysdata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                         ->execute($champs);
                 }
             } catch (PDOException) {
@@ -187,6 +207,17 @@ function action_suivi(string $action): bool
             }
             flash("Atelier « $nom » enregistré.");
             rediriger('./?p=ateliers');
+
+        case 'emplacements_apps':
+            // Où tourne la Centrale, et dans quel ordre essayer les emplacements des applications
+            $lieu = (string) ($_POST['lieu_centrale'] ?? 'auto');
+            definir_reglage('lieu_centrale', in_array($lieu, ['local', 'en_ligne'], true) ? $lieu : 'auto');
+            foreach (array_keys(ORDRE_EMPLACEMENTS) as $l) {
+                $ordre = array_values(array_unique(array_intersect((array) ($_POST['ordre_' . $l] ?? []), array_keys(EMPLACEMENTS))));
+                definir_reglage('ordre_' . $l, $ordre ? implode(',', $ordre) : ORDRE_EMPLACEMENTS[$l]);
+            }
+            flash('Ordre des emplacements enregistré.');
+            rediriger('./?p=ateliers#emplacements');
 
         case 'enregistrer_activation':
             $id = (int) ($_POST['atelier_id'] ?? 0);
@@ -763,7 +794,8 @@ function page_ateliers(): void
     $brouillon = $_SESSION['brouillon_atelier'] ?? null;
     unset($_SESSION['brouillon_atelier']);
     $courant = ['id' => 0, 'app' => (string) ($_GET['app'] ?? ''), 'nom' => '', 'description' => '', 'url' => '',
-                'icone' => '', 'classes' => '', 'ordre' => count($liste) + 1, 'actif' => 1, 'urls_secours' => ''];
+                'icone' => '', 'classes' => '', 'ordre' => count($liste) + 1, 'actif' => 1, 'urls_secours' => '',
+                'url_local' => '', 'url_github' => '', 'url_gitlab' => '', 'url_alwaysdata' => ''];
     if ($modifier) {
         $st = $pdo->prepare('SELECT * FROM ateliers WHERE id = ?');
         $st->execute([$modifier]);
@@ -809,12 +841,22 @@ function page_ateliers(): void
                         <datalist id="apps-connues"><?php foreach ($connues as $c): ?><option value="<?= h($c) ?>"><?php endforeach; ?></datalist>
                     </label>
                 </div>
-                <label>Adresse de l'application<input name="url" type="url" required value="<?= h($courant['url']) ?>" placeholder="https://grandiosian.github.io/NetSim/"></label>
-                <label>Adresses de secours (facultatives)
-                    <span class="aide">Une par ligne : copie sur la Forge, sur ce serveur (<code><?= h(url_base()) ?>/miroir/…/</code>)…
-                        Si l'adresse principale ne répond plus, le portail ouvre automatiquement la première qui répond.</span>
-                    <textarea name="urls_secours" rows="2" class="mono" placeholder="<?= h(url_base()) ?>/miroir/netsim/"><?= h($courant['urls_secours']) ?></textarea>
-                </label>
+                <fieldset class="emplacements">
+                    <legend>Emplacements de l'application</legend>
+                    <p class="aide">Le portail ouvre le premier emplacement qui répond, dans l'ordre réglé plus bas
+                        (« Ordre des emplacements »). Laissez vide un emplacement qui n'existe pas.</p>
+                    <?php $exemples = ['local' => '/miroir/netsim/', 'github' => 'https://grandiosian.github.io/NetSim/',
+                        'gitlab' => 'https://lionelcaruana.forge.apps.education.fr/netsim/', 'alwaysdata' => 'https://technoversailles.alwaysdata.net/miroir/netsim/'];
+                    foreach (EMPLACEMENTS as $type => $libelle): ?>
+                        <label><?= h($libelle) ?>
+                            <?php if ($type === 'local'): ?><span class="aide">Copie servie par cette Centrale (<code>/miroir/…/</code>, voir miroirs.txt) ou adresse d'un dossier local (<code>http://localhost:8080/…</code>).</span><?php endif; ?>
+                            <input name="url_<?= $type ?>" class="mono" value="<?= h($courant['url_' . $type] ?? '') ?>" placeholder="<?= h($exemples[$type]) ?>"></label>
+                    <?php endforeach; ?>
+                    <label>Autres adresses (facultatives)
+                        <span class="aide">Une par ligne : essayées après les emplacements ci-dessus.</span>
+                        <textarea name="urls_secours" rows="2" class="mono"><?= h($courant['urls_secours']) ?></textarea>
+                    </label>
+                </fieldset>
                 <label>Description (facultative)<input name="description" maxlength="300" value="<?= h($courant['description']) ?>" placeholder="Construire et tester des réseaux"></label>
                 <div class="grille-atelier reglages-atelier">
                     <label>Classes<span class="aide">Ex. 5A, 5B. Vide = toutes.</span><input name="classes" value="<?= h($courant['classes']) ?>"></label>
@@ -889,9 +931,11 @@ function page_ateliers(): void
                     <tr class="<?= $a['actif'] ? '' : 'inactif' ?>">
                         <td style="font-size:1.4rem"><?= h($a['icone']) ?></td>
                         <td><strong><?= h($a['nom']) ?></strong> <code><?= h($a['app']) ?></code>
-                            <?php foreach (adresses_atelier($a) as $i => $u): $repond = adresse_repond($u); ?>
-                                <br><span class="<?= $repond ? 'ok' : 'alerte' ?>" title="<?= $repond ? 'Répond' : 'Ne répond pas' ?> (vérifié il y a moins de 5 min)"><?= $repond ? '●' : '○' ?></span>
-                                <a href="<?= h($u) ?>" target="_blank" rel="noopener" class="discret"><?= h($u) ?></a><?= $i ? ' <span class="discret">(secours)</span>' : '' ?>
+                            <?php $choisie = meilleure_adresse($a);
+                            foreach (emplacements_atelier($a) as $e): $u = $e['url']; $repond = $e['utilise'] && adresse_repond($u); ?>
+                                <br><?php if ($e['utilise']): ?><span class="<?= $repond ? 'ok' : 'alerte' ?>" title="<?= $repond ? 'Répond' : 'Ne répond pas' ?> (vérifié il y a moins de 5 min)"><?= $repond ? '●' : '○' ?></span><?php else: ?><span class="discret" title="Pas utilisé ici (voir « Ordre des emplacements »)">–</span><?php endif; ?>
+                                <span class="discret"><?= h(EMPLACEMENTS[$e['type']] ?? 'Autre') ?> :</span>
+                                <a href="<?= h($u) ?>" target="_blank" rel="noopener" class="discret"><?= h($u) ?></a><?= $u === $choisie ? ' <strong>← ouvert par le portail</strong>' : '' ?>
                             <?php endforeach; ?></td>
                         <td><?= cellule_passerelle($a) ?></td>
                         <td><?= count($catalogue[$a['app']] ?? []) ?: '<span class="discret" title="Les activités apparaissent quand l\'application les déclare (à la première connexion d\'un élève)">—</span>' ?></td>
@@ -913,6 +957,36 @@ function page_ateliers(): void
                 <?php endforeach; ?>
                 </tbody>
             </table></div>
+        <?php endif; ?>
+        <?php if (!$afficher_form): $lieu_auto = reglage('lieu_centrale', 'auto'); ?>
+            <form method="post" class="carte" id="emplacements" style="margin-top:20px">
+                <?= csrf() ?>
+                <input type="hidden" name="action" value="emplacements_apps">
+                <h2>Ordre des emplacements</h2>
+                <p class="aide">Pour chaque application, le portail essaie ses emplacements dans cet ordre et ouvre le premier qui répond.
+                    Cette Centrale tourne <strong><?= lieu_centrale() === 'local' ? 'en local' : 'en ligne' ?></strong>
+                    (<?= h($_SERVER['HTTP_HOST'] ?? '') ?>).</p>
+                <label>Où tourne cette Centrale ?
+                    <select name="lieu_centrale">
+                        <option value="auto" <?= $lieu_auto === 'auto' ? 'selected' : '' ?>>Détection automatique (localhost, 192.168…, 10… = local)</option>
+                        <option value="local" <?= $lieu_auto === 'local' ? 'selected' : '' ?>>En local (ordinateur de la classe)</option>
+                        <option value="en_ligne" <?= $lieu_auto === 'en_ligne' ? 'selected' : '' ?>>En ligne (serveur alwaysdata…)</option>
+                    </select></label>
+                <?php foreach (['local' => 'Centrale en local', 'en_ligne' => 'Centrale en ligne'] as $l => $titre): $ordre = ordre_emplacements($l); ?>
+                    <p><?= h($titre) ?> :
+                        <?php for ($k = 0; $k < count(EMPLACEMENTS); $k++): ?>
+                            <?= $k ? '→' : '' ?>
+                            <select name="ordre_<?= $l ?>[]" aria-label="<?= h($titre) ?>, choix <?= $k + 1 ?>">
+                                <option value="">—</option>
+                                <?php foreach (EMPLACEMENTS as $type => $libelle): ?>
+                                    <option value="<?= $type ?>" <?= ($ordre[$k] ?? '') === $type ? 'selected' : '' ?>><?= h($libelle) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php endfor; ?></p>
+                <?php endforeach; ?>
+                <p class="aide">Par défaut, « Local » ne sert que si la Centrale est en local : depuis un serveur en ligne, les élèves ne peuvent pas joindre l'ordinateur du professeur.</p>
+                <div class="ligne-actions"><button>Enregistrer</button></div>
+            </form>
         <?php endif; ?>
     </main>
     <?php

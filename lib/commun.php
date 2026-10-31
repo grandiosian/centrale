@@ -272,6 +272,19 @@ function creer_tables(PDO $pdo): void
     ajouter_colonne($pdo, 'ateliers', 'descripteur', "TEXT NOT NULL DEFAULT ''");       // centrale.json lu (passerelle.atelier)
     ajouter_colonne($pdo, 'ateliers', 'descripteur_url', "TEXT NOT NULL DEFAULT ''");
     ajouter_colonne($pdo, 'ateliers', 'descripteur_lu', 'INTEGER NOT NULL DEFAULT 0');
+    // Emplacements de chaque application (local, GitHub Pages, GitLab Pages, alwaysdata) : voir adresses_atelier().
+    $avait_emplacements = in_array('url_local', array_column($pdo->query('PRAGMA table_info(ateliers)')->fetchAll(), 'name'), true);
+    foreach (EMPLACEMENTS as $type => $_) {
+        ajouter_colonne($pdo, 'ateliers', 'url_' . $type, "TEXT NOT NULL DEFAULT ''");
+    }
+    if (!$avait_emplacements) {
+        // Première fois : on range les adresses déjà connues (principale + secours) dans les bons emplacements.
+        foreach ($pdo->query('SELECT * FROM ateliers')->fetchAll() as $a) {
+            $r = ranger_adresses(array_merge([$a['url']], preg_split('/\R/', (string) $a['urls_secours']) ?: []), $a['app']);
+            $pdo->prepare('UPDATE ateliers SET url_local = ?, url_github = ?, url_gitlab = ?, url_alwaysdata = ?, urls_secours = ? WHERE id = ?')
+                ->execute([$r['local'], $r['github'], $r['gitlab'], $r['alwaysdata'], implode("\n", $r['autres']), $a['id']]);
+        }
+    }
     // Activation d'un atelier par calendrier : fenêtres de disponibilité par classe/groupe.
     // Aucune fenêtre pour un atelier = visible en permanence (comportement historique).
     $pdo->exec("CREATE TABLE IF NOT EXISTS atelier_activations (
@@ -438,7 +451,7 @@ function adresse_repond(string $url): bool
 {
     // Adresse sur ce serveur (ex. copie de secours /miroir/netsim/) : on regarde directement le disque
     $p = parse_url($url);
-    if (strcasecmp((string) ($p['host'] ?? '') . (isset($p['port']) ? ':' . $p['port'] : ''), (string) ($_SERVER['HTTP_HOST'] ?? '')) === 0) {
+    if (meme_serveur($p)) {
         if (preg_match('#^/miroir/([A-Za-z0-9_-]+)/#', (string) ($p['path'] ?? ''), $m)) {
             return is_file(__DIR__ . '/../public/miroir/' . $m[1] . '/index.html');
         }
@@ -461,7 +474,9 @@ function adresse_repond(string $url): bool
         curl_exec($c);
         $code = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
         // curl_close() est inutile depuis PHP 8.0 (le handle est libéré automatiquement) et déprécié en 8.5.
-        $ok = $code >= 200 && $code < 400;
+        // Redirigé vers un autre site (ex. page de connexion de la Forge pour un projet absent ou privé) : ne répond pas
+        $final = strtolower((string) parse_url((string) curl_getinfo($c, CURLINFO_EFFECTIVE_URL), PHP_URL_HOST));
+        $ok = $code >= 200 && $code < 400 && $final === strtolower((string) parse_url($url, PHP_URL_HOST));
     } else {
         $ctx = stream_context_create(['http' => ['method' => 'HEAD', 'timeout' => 4, 'ignore_errors' => true]]);
         $h = @get_headers($url, false, $ctx);
@@ -471,26 +486,214 @@ function adresse_repond(string $url): bool
     return $ok;
 }
 
-/** Adresses d'un atelier (principale puis secours). */
-function adresses_atelier(array $atelier): array
+/* ---------- Emplacements des applications (local, GitHub, GitLab, alwaysdata) ---------- */
+
+/** Emplacements possibles d'une application (colonnes url_<type> de la table ateliers). */
+const EMPLACEMENTS = [
+    'local'      => 'Local (copie sur cet ordinateur)',
+    'github'     => 'GitHub Pages',
+    'gitlab'     => 'GitLab Pages (Forge ÉdNat)',
+    'alwaysdata' => 'Serveur alwaysdata',
+];
+
+/** Ordre de préférence par défaut, selon l'endroit où tourne la Centrale. */
+const ORDRE_EMPLACEMENTS = [
+    'local'    => 'local,github,gitlab,alwaysdata',
+    'en_ligne' => 'github,gitlab,alwaysdata',
+];
+
+/** Type d'emplacement d'une adresse, d'après son hôte (« autre » si inconnu). */
+function type_emplacement(string $url): string
 {
-    $secours = array_filter(array_map('trim', preg_split('/\R/', (string) ($atelier['urls_secours'] ?? '')) ?: []));
-    return array_values(array_unique(array_merge([$atelier['url']], $secours)));
+    if (str_starts_with($url, '/')) {
+        return 'local';                                   // chemin sur la Centrale, ex. /miroir/netsim/
+    }
+    $hote = strtolower((string) parse_url($url, PHP_URL_HOST));
+    return match (true) {
+        hote_local($hote) => 'local',
+        str_ends_with($hote, '.github.io') => 'github',
+        str_ends_with($hote, 'forge.apps.education.fr') || str_contains($hote, 'gitlab') => 'gitlab',
+        str_ends_with($hote, '.alwaysdata.net') => 'alwaysdata',
+        default => 'autre',
+    };
 }
 
-/** Première adresse qui répond (ou la principale si aucune ne répond). */
+/** Hôte d'un ordinateur de la classe : localhost, adresse privée (192.168…, 10…), nom en .local. */
+function hote_local(string $hote): bool
+{
+    $hote = trim(strtolower($hote), '[]');
+    if ($hote === 'localhost' || $hote === '::1' || str_ends_with($hote, '.localhost') || str_ends_with($hote, '.local')) {
+        return true;
+    }
+    return filter_var($hote, FILTER_VALIDATE_IP) !== false
+        && filter_var($hote, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+}
+
+/** Où tourne cette Centrale : « local » ou « en_ligne » (réglage « lieu_centrale », automatique par défaut). */
+function lieu_centrale(): string
+{
+    $r = reglage('lieu_centrale', 'auto');
+    if ($r === 'local' || $r === 'en_ligne') {
+        return $r;
+    }
+    return hote_local((string) parse_url('http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'), PHP_URL_HOST)) ? 'local' : 'en_ligne';
+}
+
+/** Ordre de préférence des emplacements pour un lieu (réglage « ordre_<lieu> », modifiable dans l'onglet Ateliers). */
+function ordre_emplacements(?string $lieu = null): array
+{
+    $lieu ??= lieu_centrale();
+    $ordre = array_intersect(array_map('trim', explode(',', (string) reglage('ordre_' . $lieu, ORDRE_EMPLACEMENTS[$lieu]))), array_keys(EMPLACEMENTS));
+    return array_values(array_unique($ordre));
+}
+
+/**
+ * Range des adresses dans les emplacements (le premier trouvé par type gagne) ; le reste va dans « autres ».
+ * Sans adresse locale, on propose la copie miroir de la Centrale : /miroir/<app>/.
+ */
+function ranger_adresses(array $urls, string $app): array
+{
+    $r = array_fill_keys(array_keys(EMPLACEMENTS), '') + ['autres' => []];
+    foreach (array_unique(array_filter(array_map('trim', $urls))) as $u) {
+        $t = type_emplacement($u);
+        if ($t !== 'autre' && $r[$t] === '') {
+            $r[$t] = $u;
+        } else {
+            $r['autres'][] = $u;
+        }
+    }
+    if ($r['local'] === '' && preg_match('/^[A-Za-z0-9_-]+$/', $app)) {
+        $r['local'] = '/miroir/' . $app . '/';
+    }
+    return $r;
+}
+
+/** Adresse complète : un chemin « /miroir/netsim/ » est pris sur cette Centrale. */
+function adresse_complete(string $url): string
+{
+    if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+        return (est_https() ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . racine_site() . $url;
+    }
+    return $url;
+}
+
+/** Chemin de la racine du site (« » si la Centrale est à la racine du domaine). */
+function racine_site(): string
+{
+    // Les scripts sont à la racine (index.php) ou un niveau en dessous (admin/, api/, passerelle/).
+    $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
+    $dossier = dirname($script);
+    if (preg_match('#/(admin|api|passerelle)$#', $dossier)) {
+        $dossier = dirname($dossier);
+    }
+    return rtrim($dossier, '/');
+}
+
+/**
+ * Emplacements d'un atelier, dans l'ordre où ils seront essayés :
+ * [ ['type' => local|github|gitlab|alwaysdata|autre, 'url' => adresse complète, 'utilise' => bool] ].
+ * Les emplacements hors de l'ordre de préférence (ex. le local quand la Centrale est en ligne) sont à la fin, non utilisés.
+ */
+function emplacements_atelier(array $atelier): array
+{
+    $ordre = ordre_emplacements();
+    $res = [];
+    $vus = [];
+    $ajouter = function (string $type, string $u, bool $utilise) use (&$res, &$vus) {
+        $u = trim($u);
+        if ($u === '') {
+            return;
+        }
+        $u = adresse_complete($u);
+        if (!isset($vus[$u])) {
+            $vus[$u] = true;
+            $res[] = ['type' => $type, 'url' => $u, 'utilise' => $utilise];
+        }
+    };
+    foreach ($ordre as $t) {
+        $ajouter($t, (string) ($atelier['url_' . $t] ?? ''), true);
+    }
+    // Adresse principale et adresses de secours non rangées : après les emplacements choisis
+    $autres = array_merge([(string) $atelier['url']], preg_split('/\R/', (string) ($atelier['urls_secours'] ?? '')) ?: []);
+    foreach ($autres as $u) {
+        $t = type_emplacement(trim($u));
+        $ajouter($t, $u, $t === 'autre' || in_array($t, $ordre, true));
+    }
+    foreach (array_diff(array_keys(EMPLACEMENTS), $ordre) as $t) {
+        $ajouter($t, (string) ($atelier['url_' . $t] ?? ''), false);
+    }
+    // Les non utilisés à la fin (ex. le local quand la Centrale est en ligne : l'élève ne peut pas joindre l'ordinateur du professeur)
+    usort($res, fn($x, $y) => $y['utilise'] <=> $x['utilise']);
+    return $res;
+}
+
+/** L'adresse (découpée par parse_url) désigne-t-elle cette Centrale ? localhost, 127.0.0.1 et ::1 sont équivalents. */
+function meme_serveur(array $p): bool
+{
+    $ici = parse_url('http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    $boucle = fn($h) => in_array(trim(strtolower((string) $h), '[]'), ['localhost', '127.0.0.1', '::1'], true);
+    $h1 = strtolower((string) ($p['host'] ?? ''));
+    $h2 = strtolower((string) ($ici['host'] ?? ''));
+    return ($h1 === $h2 || ($boucle($h1) && $boucle($h2))) && (int) ($p['port'] ?? 0) === (int) ($ici['port'] ?? 0);
+}
+
+/** Adresses d'un atelier à essayer, dans l'ordre de préférence. */
+function adresses_atelier(array $atelier): array
+{
+    $adresses = array_column(array_filter(emplacements_atelier($atelier), fn($e) => $e['utilise']), 'url');
+    return $adresses ?: [(string) $atelier['url']];
+}
+
+/** Toutes les adresses connues d'un atelier (pour reconnaître ses liens, ex. dans les étapes de parcours). */
+function toutes_adresses_atelier(array $atelier): array
+{
+    return array_values(array_unique(array_merge(array_column(emplacements_atelier($atelier), 'url'), [(string) $atelier['url']])));
+}
+
+/** Première adresse qui répond, dans l'ordre de préférence (sinon la première adresse publique). */
 function meilleure_adresse(array $atelier): string
 {
     $adresses = adresses_atelier($atelier);
-    if (count($adresses) === 1) {
-        return $adresses[0];
-    }
     foreach ($adresses as $u) {
         if (adresse_repond($u)) {
             return $u;
         }
     }
+    foreach ($adresses as $u) {
+        if (type_emplacement($u) !== 'local') {
+            return $u;
+        }
+    }
     return $adresses[0];
+}
+
+/** Remplace, au début d'un lien vers une application, son adresse par la meilleure (ex. étape de parcours). */
+function lien_vers_meilleure_adresse(string $url, array $ateliers): string
+{
+    static $table = null;
+    if ($table === null) {
+        $table = [];
+        foreach ($ateliers as $a) {
+            $meilleure = meilleure_adresse($a);
+            foreach (array_merge(toutes_adresses_atelier($a), [(string) ($a['url_local'] ?? '')]) as $u) {
+                if ($u !== '' && $u !== $meilleure) {
+                    $table[$u] = $meilleure;
+                }
+            }
+        }
+        uksort($table, fn($x, $y) => strlen($y) <=> strlen($x));   // la plus longue d'abord
+    }
+    // Lien vers une copie locale (http://localhost:8000/miroir/netsim/…) : ramené à /miroir/netsim/…,
+    // car « localhost » ne mène nulle part depuis le serveur en ligne ou l'ordinateur d'un élève.
+    if (type_emplacement($url) === 'local' && preg_match('#^(?:https?://[^/]+)?(/miroir/[A-Za-z0-9_-]+/.*)$#', $url, $m)) {
+        $url = $m[1];
+    }
+    foreach ($table as $de => $vers) {
+        if ($url !== '' && str_starts_with($url, $de)) {
+            return $vers . substr($url, strlen($de));
+        }
+    }
+    return $url;
 }
 
 /* ---------- Progression ---------- */

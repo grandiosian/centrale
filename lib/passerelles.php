@@ -260,20 +260,30 @@ function enregistrer_descripteur(array $d, string $url_descripteur): array
     $existant = $st->fetch();
     $secours = implode("\n", array_values(array_filter(array_map('strval', (array) ($a['urls_secours'] ?? [])), fn($u) => preg_match('#^https?://\S+$#', $u))));
     $json = json_encode($d, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    // Adresses rangées par emplacement (local, GitHub, GitLab, alwaysdata) ; l'enseignant les règle ensuite dans l'onglet Ateliers
+    $r = ranger_adresses(array_merge([$a['url']], explode("\n", $secours)), $app);
+    $secours = implode("\n", array_diff($r['autres'], [$a['url']]));
     if (!$existant) {
         $ordre = (int) $pdo->query('SELECT COALESCE(MAX(ordre), 0) + 1 FROM ateliers')->fetchColumn();
-        $pdo->prepare('INSERT INTO ateliers (app, nom, description, url, icone, classes, ordre, actif, urls_secours, descripteur, descripteur_url, descripteur_lu)
-                       VALUES (?, ?, ?, ?, ?, \'\', ?, 1, ?, ?, ?, ?)')
+        $pdo->prepare('INSERT INTO ateliers (app, nom, description, url, icone, classes, ordre, actif, urls_secours, descripteur, descripteur_url, descripteur_lu,
+                       url_local, url_github, url_gitlab, url_alwaysdata)
+                       VALUES (?, ?, ?, ?, ?, \'\', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)')
             ->execute([$app, mb_substr($a['nom'], 0, 80), mb_substr((string) ($a['description'] ?? ''), 0, 300), $a['url'],
-                       mb_substr((string) ($a['icone'] ?? ''), 0, 8), $ordre, $secours, $json, $url_descripteur, time()]);
+                       mb_substr((string) ($a['icone'] ?? ''), 0, 8), $ordre, $secours, $json, $url_descripteur, time(),
+                       $r['local'], $r['github'], $r['gitlab'], $r['alwaysdata']]);
     } else {
         // La fiche réglée par l'enseignant est gardée ; seuls les champs vides sont complétés
         $pdo->prepare("UPDATE ateliers SET descripteur = ?, descripteur_url = ?, descripteur_lu = ?,
                        description = CASE WHEN description = '' THEN ? ELSE description END,
                        icone = CASE WHEN icone = '' THEN ? ELSE icone END,
-                       urls_secours = CASE WHEN urls_secours = '' THEN ? ELSE urls_secours END WHERE app = ?")
+                       urls_secours = CASE WHEN urls_secours = '' THEN ? ELSE urls_secours END,
+                       url_local = CASE WHEN url_local = '' THEN ? ELSE url_local END,
+                       url_github = CASE WHEN url_github = '' THEN ? ELSE url_github END,
+                       url_gitlab = CASE WHEN url_gitlab = '' THEN ? ELSE url_gitlab END,
+                       url_alwaysdata = CASE WHEN url_alwaysdata = '' THEN ? ELSE url_alwaysdata END WHERE app = ?")
             ->execute([$json, $url_descripteur, time(), mb_substr((string) ($a['description'] ?? ''), 0, 300),
-                       mb_substr((string) ($a['icone'] ?? ''), 0, 8), $secours, $app]);
+                       mb_substr((string) ($a['icone'] ?? ''), 0, 8), $secours,
+                       $r['local'], $r['github'], $r['gitlab'], $r['alwaysdata'], $app]);
     }
     $n = ecrire_catalogue($app, (array) ($d['activites']['liste'] ?? []), false);
     return [$app, !$existant, $n];

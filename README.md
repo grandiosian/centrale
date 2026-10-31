@@ -186,9 +186,20 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 
 ### Hébergements multiples et copie de secours
 
-- Chaque atelier a une **adresse principale** et des **adresses de secours**, une par ligne : copie sur la Forge, copie sur ce serveur…
-- La Centrale vérifie elle-même quelles adresses répondent, avec un cache de 5 minutes. Le portail et les parcours ouvrent la première qui répond. Dans l'onglet Ateliers, ● veut dire que l'adresse répond, ○ qu'elle ne répond pas.
-- **Copie de secours sur ce serveur** : chaque application listée dans `miroirs.txt` est copiée dans `public/miroir/<nom>/`, servie à `https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/` (NetSim, TechnoStudio et Établi 3D). Une ligne peut ajouter le dossier à publier et la commande qui l'assemble : `etabli3d https://github.com/grandiosian/etabli3d dist python3 build.py`. Pour s'en servir, ajoutez cette adresse aux adresses de secours de l'atelier.
+- Chaque atelier a **quatre emplacements**, réglables dans l'onglet Ateliers (bouton « Modifier ») :
+  - **Local** : la copie servie par cette Centrale, `/miroir/<nom>/` (rempli par défaut), ou un dossier local (`http://localhost:8080/…`) ;
+  - **GitHub Pages** (ex. `https://grandiosian.github.io/NetSim/`) ;
+  - **GitLab Pages**, sur la Forge ÉdNat (ex. `https://lionelcaruana.forge.apps.education.fr/netsim/`) ;
+  - **Serveur alwaysdata** (ex. `https://technoversailles.alwaysdata.net/miroir/netsim/`).
+  Des « autres adresses » (une par ligne) peuvent s'ajouter ; elles sont essayées après.
+- **Ordre de préférence** (carte « Ordre des emplacements », en bas de l'onglet Ateliers) :
+  - Centrale **en local** (localhost, 127.0.0.1, adresse 192.168… / 10…, nom en .local) : local → GitHub → GitLab → alwaysdata ;
+  - Centrale **en ligne** : GitHub → GitLab → alwaysdata (le local est ignoré : les élèves ne peuvent pas joindre l'ordinateur du professeur).
+  La détection est automatique ; on peut forcer « en local » ou « en ligne », et changer chaque ordre.
+- La Centrale vérifie elle-même quelles adresses répondent (cache de 5 minutes ; la copie `/miroir/` est vérifiée directement sur le disque). Le portail, les propositions, les parcours et « Tester comme élève » ouvrent **le premier emplacement qui répond** ; si aucun ne répond, la première adresse publique. Les liens des étapes de parcours (souvent vers GitHub) sont redirigés de la même façon. Dans l'onglet Ateliers, ● veut dire que l'adresse répond, ○ qu'elle ne répond pas, – qu'elle n'est pas utilisée ici ; « ← ouvert par le portail » montre le choix actuel.
+- À la mise à jour, les anciennes « adresse principale » et « adresses de secours » sont rangées automatiquement dans les emplacements. L'import d'un `centrale.json` (`url`, `urls_secours`) remplit aussi les emplacements vides.
+- **Copie de secours sur ce serveur** : chaque application listée dans `miroirs.txt` est copiée dans `public/miroir/<nom>/`, servie à `https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/` (NetSim, TechnoStudio et Établi 3D). Une ligne peut ajouter le dossier à publier et la commande qui l'assemble : `etabli3d https://github.com/grandiosian/etabli3d dist python3 build.py`. En local, `techno-local.sh miroirs` fait de `public/miroir/*` des liens vers les clones : l'emplacement « Local » ouvre alors la copie de l'ordinateur.
+- Une application ouverte depuis une copie `…/miroir/<nom>/` se connecte à **la Centrale qui la sert** (NetSim, TechnoStudio, Établi 3D) : depuis une Centrale locale, la progression et les fichiers sont enregistrés en local. Ouverte depuis GitHub ou GitLab, elle utilise la Centrale en ligne (ou `window.CENTRALE_URL`).
   - La copie est mise à jour à chaque déploiement et toutes les heures, par le workflow GitHub.
   - Si une copie échoue, rien n'est envoyé et le serveur garde la version précédente.
 - Les applications fonctionnent aussi **sans la Centrale**, avec un enregistrement dans le navigateur. Si la Centrale est injoignable, le travail est gardé localement et renvoyé à son retour.
