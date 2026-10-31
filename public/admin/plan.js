@@ -408,5 +408,25 @@ window.PlanSalle = (function () {
     rendre();
   }
 
-  return { editeur: editeur, placement: placement, dessiner: dessiner, TYPES: TYPES };
+  /** Aperçu en lecture seule d'un plan placé (tableau de bord) : dessine la salle + les élèves posés. */
+  function apercu(svg, d) {
+    if (!svg || !d || !d.plan) return;
+    var carte = d.placement || {};
+    function eleve(id) { return (d.eleves || []).find(function (e) { return e.id === id; }); }
+    function nom(e) { var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : ''; return n || ('n° ' + e.numero); }
+    function rendre() {
+      dessiner(svg, d.plan, {
+        surObjet: function (o, g, w, h) {
+          if (!estPlace(o) || !carte[o.id]) return;
+          g.classList.add('occupee');
+          var e = eleve(carte[o.id]);
+          el('text', { x: w / 2, y: h + 13, class: 'nom-eleve' }, g).textContent = e ? nom(e) : '?';
+        },
+      });
+    }
+    rendre();
+    document.addEventListener('centrale-noms', rendre);   // redessine quand les noms locaux sont chargés
+  }
+
+  return { editeur: editeur, placement: placement, dessiner: dessiner, apercu: apercu, TYPES: TYPES };
 })();

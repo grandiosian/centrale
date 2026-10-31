@@ -51,6 +51,43 @@ function groupe_seance(array $s): string
     return str_contains($s['classe'], ' · ') ? explode(' · ', $s['classe'], 2)[1] : '';
 }
 
+/** Données d'un plan de classe (salle + élèves placés) pour une séance, ou null si pas de salle / plan. */
+function donnees_plan_seance(array $s): ?array
+{
+    $salle_id = (int) ($s['salle_id'] ?? 0);
+    if (!$salle_id) {
+        return null;
+    }
+    $st = db()->prepare('SELECT * FROM salles WHERE id = ?');
+    $st->execute([$salle_id]);
+    $salle = $st->fetch();
+    if (!$salle) {
+        return null;
+    }
+    $classe_id = (int) $s['classe_id'];
+    $groupe_id = (int) ($s['groupe_id'] ?? 0);
+    $st = db()->prepare("SELECT id, etiquette, actif FROM eleves WHERE classe_id = ?" . ($groupe_id ? ' AND groupe_id = ?' : '') . "
+        ORDER BY CASE WHEN etiquette GLOB '[0-9]*' THEN CAST(etiquette AS INTEGER) ELSE 9999 END, etiquette");
+    $st->execute($groupe_id ? [$classe_id, $groupe_id] : [$classe_id]);
+    $eleves = $st->fetchAll();
+    $st = db()->prepare('SELECT place, eleve_id FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?');
+    $st->execute([$classe_id, $groupe_id, $salle_id]);
+    $placement = array_map('intval', array_column($st->fetchAll(), 'eleve_id', 'place'));
+    if (!$placement) {
+        return null;   // salle sans plan de classe enregistré pour cette classe : rien à montrer
+    }
+    return [
+        'plan'      => plan_de($salle),
+        'classe'    => classe_par_id($classe_id)['nom'] ?? '',
+        'eleves'    => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif']], $eleves),
+        'placement' => (object) $placement,
+        'salle'     => $salle['nom'],
+        'salle_id'  => $salle_id,
+        'classe_id' => $classe_id,
+        'groupe_id' => $groupe_id,
+    ];
+}
+
 function page_tableau_de_bord(): void
 {
     $pdo = db();
@@ -92,8 +129,18 @@ function page_tableau_de_bord(): void
         }
     }
     usort($a_valider, fn($a, $b) => ($a['depuis'] ?: PHP_INT_MAX) <=> ($b['depuis'] ?: PHP_INT_MAX));
+    $a_valider_tous = $a_valider;                 // liste complète, pour filtrer par classe dans « En cours »
     $total_av = count($a_valider);
     $a_valider = array_slice($a_valider, 0, 8);
+
+    // Prochain cours (le premier à venir qui n'a pas encore commencé), pour le message d'info de « En cours »
+    $suivant = null;
+    foreach ($prochains as $p) {
+        if ($p['date'] > $aujourdhui || $p['debut'] > $heure) {
+            $suivant = $p;
+            break;
+        }
+    }
 
     entete('Accueil');
     barre('accueil');
@@ -125,20 +172,54 @@ function page_tableau_de_bord(): void
                 </li>
             </ul>
             <?php if ($en_cours_maintenant): ?>
-                <ul class="en-cours-liste">
-                    <?php foreach ($en_cours_maintenant as $s):
-                        $reste = max(0, (new DateTimeImmutable($aujourdhui . ' ' . $s['fin'], fuseau()))->getTimestamp() - $maintenant->getTimestamp()); ?>
-                        <li style="--etab:<?= h(couleur_etablissement($s['etablissement_id'])) ?>">
+                <?php foreach ($en_cours_maintenant as $i => $s):
+                    $reste = max(0, (new DateTimeImmutable($aujourdhui . ' ' . $s['fin'], fuseau()))->getTimestamp() - $maintenant->getTimestamp());
+                    $av_classe = array_values(array_filter($a_valider_tous, fn($it) => (int) $it['classe']['id'] === (int) $s['classe_id']));
+                    $plan = donnees_plan_seance($s);
+                    $cle_plan = 'plan-ec-' . $i; ?>
+                    <div class="ec-bloc" style="--etab:<?= h(couleur_etablissement($s['etablissement_id'])) ?>">
+                        <div class="ec-ligne">
                             <?= pastille_classe($s['classe_id'], groupe_seance($s)) ?>
                             <span class="intitule"><?= h($s['intitule'] ?: 'Cours') ?></span>
                             <span class="ou"><span class="puce-etab"></span><?= h($s['etablissement']) ?><?= $s['salle'] ? ' · ' . h($s['salle']) : '' ?> · <?= h($s['creneau']) ?> (<?= h($s['debut']) ?>–<?= h($s['fin']) ?>)</span>
                             <span class="rebours" data-reste="<?= (int) $reste ?>" title="Temps restant jusqu'à la fin du cours">jusqu'à <?= h($s['fin']) ?></span>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
+                        </div>
+                        <div class="ec-details">
+                            <?php if ($plan): ?>
+                                <div class="ec-plan">
+                                    <div class="ec-sous-titre">Plan de classe · <?= h($plan['salle']) ?>
+                                        <a class="btn petit secondaire" href="./?p=placement&classe=<?= (int) $plan['classe_id'] ?>&salle=<?= (int) $plan['salle_id'] ?><?= $plan['groupe_id'] ? '&groupe=' . (int) $plan['groupe_id'] : '' ?>">Ouvrir</a></div>
+                                    <svg class="plan-svg apercu-plan" id="<?= $cle_plan ?>" xmlns="http://www.w3.org/2000/svg"></svg>
+                                    <script type="application/json" class="plan-data" data-cible="<?= $cle_plan ?>"><?= json_encode($plan, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+                                </div>
+                            <?php endif; ?>
+                            <div class="ec-valider">
+                                <div class="ec-sous-titre">Élèves à valider<?= $av_classe ? ' · ' . count($av_classe) : '' ?></div>
+                                <?php if ($av_classe): ?>
+                                    <ol class="file-valider">
+                                        <?php foreach (array_slice($av_classe, 0, 6) as $it): $l = $it['ligne'];
+                                            $qui = ($l['titre'] ?? '') !== '' ? $l['titre'] : implode(', ', array_map(fn($m) => $m['etiquette'], $l['membres'] ?? [])); ?>
+                                            <li><a href="./?p=projets&amp;parcours=<?= (int) $it['pid'] ?>&amp;vue=a_valider">
+                                                <span class="qui"><?= h($qui) ?></span>
+                                                <span class="quoi"><?= h($it['pnom']) ?> · ét. <?= (int) $it['ordre'] + 1 ?></span>
+                                                <span class="quand discret"><?= h(depuis_texte((int) $it['depuis'])) ?></span>
+                                                <span class="tag <?= $it['valider'] ? 't-valider' : 't-noter' ?>"><?= $it['valider'] ? 'à valider' : 'à évaluer' ?></span>
+                                            </a></li>
+                                        <?php endforeach; ?>
+                                    </ol>
+                                    <?php if (count($av_classe) > 6): ?><p class="discret" style="margin:4px 0 0">+ <?= count($av_classe) - 6 ?> autre(s).</p><?php endif; ?>
+                                <?php else: ?>
+                                    <p class="vide" style="margin:0">Rien à valider pour cette classe.</p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                <?php if ($suivant): ?>
+                    <p class="ec-prochain">➡ Prochain cours : <strong><?= h(quand_seance($suivant['date'], $aujourdhui)) ?></strong> à <?= h($suivant['debut']) ?> — <?= pastille_classe($suivant['classe_id'], groupe_seance($suivant)) ?> <?= h($suivant['intitule'] ?: 'Cours') ?><?= $suivant['salle'] ? ' · ' . h($suivant['salle']) : '' ?>.</p>
+                <?php endif; ?>
             <?php else: ?>
-                <p class="vide" style="margin:0">Pas de cours en ce moment.<?php if ($prochains):
-                    $p0 = $prochains[0]; ?> Prochain : <strong><?= h(quand_seance($p0['date'], $aujourdhui)) ?></strong> à <?= h($p0['debut']) ?> — <?= pastille_classe($p0['classe_id'], groupe_seance($p0)) ?> <?= h($p0['intitule']) ?>.<?php endif; ?></p>
+                <p class="vide" style="margin:0">Pas de cours en ce moment.<?php if ($suivant): ?> Prochain : <strong><?= h(quand_seance($suivant['date'], $aujourdhui)) ?></strong> à <?= h($suivant['debut']) ?> — <?= pastille_classe($suivant['classe_id'], groupe_seance($suivant)) ?> <?= h($suivant['intitule'] ?: 'Cours') ?>.<?php endif; ?></p>
             <?php endif; ?>
         </section>
         <script>
@@ -171,6 +252,14 @@ function page_tableau_de_bord(): void
             });
         })();
         </script>
+        <?php if ($en_cours_maintenant): ?>
+        <script src="plan.js?v=<?= @filemtime(__DIR__ . '/../public/admin/plan.js') ?: 1 ?>"></script>
+        <script>
+        document.querySelectorAll('.plan-data').forEach(function (s) {
+            try { PlanSalle.apercu(document.getElementById(s.dataset.cible), JSON.parse(s.textContent)); } catch (e) {}
+        });
+        </script>
+        <?php endif; ?>
 
         <?php if (!$etabs): ?>
             <section class="carte" style="margin-top:16px">
