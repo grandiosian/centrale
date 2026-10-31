@@ -158,7 +158,8 @@ function carte_tester(string $retour): bool
             </form>
             <p class="aide">Un nouvel onglet s’ouvre, connecté comme cet élève (2 h, sans code) : son portail, ses ateliers, ses parcours,
                 « Étape suivante » et dossier de projet, comme en classe. Les boutons <strong>Tester</strong> du tableau ouvrent directement
-                l’atelier, ou le portail pour un parcours, avec l’élève choisi ici. Seuls les élèves des classes de test sont proposés.</p>
+                l’atelier, ou le portail pour un parcours, avec l’élève choisi ici. Seuls les élèves des classes de test sont proposés.
+                Si votre navigateur n’ouvre pas de nouvel onglet, la page s’ouvre ici : « Précédent » pour revenir.</p>
             <div class="ligne-actions">
                 <?= bouton('reinitialiser_test', 'Remettre les élèves test à zéro', ['retour' => $retour], 'secondaire',
                     'Effacer le travail, l’avancement et les dossiers de projet de tous les élèves test ?') ?>

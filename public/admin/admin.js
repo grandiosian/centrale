@@ -387,6 +387,17 @@
     return false;
   }
 
+  // « Tester à la place d'un élève » : un nouvel onglet par essai (on peut ouvrir deux coéquipiers côte à côte).
+  // Si le navigateur n'ouvre pas d'onglet (bloqueur, volet navigateur de l'app Claude), la page s'ouvre ici.
+  var formTester = document.getElementById('form-tester');
+  if (formTester) {
+    formTester.addEventListener('submit', function () {
+      var nom = 'eleve-test-' + Date.now(), w = null;
+      try { w = window.open('', nom); } catch (e) { w = null; }
+      formTester.target = w ? nom : '_self';
+    });
+  }
+
   document.querySelectorAll('form[data-confirmer]').forEach(function (f) {
     f.addEventListener('submit', function (ev) {
       var b = ev.submitter || f.querySelector('button');
