@@ -2,7 +2,9 @@
 #
 # Utilise les mêmes secrets que le déploiement de la Centrale (ALWAYSDATA_COMPTE, ALWAYSDATA_SSH_KEY).
 # - Code : dossier serveur-compilation/ du dépôt grandiosian/TechnoStudio → ~/technostudio-compilation/code/
-# - Outils : arduino-cli (~/bin), cœurs Arduino AVR et ESP32 (~/.arduino15), MicroPython micro:bit
+# - Outils : arduino-cli (~/bin), cœurs Arduino AVR et ESP32 (~/.arduino15), bibliothèques (~/Arduino),
+#   MicroPython micro:bit. La chaîne arduino-cli est préparée ICI, sur la machine GitHub, puis copiée :
+#   sur alwaysdata, arduino-cli est tué (mémoire) pendant l'installation des cœurs.
 # - Accès web : public/api/compilation.php (déployé avec la Centrale) lit ~/technostudio-compilation/config.json
 # Rien n'est placé dans www/centrale : le déploiement de la Centrale (rsync --delete) n'y touche pas.
 #
@@ -34,6 +36,14 @@ jobs:
           repository: grandiosian/TechnoStudio
           path: ts
 
+      - name: Préparer la chaîne de compilation (machine GitHub)
+        run: |
+          set +e
+          bash ts/serveur-compilation/preparer-chaine.sh ~/chaine > preparation.log 2>&1; r=$?
+          a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
+          a notice préparation "$(grep -E 'Ko →|^[0-9.]+[KMG]\s|Sketch uses|Le croquis' preparation.log | tail -c 3000)"
+          [ $r -eq 0 ] || { a error préparation "$(tail -c 3000 preparation.log)"; exit 1; }
+
       - name: Secrets configurés ?
         id: config
         env:
@@ -60,13 +70,21 @@ jobs:
           ssh ad 'mkdir -p technostudio-compilation/code'
           rsync -az --delete --exclude node_modules --exclude 'microbit/*.hex' ts/serveur-compilation/ ad:technostudio-compilation/code/
 
+      - name: Copier la chaîne sur le serveur
+        if: steps.config.outputs.pret == 'true'
+        run: |
+          ssh ad 'mkdir -p bin .arduino15 Arduino/libraries'
+          rsync -az ~/chaine/bin/arduino-cli ad:bin/arduino-cli
+          rsync -az --delete --exclude arduino-cli.yaml ~/chaine/arduino15/ ad:.arduino15/
+          rsync -az --delete ~/chaine/Arduino/libraries/ ad:Arduino/libraries/
+
       - name: Installer ou mettre à jour (arduino-cli, cœurs, MicroPython)
         if: steps.config.outputs.pret == 'true'
         run: |
           set +e
           # Résultats en annotations : lisibles dans l'onglet Actions et par l'API
           a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
-          ssh ad 'bash technostudio-compilation/code/installer-centrale.sh' > installation.log 2>&1; r=$?
+          ssh ad 'bash technostudio-compilation/code/installer-centrale.sh --chaine-copiee' > installation.log 2>&1; r=$?
           # journal complet, en morceaux (une annotation fait 3500 caractères au plus)
           sed -e 's/\x1b\[[0-9;]*m//g' installation.log | grep -v '^\s*$' | grep -vE 'Downloading|\[=+' > journal.txt || true
           n=0; while [ $n -lt 8 ]; do part=$(tail -c +$((n * 3400 + 1)) journal.txt | head -c 3400); [ -z "$part" ] && break; a notice "installation $((n + 1))" "$part"; n=$((n + 1)); done
@@ -77,7 +95,7 @@ jobs:
         run: |
           set +e
           a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
-          a notice diagnostic "$(ssh ad 'echo "PATH=$PATH"; command -v node; node --version; ls -d /usr/alwaysdata/node/* 2>&1 | tail -3; grep -v -A3 cles ~/technostudio-compilation/config.json | grep -v "[a-f0-9]\{32\}"; ~/bin/arduino-cli core list; ls ~/technostudio-compilation/code/microbit ~/technostudio-compilation/code/node_modules 2>&1' 2>&1)"
+          a notice diagnostic "$(ssh ad 'ulimit -a | grep -iE "memory|virtual|cpu"; cat /sys/fs/cgroup/memory.max 2>/dev/null; grep -E "\"(node|cli|dossier)\"" ~/technostudio-compilation/config.json; ~/bin/arduino-cli core list; du -sh ~/.arduino15 ~/Arduino' 2>&1)"
           ko=0
           for c in uno nano microbit esp32; do
             out=$(ssh ad "C=~/technostudio-compilation; N=\$(sed -n 's/.*\"node\": *\"\\([^\"]*\\)\".*/\\1/p' \$C/config.json); \$N \$C/code/compiler-cli.js essai $c --dossier \$C/travail" 2>&1); r=$?
