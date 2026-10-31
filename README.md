@@ -514,5 +514,17 @@ Toutes les requêtes, sauf `login.php`, demandent l'en-tête `X-Jeton` reçu à 
 | `GET parcours.php` | Parcours de la classe avec l'avancement de l'élève |
 | `GET ateliers.php` | Ateliers proposés à la classe, avec l'avancement et les activités |
 | `GET session.php?app=` | Vérifie un jeton (passage d'une application à l'autre) |
+| `GET compilation.php` | État du compilateur des cartes (sans connexion) |
+| `POST compilation.php` `{carte, code}` | Compile pour `uno`, `nano`, `esp32` (C++) ou `microbit` (MicroPython) → `.hex` / `.bin` ; `{enCours, travail}` au-delà de 25 s |
+| `GET compilation.php?travail=` | Résultat d’une compilation longue |
 
 Codes d'erreur : 400 (demande incomplète), 401 (non connecté ou session expirée), 403 (site non autorisé), 409 (conflit), 413 (trop gros), 429 (trop d'essais de codes), 507 (espace de l'élève plein).
+
+## 11. Compilation des cartes (TechnoStudio)
+
+`api/compilation.php` compile les programmes des cartes pour les applications (TechnoStudio) : Arduino Uno et Nano, ESP32 et micro:bit (MicroPython). Le compilateur lui-même (arduino-cli, cœurs, MicroPython) est installé **hors du site**, dans `~/technostudio-compilation/`, par le workflow **Chaîne de compilation** (`.github/workflows/compilation.yml`). Ce workflow utilise les mêmes secrets que le déploiement, tourne chaque nuit et à la demande (Actions → Run workflow), et compile un essai par carte.
+
+- Accès : élève connecté (`X-Jeton`) ou clé enseignant (`X-Cle`, lisible dans `~/technostudio-compilation/config.json`).
+- Limite : 15 compilations par minute et par élève, une compilation à la fois.
+- Code et détails : dépôt [TechnoStudio](https://github.com/grandiosian/TechnoStudio), dossier `serveur-compilation/`.
+

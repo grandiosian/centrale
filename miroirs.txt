@@ -3,3 +3,4 @@
 # Chaque application sera servie à l'adresse  https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/
 # La copie est mise à jour à chaque déploiement de la Centrale et toutes les heures.
 netsim https://github.com/grandiosian/NetSim
+technostudio https://github.com/grandiosian/TechnoStudio

@@ -1,0 +1,95 @@
+# Installe et met à jour la chaîne de compilation des cartes (TechnoStudio) sur alwaysdata.
+#
+# Utilise les mêmes secrets que le déploiement de la Centrale (ALWAYSDATA_COMPTE, ALWAYSDATA_SSH_KEY).
+# - Code : dossier serveur-compilation/ du dépôt grandiosian/TechnoStudio → ~/technostudio-compilation/code/
+# - Outils : arduino-cli (~/bin), cœurs Arduino AVR et ESP32 (~/.arduino15), MicroPython micro:bit
+# - Accès web : public/api/compilation.php (déployé avec la Centrale) lit ~/technostudio-compilation/config.json
+# Rien n'est placé dans www/centrale : le déploiement de la Centrale (rsync --delete) n'y touche pas.
+#
+# Déclenchement : modification de ce fichier ou de compilation.php, à la demande (Actions → Run workflow),
+# et chaque nuit (reprend les mises à jour de TechnoStudio ; ce qui est installé n'est pas refait).
+
+name: Chaîne de compilation (TechnoStudio)
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compilation.yml', 'public/api/compilation.php']
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+concurrency:
+  group: compilation
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Code du compilateur (dépôt TechnoStudio)
+        uses: actions/checkout@v4
+        with:
+          repository: grandiosian/TechnoStudio
+          path: ts
+
+      - name: Secrets configurés ?
+        id: config
+        env:
+          COMPTE: ${{ secrets.ALWAYSDATA_COMPTE }}
+          CLE: ${{ secrets.ALWAYSDATA_SSH_KEY }}
+        run: |
+          if [ -n "$COMPTE" ] && [ -n "$CLE" ]; then echo "pret=true" >> "$GITHUB_OUTPUT"
+          else echo "pret=false" >> "$GITHUB_OUTPUT"; echo "::notice::Ajoutez les secrets ALWAYSDATA_COMPTE et ALWAYSDATA_SSH_KEY."; fi
+
+      - name: Connexion SSH
+        if: steps.config.outputs.pret == 'true'
+        env:
+          COMPTE: ${{ secrets.ALWAYSDATA_COMPTE }}
+          CLE: ${{ secrets.ALWAYSDATA_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CLE" > ~/.ssh/id_deploiement && chmod 600 ~/.ssh/id_deploiement
+          ssh-keyscan -H "ssh-$COMPTE.alwaysdata.net" >> ~/.ssh/known_hosts
+          printf 'Host ad\n  HostName ssh-%s.alwaysdata.net\n  User %s\n  IdentityFile ~/.ssh/id_deploiement\n  ServerAliveInterval 30\n' "$COMPTE" "$COMPTE" > ~/.ssh/config
+
+      - name: Envoyer le code du compilateur
+        if: steps.config.outputs.pret == 'true'
+        run: |
+          ssh ad 'mkdir -p technostudio-compilation/code'
+          rsync -az --delete --exclude node_modules --exclude 'microbit/*.hex' ts/serveur-compilation/ ad:technostudio-compilation/code/
+
+      - name: Installer ou mettre à jour (arduino-cli, cœurs, MicroPython)
+        if: steps.config.outputs.pret == 'true'
+        run: ssh ad 'bash technostudio-compilation/code/installer-centrale.sh'
+
+      - name: Essais de compilation sur le serveur
+        if: steps.config.outputs.pret == 'true'
+        run: |
+          ssh ad 'C=~/technostudio-compilation; N=$(sed -n "s/.*\"node\": *\"\([^\"]*\)\".*/\1/p" $C/config.json); ko=0
+            for c in uno nano microbit esp32; do "$N" $C/code/compiler-cli.js essai $c --dossier $C/travail || ko=1; done; exit $ko'
+
+      - name: API en ligne (api/compilation.php)
+        if: steps.config.outputs.pret == 'true'
+        env:
+          COMPTE: ${{ secrets.ALWAYSDATA_COMPTE }}
+          URL: ${{ vars.URL_CENTRALE }}
+        run: |
+          BASE="${URL:-https://$COMPTE.alwaysdata.net/}"
+          API="${BASE%/}/api/compilation.php"
+          CLE=$(ssh ad 'sed -n "/\"cles\"/,/\]/p" ~/technostudio-compilation/config.json | grep -o "[a-f0-9]\{32\}" | head -1')
+          echo "::add-mask::$CLE"
+          # La page arrive avec le déploiement de la Centrale (workflow voisin) : on l'attend un peu
+          for i in $(seq 1 30); do
+            code=$(curl -s -o etat.json -w '%{http_code}' "$API"); [ "$code" = 200 ] && break; sleep 10
+          done
+          echo "État ($code) :"; cat etat.json; echo
+          [ "$code" = 200 ] || { echo "::error::$API ne répond pas"; exit 1; }
+          echo "Sans connexion (attendu : 401) : $(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"carte":"uno","code":"void setup(){}"}' "$API")"
+          for c in uno microbit; do
+            [ $c = uno ] && prog='void setup(){pinMode(13,OUTPUT);}\nvoid loop(){digitalWrite(13,!digitalRead(13));delay(300);}' || prog='from microbit import *\ndisplay.scroll("Centrale")'
+            r=$(curl -s -X POST -H 'Content-Type: application/json' -H "X-Cle: $CLE" -d "{\"carte\":\"$c\",\"code\":\"$prog\"}" "$API")
+            echo "$c : $(echo "$r" | head -c 160)…"
+            echo "$r" | grep -q '"ok":true' || { echo "::error::compilation $c par l'API en échec"; exit 1; }
+          done
