@@ -128,7 +128,7 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 |---|---|
 | NetSim | `centrale.json` complet : 18 activités, schéma et découvertes, pas de fichiers |
 | TechnoStudio | `centrale.json` complet : 28 activités et activités dynamiques, ressources `*.technostudio.json` / `*.gift`, pas encore de dossier de projet |
-| Établi 3D | Manifeste `postMessage` (`passerelle/manifest.json`, `"protocol": "passerelle"`). La Centrale en tire seulement la fiche. Pour le reste, Établi 3D doit publier un `centrale.json` |
+| Établi 3D | `centrale.json` complet : 39 activités (tutos, exercices, exemples), projet, **dossier de projet** : reçoit un projet `.json`, produit projet `.json`, `resume.json`, `.stl`, `.png` (noms au choix du professeur, reconnus par leur extension) ; dépose ses sorties tout seul avant « Étape suivante » |
 
 ### Fonctions
 
@@ -188,7 +188,7 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 
 - Chaque atelier a une **adresse principale** et des **adresses de secours**, une par ligne : copie sur la Forge, copie sur ce serveur…
 - La Centrale vérifie elle-même quelles adresses répondent, avec un cache de 5 minutes. Le portail et les parcours ouvrent la première qui répond. Dans l'onglet Ateliers, ● veut dire que l'adresse répond, ○ qu'elle ne répond pas.
-- **Copie de secours sur ce serveur** : chaque application listée dans `miroirs.txt` est copiée dans `public/miroir/<nom>/`, servie à `https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/`.
+- **Copie de secours sur ce serveur** : chaque application listée dans `miroirs.txt` est copiée dans `public/miroir/<nom>/`, servie à `https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/` (NetSim et Établi 3D). Une ligne peut ajouter le dossier à publier et la commande qui l'assemble : `etabli3d https://github.com/grandiosian/etabli3d dist python3 build.py`. Pour s'en servir, ajoutez cette adresse aux adresses de secours de l'atelier.
   - La copie est mise à jour à chaque déploiement et toutes les heures, par le workflow GitHub.
   - Si une copie échoue, rien n'est envoyé et le serveur garde la version précédente.
 - Les applications fonctionnent aussi **sans la Centrale**, avec un enregistrement dans le navigateur. Si la Centrale est injoignable, le travail est gardé localement et renvoyé à son retour.
@@ -273,10 +273,10 @@ Centrale.progression("quiz-reseau", { statut: "termine", score: 8, score_max: 10
 Dans l'espace enseignant, onglet **Parcours** : une étape par ligne.
 
 ```
-Titre de l'étape            | atelier  | activité | adresse du logiciel
-Brancher la salle           | netsim   | e5-1     | https://grandiosian.github.io/NetSim/
-Modéliser le boîtier        | etabli3d | boitier  | https://grandiosian.github.io/etabli3d/
-Programmer le capteur       | blocs    |          | https://…
+Titre de l'étape            | atelier      | activité                 | adresse du logiciel
+Brancher la salle           | netsim       | e5-1                     | https://grandiosian.github.io/NetSim/
+Modéliser le support        | etabli3d     |                          | https://grandiosian.github.io/etabli3d/
+Programmer la lampe         | technostudio | charte-lampe-de-poche/P1 | https://grandiosian.github.io/TechnoStudio/
 ```
 
 - **Activité vide** = tout l'atelier. L'étape est terminée quand toutes ses activités déclarées le sont.
@@ -284,11 +284,11 @@ Programmer le capteur       | blocs    |          | https://…
 - Sur le **portail élève** (`https://VOTRECOMPTE.alwaysdata.net/`), l'élève voit ses parcours, l'étape suivante, et clique sur **Commencer** ou **Continuer**. Le logiciel s'ouvre déjà connecté : le jeton passe dans l'adresse (`#centrale=…`) et le module le retire aussitôt.
 - **Bouton « Étape N : titre → »** : le module l'ajoute dans toute application ouverte depuis une étape de parcours, en bas à gauche, à côté de « ← Mes ateliers ».
   - Au clic, il enregistre tout, puis ouvre directement l'étape suivante : la bonne application, la bonne activité, le même dossier de projet, sans repasser par le portail.
-  - Si l'étape suivante est verrouillée (« dans l'ordre » ou « après validation »), il affiche un 🔒 et explique pourquoi.
+  - Si l'étape suivante est verrouillée (« dans l'ordre » ou « après validation »), il affiche un 🔒 et explique pourquoi. En mode « dans l'ordre », quand l'application dépose ses fichiers en partant (Établi 3D), il reste cliquable : il dépose d'abord, puis ouvre l'étape suivante si l'étape est terminée.
   - À la dernière étape, il devient « Parcours terminé → Mes ateliers ».
   - Il se met à jour tout seul après chaque progression ou dépôt de fichier.
 - **Côté application** (détails : spécification de la passerelle, § 2.6) :
-  - `Centrale.init({ avantDeQuitter: async () => … })` : dépose ce qui attend encore, avant « ← Mes ateliers » ou « Étape suivante » (5 s au plus) ;
+  - `Centrale.init({ avantDeQuitter: async () => … })` : dépose ce qui attend encore, avant « ← Mes ateliers » ou « Étape suivante » (15 s au plus) ;
   - `Centrale.init({ boutonSuivant: false })` masque le bouton, pour placer le sien avec `Centrale.etapeSuivante()` et `Centrale.allerEtapeSuivante()` ;
   - le descripteur le déclare dans `centrale.parcours` (`bouton_suivant`, `avant_de_quitter`).
 - Entre vos propres applications, `Centrale.ouvrir(url)` ouvre une autre application déjà connectée.
@@ -340,7 +340,7 @@ Onglet **Emploi du temps** : une grille par semaine, par établissement, avec l'
 
 ## 5 bis. Ateliers transversaux (parcours en plusieurs logiciels)
 
-Un parcours peut enchaîner plusieurs applications : questionnaire → établi3D → programmation3D… Chaque élève (parcours **individuel**) ou chaque équipe (parcours **en équipe**) a un **dossier de projet** pour ce parcours, partagé par toutes les applications. Une étape y dépose ses productions, l'étape suivante les relit.
+Un parcours peut enchaîner plusieurs applications : NetSim → Établi 3D → TechnoStudio… Chaque élève (parcours **individuel**) ou chaque équipe (parcours **en équipe**) a un **dossier de projet** pour ce parcours, partagé par toutes les applications. Une étape y dépose ses productions, l'étape suivante les relit.
 
 **Côté enseignant** (onglet Parcours) :
 
@@ -352,9 +352,10 @@ Un parcours peut enchaîner plusieurs applications : questionnaire → établi3D
 - **Étapes** : une ligne `Titre | atelier | activité | adresse`, suivie si besoin de ces lignes :
   ```
     > consigne affichée à l'élève (plusieurs lignes possibles)
-    reçoit : cahier.json, gabarit.glb
-    produit : chassis.glb
+    reçoit : support.etabli3d.json
+    produit : support.etabli3d.json, support.stl
   ```
+  Avec Établi 3D, les noms sont libres pourvu que l'extension soit la bonne : `.json` (projet), `resume.json`, `.stl`, `.png`. Le fichier reçu (ici le gabarit fourni) s'ouvre à l'arrivée dans l'étape ; les fichiers produits sont déposés tout seuls quand l'élève clique « Étape suivante » ou « ← Mes ateliers ».
   Une étape est terminée quand tous les fichiers de sa ligne « produit » sont déposés, ou quand l'application déclare l'activité terminée.
 - **Fichiers fournis** : vos gabarits et fichiers de départ, visibles dans tous les dossiers. Si l'élève dépose un fichier du même nom, c'est le sien qui est lu.
 - **Dossiers de projet** : l'avancement de chaque élève ou équipe étape par étape, la validation des étapes, et le téléchargement de leurs fichiers.
@@ -374,7 +375,7 @@ if (info) {
   for (const nom of info.etape.entrees) {       // ce que l'étape reçoit
     const contenu = await Centrale.projet.charger(nom);   // JSON, texte ou Blob ; null s'il n'existe pas
   }
-  await Centrale.projet.sauver("chassis.glb", blob);      // dépose une production (objet → JSON)
+  await Centrale.projet.sauver("support.stl", blob);      // dépose une production (objet → JSON)
 }
 ```
 

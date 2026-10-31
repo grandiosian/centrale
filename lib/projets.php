@@ -3,8 +3,8 @@
  * Centrale élèves — ateliers transversaux (parcours en plusieurs logiciels).
  *
  * Un parcours est « individuel » ou « en équipe ». Chaque élève (ou chaque équipe) a un DOSSIER DE PROJET
- * pour ce parcours, partagé par toutes les applications : l'étape 2 (établi3D) y dépose « chassis.glb »,
- * l'étape 3 (programmation3D) le relit. Les étapes déclarent ce qu'elles reçoivent (entrées) et produisent
+ * pour ce parcours, partagé par toutes les applications : l'étape 2 (Établi 3D) y dépose « support.stl »,
+ * une étape suivante le relit. Les étapes déclarent ce qu'elles reçoivent (entrées) et produisent
  * (sorties) ; l'enseignant peut fournir des fichiers de départ, et choisir comment les étapes se débloquent.
  */
 declare(strict_types=1);

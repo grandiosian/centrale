@@ -26,6 +26,7 @@ Les fichiers associés :
 - Il est placé **à la racine du site** de l'application, à côté de sa page d'accueil. Exemples :
   - `https://grandiosian.github.io/NetSim/centrale.json`
   - `https://grandiosian.github.io/TechnoStudio/centrale.json`
+  - `https://grandiosian.github.io/etabli3d/centrale.json`
 - Il est servi tel quel, sans authentification.
 - Les copies de secours (miroir, Forge) le publient au même endroit relatif.
 
@@ -107,7 +108,8 @@ Le format est fixé une fois pour toutes. Il est commun aux ateliers transversau
 - Les listes portent des objets `{ nom, type, description }`, avec deux champs facultatifs :
   - `obligatoire` (pour `recoit`) : l'application ne peut pas commencer sans ce fichier ;
   - `format` : un schéma, pour un fichier JSON.
-- `nom` est le nom exact dans le dossier. `*` désigne une partie variable (`programme-*.ino`).
+- `nom` est le nom exact dans le dossier. `*` désigne une partie variable (`programme-*.ino`), ou n'importe quel nom pour une application qui reconnaît ses fichiers à leur extension (`*.stl`).
+- `nom_conseille` (facultatif) : avec un motif, le nom à proposer au professeur (`piece.stl`). La fiche de la passerelle l'affiche.
 - `type` est un type MIME.
 - `dossier_projet: true` si l'application lit ou écrit dans le dossier de projet (`Centrale.etape`, `Centrale.projet`).
 - Les noms de `recoit` et `produit` correspondent aux lignes « reçoit : … » et « produit : … » des étapes de parcours. La Centrale peut ainsi proposer, ou vérifier, l'enchaînement de deux applications.
@@ -118,12 +120,13 @@ Quand l'élève ouvre une application depuis une étape d'un parcours, le module
 
 - au clic, il enregistre tout, puis ouvre directement l'étape suivante : la bonne application, sur la bonne activité, avec le même dossier de projet ;
 - si l'étape suivante est verrouillée (mode « dans l'ordre » ou « après validation »), le bouton porte un 🔒 et explique pourquoi au lieu d'ouvrir ;
+- exception, en mode « dans l'ordre » : si l'application dépose ses fichiers en partant (`avantDeQuitter`) et que l'étape attend des fichiers (`produit`), le bouton reste cliquable. Le clic dépose, regarde de nouveau, puis ouvre l'étape suivante si l'étape en cours est maintenant terminée (sinon il explique ce qui manque) ;
 - à la dernière étape, il devient « Parcours terminé → Mes ateliers » ;
 - il se met à jour après chaque `Centrale.progression`, chaque dépôt `Centrale.projet.sauver` et au retour sur l'onglet.
 
 Ce que l'application doit faire pour que cela marche bien :
 
-1. **Tout déposer avant de partir.** Si elle attend avant de déposer (minuteur, bouton « Déposer »), elle passe `avantDeQuitter` à `Centrale.init`. Le module attend cette fonction (5 s au plus) avant « ← Mes ateliers » et « Étape suivante » :
+1. **Tout déposer avant de partir.** Si elle attend avant de déposer (minuteur, bouton « Déposer »), elle passe `avantDeQuitter` à `Centrale.init`. Le module attend cette fonction (15 s au plus) avant « ← Mes ateliers » et « Étape suivante » :
    ```js
    Centrale.init({ app: 'etabli3d', avantDeQuitter: () => deposerProjet() });
    ```
@@ -165,7 +168,7 @@ La Centrale affiche ces informations sur la fiche de la passerelle, et signale u
 - **Sites à autoriser** : chaque `centrale.sites_a_autoriser` absent des origines autorisées est signalé, avec un bouton pour l'ajouter.
 - **Parcours** : l'enchaînement des étapes est vérifié avec les `fichiers` déclarés : fichier qu'un atelier ne déclare pas recevoir ou produire (motifs `*` acceptés), fichier reçu que rien ne produit ni ne fournit, atelier qui n'utilise pas encore le dossier de projet (`fichiers.utilises: false` ou `dossier_projet: false`).
 - **Navigation dans les parcours** : `centrale.parcours` est affiché sur la fiche de la passerelle (§ 2.6).
-- **Manifeste `postMessage`** : si l'adresse n'a pas de `centrale.json` mais publie `passerelle/manifest.json` (`"protocol": "passerelle"`, cas d'Établi 3D), la Centrale en tire seulement la fiche (nom, adresse, description) et le signale.
+- **Manifeste `postMessage`** : si l'adresse n'a pas de `centrale.json` mais publie `passerelle/manifest.json` (`"protocol": "passerelle"`), la Centrale en tire seulement la fiche (nom, adresse, description) et le signale.
 
 Pistes non encore faites : valider les valeurs des clés de `donnees` avec leur schéma dans la page Travail, signaler dans le suivi les activités hors `liste` et hors `dynamiques`.
 
@@ -178,4 +181,4 @@ npm i ajv@8
 node -e "const A=require('ajv/dist/2020'),f=require('fs');const v=new A({strict:false}).compile(JSON.parse(f.readFileSync('passerelle-atelier.schema.json')));const ok=v(JSON.parse(f.readFileSync('centrale.json')));console.log(ok||v.errors)"
 ```
 
-Le descripteur de NetSim et celui de TechnoStudio sont valides. Établi 3D publie aujourd'hui un manifeste de transport `postMessage` (`passerelle/manifest.json`), qui ne relève pas de ce format : il doit ajouter son `centrale.json` s'il se branche sur la Centrale.
+Les descripteurs de NetSim, TechnoStudio et Établi 3D sont valides. Établi 3D est la première application qui utilise le dossier de projet : ses noms de fichiers sont des motifs par extension (`*.json`, `*.stl`, `*.png`, `resume.json`) avec un `nom_conseille`, et il déclare `centrale.parcours` (dépôt automatique avant de changer d'étape).

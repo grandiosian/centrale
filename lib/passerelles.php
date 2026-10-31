@@ -72,7 +72,7 @@ function telecharger_descripteur(string $url): array
 
 /**
  * Lit l'adresse donnée par l'enseignant : centrale.json (passerelle.atelier), sinon le manifeste
- * postMessage passerelle/manifest.json (Établi 3D) converti en fiche minimale.
+ * postMessage passerelle/manifest.json (« protocol: passerelle ») converti en fiche minimale.
  * Renvoie [descripteur|null, adresse lue, erreur|null].
  */
 function lire_passerelle_distante(string $adresse): array

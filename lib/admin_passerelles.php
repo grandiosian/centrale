@@ -201,7 +201,7 @@ function page_passerelle(): void
                     $liste = fichiers_declares($d, $l); if (!$liste) continue; ?>
                     <h3><?= $titre ?></h3>
                     <ul><?php foreach ($liste as $x): ?>
-                        <li><code><?= h((string) $x['nom']) ?></code><?= !empty($x['type']) ? ' <span class="discret">' . h((string) $x['type']) . '</span>' : '' ?>
+                        <li><code><?= h((string) $x['nom']) ?></code><?= !empty($x['nom_conseille']) && $x['nom_conseille'] !== $x['nom'] ? ' <span class="discret">(nom conseillé : <code>' . h((string) $x['nom_conseille']) . '</code>)</span>' : '' ?><?= !empty($x['type']) ? ' <span class="discret">' . h((string) $x['type']) . '</span>' : '' ?>
                             <?= !empty($x['description']) ? ' — ' . h((string) $x['description']) : '' ?></li>
                     <?php endforeach; ?></ul>
                 <?php endforeach; ?>

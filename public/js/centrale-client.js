@@ -70,9 +70,12 @@
   function retour() {
     var r = adresseRetour();
     if (!r) return false;
+    var b = document.getElementById('centrale-retour');
+    if (b && typeof config.avantDeQuitter === 'function') { b.disabled = true; b.textContent = 'Enregistrement…'; }
     avantDeQuitter().then(function () {
       toutEnvoyer();
-      viderFileProgression();
+      return Promise.resolve(viderFileProgression()).catch(function () { /* renvoyée à la prochaine connexion */ });
+    }).then(function () {
       location.href = r;
     });
     return true;
@@ -81,11 +84,12 @@
   /**
    * Option avantDeQuitter de Centrale.init : fonction (éventuellement asynchrone) appelée avant de quitter
    * l'application par « ← Mes ateliers » ou « Étape suivante », pour déposer ce qui attend encore
-   * (ex. le projet dans le dossier de projet). 5 s au plus.
+   * (ex. le projet dans le dossier de projet, un aperçu à calculer). 15 s au plus : au-delà, on part quand même.
    */
+  var DELAI_AVANT_DE_QUITTER = 15000;
   function avantDeQuitter() {
     if (typeof config.avantDeQuitter !== 'function') return Promise.resolve();
-    var fin = new Promise(function (ok) { setTimeout(ok, 5000); });
+    var fin = new Promise(function (ok) { setTimeout(ok, DELAI_AVANT_DE_QUITTER); });
     var travail = Promise.resolve().then(config.avantDeQuitter).catch(function () { /* on part quand même */ });
     return Promise.race([travail, fin]);
   }
@@ -137,9 +141,20 @@
   async function allerEtapeSuivante() {
     var info = await etapeSuivante();
     if (!info) return false;
+    var depose = false;
+    if (info.raison && peutSeDebloquerEnPartant(info)) {
+      // En mode « dans l'ordre », l'étape en cours se termine peut-être avec ce que l'application
+      // dépose en partant (avantDeQuitter) : on dépose d'abord, puis on regarde de nouveau.
+      await avantDeQuitter();
+      toutEnvoyer();
+      await viderFileProgression();
+      depose = true;
+      info = await etapeSuivante();
+      if (!info) return false;
+    }
     if (info.fin) return retour();
     if (info.raison) return false;
-    await avantDeQuitter();
+    if (!depose) await avantDeQuitter();
     toutEnvoyer();
     await viderFileProgression();
     var e = info.etape;
@@ -149,6 +164,16 @@
     location.href = cible;
     if (memePage) location.reload();   // même application : le changement de # ne recharge pas la page
     return true;
+  }
+
+  /**
+   * Étape suivante verrouillée seulement parce que l'étape en cours n'est pas finie (mode « dans l'ordre »),
+   * alors que l'application dépose ses fichiers en partant (avantDeQuitter) et que l'étape attend des fichiers :
+   * le clic peut la débloquer. (Mode « après validation » : seul le professeur débloque.)
+   */
+  function peutSeDebloquerEnPartant(info) {
+    return !!(info && info.raison && info.etape && info.etape.url && info.parcours.deblocage === 'ordre'
+      && typeof config.avantDeQuitter === 'function' && info.actuelle && (info.actuelle.sorties || []).length);
   }
 
   function demarrerBoutonSuivant() {
@@ -178,17 +203,23 @@
       b.type = 'button';
       b.onclick = async function () {
         var i = suivant.info;
-        if (i && i.raison) { montrerMessageSuivant(i.raison); return; }
+        if (i && i.raison && !peutSeDebloquerEnPartant(i)) { montrerMessageSuivant(i.raison); return; }
         b.disabled = true;
         b.textContent = 'Enregistrement…';
         var parti = await allerEtapeSuivante().catch(function () { return false; });
-        if (!parti) { b.disabled = false; majBoutonSuivant(0); }
+        if (!parti) {
+          b.disabled = false;
+          try { suivant.info = await etapeSuivante(); } catch (e) { /* rien */ }
+          dessinerBoutonSuivant();
+          if (suivant.info && suivant.info.raison) montrerMessageSuivant(suivant.info.raison);
+        }
       };
       document.body.appendChild(b);
     }
     var r = document.getElementById('centrale-retour');
     var gauche = r ? Math.round(r.getBoundingClientRect().right) + 8 : 12;
-    var verrou = !!info.raison;
+    // Verrou affiché seulement si le clic ne peut pas le lever (dépôt des fichiers en partant)
+    var verrou = !!info.raison && !peutSeDebloquerEnPartant(info);
     b.textContent = info.fin ? 'Parcours terminé → Mes ateliers'
       : (verrou ? '🔒 ' : '') + 'Étape ' + (info.numero + 1) + ' : ' + info.etape.titre + (verrou ? '' : ' →');
     b.title = info.fin ? 'Dernière étape : revenir à la liste de tes ateliers'
@@ -966,7 +997,10 @@
         try { e = await reponse.json(); } catch (x) { /* rien */ }
         throw ErreurCentrale(e.erreur || ('Erreur du serveur (' + reponse.status + ').'), reponse.status);
       }
-      versionsProjet[nom] = parseInt(reponse.headers.get('X-Version') || '0', 10);
+      // Version lue (en-tête exposé par la Centrale). Absente : pas de contrôle, plutôt qu'un faux conflit.
+      var version = reponse.headers.get('X-Version');
+      if (version !== null && version !== '') versionsProjet[nom] = parseInt(version, 10);
+      else delete versionsProjet[nom];
       var type = (reponse.headers.get('Content-Type') || '').toLowerCase();
       var format = options.format || 'auto';
       if (format === 'json' || (format === 'auto' && (type.indexOf('json') >= 0 || /\.json$/i.test(nom)))) return reponse.json();

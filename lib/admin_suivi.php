@@ -561,15 +561,13 @@ function page_parcours(): void
                         l'adresse est celle du logiciel à ouvrir. Sous une étape, facultatif :
                         <code>&gt; consigne</code>, <code>reçoit : fichier1, fichier2</code> (ce que l'étape lit dans le dossier de projet),
                         <code>produit : fichier</code> (ce qu'elle doit y déposer ; l'étape est terminée quand tout est déposé).</span>
-                    <textarea name="etapes" rows="12" class="mono" placeholder="Cahier des charges | quiz | cdc-robot | https://technoversailles.alwaysdata.net/apps/quiz/
-  > Réponds aux questions pour fixer les dimensions du robot.
-  produit : cahier.json
-Modéliser le châssis | etabli3d | chassis | https://grandiosian.github.io/etabli3d/
-  reçoit : cahier.json, gabarit.glb
-  produit : chassis.glb
-Programmer le suivi de ligne | prog3d | suivi-ligne | https://grandiosian.github.io/programmation3d/
-  reçoit : chassis.glb
-  produit : programme.json"><?= h($courant['etapes']) ?></textarea>
+                    <textarea name="etapes" rows="12" class="mono" placeholder="Câbler le réseau de la salle | netsim | e5-1 | https://grandiosian.github.io/NetSim/
+  > Branche les ordinateurs de la salle.
+Modéliser le support de la lampe | etabli3d | | https://grandiosian.github.io/etabli3d/
+  > Pars du gabarit fourni et adapte-le.
+  reçoit : support.etabli3d.json
+  produit : support.etabli3d.json, support.stl
+Programmer la lampe | technostudio | charte-lampe-de-poche/P1 | https://grandiosian.github.io/TechnoStudio/"><?= h($courant['etapes']) ?></textarea>
                 </label>
                 <?php if ($catalogue): ?>
                     <details class="aide-catalogue"><summary>Activités connues (déclarées par vos applications)</summary>

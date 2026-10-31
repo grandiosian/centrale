@@ -31,7 +31,9 @@ function appliquer_cors(): void
         header('Vary: Origin');
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
         header('Access-Control-Allow-Headers: Content-Type, X-Jeton');
-        header('Access-Control-Expose-Headers: Content-Disposition, X-Maj');
+        // X-Version : version lue d'un fichier du dossier de projet (projet.php), renvoyée à l'enregistrement.
+        // Sans elle, une application hébergée ailleurs lit 0 et chaque nouveau dépôt du même fichier part en conflit (409).
+        header('Access-Control-Expose-Headers: Content-Disposition, X-Maj, X-Version');
         header('Access-Control-Max-Age: 86400');
     }
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
