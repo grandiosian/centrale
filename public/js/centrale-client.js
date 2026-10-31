@@ -31,6 +31,7 @@
   var jetonTransmis = null;    // jeton reçu dans l'adresse (#centrale=…) depuis le portail ou une autre application
   var activiteTransmise = null; // activité à ouvrir directement (#activite=…)
   var CLE_RETOUR = 'centrale-retour';
+  var CLE_ATELIER = 'centrale-atelier';   // { parcours, etape } : atelier transversal en cours dans cet onglet
   var memoire = null;          // session si sessionStorage est indisponible
   var attentes = {};           // cle -> { minuteur, promesses: [] }
   var bases = {};              // cle -> date (serveur) de la version sur laquelle l'élève travaille
@@ -99,15 +100,22 @@
    */
   function lireJetonTransmis() {
     var h = location.hash.replace(/^#/, '');
-    if (!/(^|&)(centrale|retour|activite)=/.test(h)) return;
+    if (!/(^|&)(centrale|retour|activite|parcours|etape)=/.test(h)) return;
+    var atelier = {};
     var reste = [];
     h.split('&').forEach(function (morceau) {
       var v = function (n) { return decodeURIComponent(morceau.slice(n)); };
       if (morceau.indexOf('centrale=') === 0) jetonTransmis = v(9);
       else if (morceau.indexOf('retour=') === 0) { try { sessionStorage.setItem(CLE_RETOUR, v(7)); } catch (e) { /* rien */ } }
       else if (morceau.indexOf('activite=') === 0) activiteTransmise = v(9);
+      else if (morceau.indexOf('parcours=') === 0) atelier.parcours = parseInt(v(9), 10);
+      else if (morceau.indexOf('etape=') === 0) atelier.etape = parseInt(v(6), 10);
       else if (morceau) reste.push(morceau);
     });
+    try {
+      if (atelier.parcours) sessionStorage.setItem(CLE_ATELIER, JSON.stringify({ parcours: atelier.parcours, etape: atelier.etape || 0 }));
+      else if (jetonTransmis) sessionStorage.removeItem(CLE_ATELIER);   // ouvert hors atelier : on oublie l'atelier précédent
+    } catch (e) { /* rien */ }
     try {
       history.replaceState(null, '', location.pathname + location.search + (reste.length ? '#' + reste.join('&') : ''));
     } catch (e) { /* rien */ }
@@ -204,6 +212,7 @@
     var r = options.retour || adresseRetour();
     if (r) morceaux.push('retour=' + encodeURIComponent(r));
     if (options.activite) morceaux.push('activite=' + encodeURIComponent(options.activite));
+    if (options.parcours) morceaux.push('parcours=' + encodeURIComponent(options.parcours), 'etape=' + encodeURIComponent(options.etape || 0));
     if (h) morceaux.push(h);
     u.hash = morceaux.join('&');
     return u.toString();
@@ -230,6 +239,7 @@
       } catch (e) { /* rien */ }
     }
     enregistrerSession(null);
+    try { sessionStorage.removeItem(CLE_ATELIER); } catch (e) { /* rien */ }
   }
 
   /* ======================================================================
@@ -777,6 +787,104 @@
   }
 
   /* ======================================================================
+     Ateliers transversaux : dossier de projet partagé par les applications d'un parcours
+     ====================================================================== */
+
+  var versionsProjet = {};   // nom -> version lue (pour ne pas écraser le travail d'un coéquipier)
+
+  /** { parcours, etape } si l'application a été ouverte depuis une étape d'un atelier, sinon null. */
+  function contexteAtelier() {
+    try { return JSON.parse(sessionStorage.getItem(CLE_ATELIER)) || null; } catch (e) { return null; }
+  }
+
+  function parcoursCourant(parcours) {
+    var c = contexteAtelier();
+    var id = parcours || (c && c.parcours);
+    if (!id) throw ErreurCentrale("Cette application n'a pas été ouverte depuis un atelier.", 0);
+    return id;
+  }
+
+  /**
+   * Étape en cours de l'atelier : { parcours, proprietaire, etapes, fichiers, numero, etape }.
+   * etape = { titre, consigne, entrees: [noms], sorties: [noms], ouverte, statut… } ; null hors atelier.
+   */
+  async function etape() {
+    var c = contexteAtelier();
+    if (!c) return null;
+    var d = await requeteJSON('projet.php', {}, { parcours: c.parcours });
+    d.numero = c.etape || 0;
+    d.etape = d.etapes[d.numero] || null;
+    return d;
+  }
+
+  var projet = {
+    /** Contenu du dossier de projet : { fichiers, etapes, proprietaire, parcours }. */
+    infos: function (parcours) {
+      return requeteJSON('projet.php', {}, { parcours: parcoursCourant(parcours) });
+    },
+    liste: async function (parcours) {
+      return (await projet.infos(parcours)).fichiers;
+    },
+    /**
+     * Lit un fichier du dossier (ou le fichier de départ fourni par l'enseignant).
+     * format : 'auto' (JSON, texte ou Blob selon le type), 'json', 'texte' ou 'blob'. null s'il n'existe pas encore.
+     */
+    charger: async function (nom, options) {
+      options = options || {};
+      var reponse = await requete('projet.php', {}, { parcours: parcoursCourant(options.parcours), nom: nom });
+      if (reponse.status === 404) return null;
+      if (!reponse.ok) {
+        var e = {};
+        try { e = await reponse.json(); } catch (x) { /* rien */ }
+        throw ErreurCentrale(e.erreur || ('Erreur du serveur (' + reponse.status + ').'), reponse.status);
+      }
+      versionsProjet[nom] = parseInt(reponse.headers.get('X-Version') || '0', 10);
+      var type = (reponse.headers.get('Content-Type') || '').toLowerCase();
+      var format = options.format || 'auto';
+      if (format === 'json' || (format === 'auto' && (type.indexOf('json') >= 0 || /\.json$/i.test(nom)))) return reponse.json();
+      if (format === 'texte' || (format === 'auto' && type.indexOf('text/') === 0)) return reponse.text();
+      return reponse.blob();
+    },
+    /**
+     * Dépose un fichier dans le dossier (objet → JSON, texte, Blob ou File).
+     * En équipe : si un coéquipier l'a modifié depuis la lecture, une erreur « conflit » est levée
+     * (e.conflit = true, e.auteur) ; recharger puis réessayer, ou passer { forcer: true }.
+     */
+    sauver: async function (nom, contenu, options) {
+      options = options || {};
+      var c = contexteAtelier();
+      var blob = contenu instanceof Blob ? contenu
+        : typeof contenu === 'string' ? new Blob([contenu], { type: options.type || 'text/plain' })
+        : new Blob([JSON.stringify(contenu)], { type: 'application/json' });
+      var f = new FormData();
+      f.append('parcours', parcoursCourant(options.parcours));
+      f.append('nom', nom);
+      if (c && !options.parcours && options.etape !== null) f.append('etape', options.etape != null ? options.etape : c.etape);
+      if (!options.forcer && versionsProjet[nom] !== undefined) f.append('version', versionsProjet[nom]);
+      f.append('fichier', blob, nom);
+      var reponse = await requete('projet.php', { method: 'POST', body: f });
+      var d = {};
+      try { d = await reponse.json(); } catch (x) { /* rien */ }
+      if (!reponse.ok || !d.ok) {
+        var err = ErreurCentrale(d.erreur || ('Erreur du serveur (' + reponse.status + ').'), reponse.status);
+        if (d.conflit) { err.conflit = true; err.auteur = d.auteur; err.version = d.version; }
+        throw err;
+      }
+      versionsProjet[nom] = d.fichier.version;
+      return d.fichier;
+    },
+    supprimer: async function (nom, options) {
+      options = options || {};
+      var r = await requeteJSON('projet.php', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parcours: parcoursCourant(options.parcours), nom: nom, supprimer: true }),
+      });
+      delete versionsProjet[nom];
+      return r;
+    },
+  };
+
+  /* ======================================================================
      Identifiant de l'élève : « 4C-LHA-LoutreAgile » (le surnom, à la fin, peut être changé)
      ====================================================================== */
 
@@ -887,6 +995,9 @@
     reprendreSession: reprendreSession,
     afficherConnexion: afficherConnexion,
     identifiant: identifiant,
+    etape: etape,
+    contexteAtelier: contexteAtelier,
+    projet: projet,
     changerSurnom: changerSurnom,
     afficherIdentifiant: afficherIdentifiant,
     nomFichier: nomFichier,

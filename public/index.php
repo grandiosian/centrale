@@ -153,6 +153,21 @@ li.suivante .num { border-color: var(--encre); color: var(--encre); }
 li.termine .etape-info { color: var(--ok); }
 li.commence .etape-info { color: var(--encours); }
 li.suivante { background: color-mix(in srgb, var(--encre) 7%, transparent); border-radius: 8px; }
+li.verrouillee { opacity: .62; }
+li.verrouillee .num { border-style: dashed; font-size: .8rem; }
+.etape-consigne { font-size: .92rem; margin: 2px 0; white-space: pre-line; }
+.fichiers-etape { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.puce-fichier { font: 600 .78rem ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; padding: 2px 7px; border-radius: 5px;
+                background: var(--code-fond); color: var(--doux); }
+.puce-fichier.sortie { border: 1px dashed var(--bord); background: transparent; }
+.puce-fichier.sortie.fait { border: 1px solid var(--ok); color: var(--ok); background: var(--ok-fond); }
+.parcours-tete .mode { font-size: .82rem; font-weight: 600; color: var(--doux); margin-left: auto; }
+.equipe { margin: 6px 0 0; font-size: .92rem; }
+.equipe.attente { color: var(--encours); }
+.pied-parcours { margin-top: 10px; }
+.dossier { margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: var(--code-fond); }
+.dossier ul { margin: 0; padding-left: 18px; }
+.dossier li { margin: 4px 0; }
 #chargement { position: fixed; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--papier) 85%, transparent);
               font-weight: 600; font-size: 1.1rem; z-index: 10; }
 [hidden] { display: none !important; }
@@ -272,9 +287,9 @@ li.suivante { background: color-mix(in srgb, var(--encre) 7%, transparent); bord
     return e;
   }
 
-  function ouvrir(url, activite) {
+  function ouvrir(url, activite, parcours, etape) {
     $('chargement').hidden = false;
-    Centrale.ouvrir(url, { activite: activite || undefined, retour: PORTAIL });
+    Centrale.ouvrir(url, { activite: activite || undefined, retour: PORTAIL, parcours: parcours || undefined, etape: etape });
   }
 
   async function rafraichir() {
@@ -328,29 +343,73 @@ li.suivante { background: color-mix(in srgb, var(--encre) 7%, transparent); bord
     }));
   }
 
-  /* ---------- Parcours ---------- */
+  /* ---------- Parcours (ateliers transversaux, individuels ou en équipe) ---------- */
   function afficherParcours(parcours) {
     $('bloc-parcours').hidden = !parcours.length;
     $('liste-parcours').replaceChildren(...parcours.map((p) => {
       const pct = Math.round(p.taux * 100);
-      const suivante = p.etapes.findIndex((e) => e.statut !== 'termine');
+      const suivante = p.etapes.findIndex((e) => e.statut !== 'termine' && e.ouverte);
       const ol = el('ol', { class: 'etapes' });
       p.etapes.forEach((e, i) => {
-        const info = e.statut === 'termine' ? 'Terminé ✓' : e.statut === 'commence' ? 'En cours' + (e.texte ? ' · ' + e.texte : '') : 'À faire';
+        const verrou = !e.ouverte;
+        const info = verrou
+          ? (p.deblocage === 'validation' ? 'Ton professeur ouvrira cette étape après avoir validé la précédente' : 'S’ouvre quand l’étape précédente est terminée')
+          : e.statut === 'termine' ? 'Terminé ✓' : e.statut === 'commence' ? 'En cours' + (e.texte ? ' · ' + e.texte : '') : 'À faire';
         const b = el('button', { class: e.statut === 'termine' ? 'secondaire' : '' },
-          e.statut === 'termine' ? 'Revoir' : e.statut === 'commence' ? 'Continuer' : 'Commencer');
-        if (e.url) b.onclick = () => ouvrir(e.url, e.activite);
+          verrou ? 'Pas encore' : e.statut === 'termine' ? 'Revoir' : e.statut === 'commence' ? 'Continuer' : 'Commencer');
+        if (verrou) b.disabled = true;
+        else if (e.url) b.onclick = () => ouvrir(e.url, e.activite, p.id, e.ordre);
         else { b.disabled = true; b.title = "Pas d'adresse pour cette étape"; }
-        ol.append(el('li', { class: e.statut + (i === suivante ? ' suivante' : '') },
-          el('span', { class: 'num' }, e.statut === 'termine' ? '✓' : String(i + 1)),
-          el('div', {}, el('div', { class: 'etape-titre' }, e.titre), el('div', { class: 'etape-info' }, info)),
+        const fichiers = (e.entrees.length || e.sorties.length) ? el('div', { class: 'fichiers-etape' },
+          ...e.entrees.map((n) => el('span', { class: 'puce-fichier', title: 'Cette étape utilise ce fichier de ton dossier' }, '↘ ' + n)),
+          ...e.sorties.map((n) => {
+            const fait = e.deposees.includes(n);
+            return el('span', { class: 'puce-fichier sortie' + (fait ? ' fait' : ''), title: fait ? 'Déposé dans ton dossier' : 'À produire à cette étape' }, (fait ? '✓ ' : '↗ ') + n);
+          })) : null;
+        ol.append(el('li', { class: e.statut + (i === suivante ? ' suivante' : '') + (verrou ? ' verrouillee' : '') },
+          el('span', { class: 'num' }, verrou ? '🔒' : e.statut === 'termine' ? '✓' : String(i + 1)),
+          el('div', {},
+            el('div', { class: 'etape-titre' }, e.titre),
+            e.consigne ? el('div', { class: 'etape-consigne' }, e.consigne) : null,
+            el('div', { class: 'etape-info' }, info),
+            fichiers),
           el('div', { class: 'action' }, b)));
       });
+      let equipe = null;
+      if (p.mode === 'equipe') {
+        equipe = el('p', { class: 'equipe' + (p.sans_equipe ? ' attente' : '') }, p.sans_equipe
+          ? 'Atelier en équipe : ton professeur n’a pas encore formé les équipes. Tu travailles seul pour l’instant.'
+          : [el('strong', {}, p.equipe), p.coequipiers.length ? ' · avec ' + p.coequipiers.join(', ') : ' · seul dans l’équipe pour l’instant']);
+      }
+      const dossier = el('div', { class: 'dossier', hidden: '' });
+      const voir = el('button', { class: 'lien' }, `Mon dossier de projet (${p.fichiers})`);
+      voir.onclick = async () => {
+        if (!dossier.hidden) { dossier.hidden = true; return; }
+        dossier.replaceChildren(el('p', { class: 'vide' }, 'Chargement…'));
+        dossier.hidden = false;
+        try {
+          const liste = await Centrale.projet.liste(p.id);
+          dossier.replaceChildren(liste.length ? el('ul', {}, ...liste.map((f) => {
+            const t = el('button', { class: 'lien' }, f.nom);
+            t.onclick = async () => {
+              const blob = await Centrale.projet.charger(f.nom, { parcours: p.id, format: 'blob' });
+              const a = el('a', { href: URL.createObjectURL(blob), download: f.nom });
+              document.body.append(a); a.click(); a.remove();
+            };
+            return el('li', {}, t, ' ', el('span', { class: 'etape-info' },
+              f.fourni ? 'fourni par ton professeur' : (f.auteur ? 'par ' + f.auteur + ' · ' : '') + new Date(f.maj * 1000).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })));
+          })) : el('p', { class: 'vide' }, 'Ton dossier est vide pour l’instant : il se remplit au fil des étapes.'));
+        } catch (e) { dossier.replaceChildren(el('p', { class: 'vide' }, e.message)); }
+      };
       return el('div', { class: 'carte parcours' },
-        el('div', { class: 'parcours-tete' }, el('h3', {}, p.nom), el('span', { class: 'pct' }, pct + ' %')),
+        el('div', { class: 'parcours-tete' }, el('h3', {}, p.nom),
+          el('span', { class: 'mode' }, p.mode === 'equipe' ? 'En équipe' : 'Individuel'), el('span', { class: 'pct' }, pct + ' %')),
+        equipe,
         el('div', { class: 'barre-prog' }, el('i', { style: `width:${pct}%` })),
         p.description ? el('p', { class: 'consigne' }, p.description) : null,
-        ol);
+        ol,
+        el('div', { class: 'pied-parcours' }, voir),
+        dossier);
     }));
   }
 </script>

@@ -273,6 +273,50 @@ Onglet **Emploi du temps** : une grille par semaine, par établissement, avec l'
 - **Placement d'une classe dans une salle** : on clique sur un élève puis sur une place, ou on le glisse. On peut aussi faire un placement aléatoire, vider la salle, ou imprimer.
   - Les noms affichés viennent de votre ordinateur. Le serveur ne garde que « place → élève n° 07 ».
 
+## 5 bis. Ateliers transversaux (parcours en plusieurs logiciels)
+
+Un parcours peut enchaîner plusieurs applications : questionnaire → établi3D → programmation3D… Chaque élève (parcours **individuel**) ou chaque équipe (parcours **en équipe**) a un **dossier de projet** pour ce parcours, partagé par toutes les applications. Une étape y dépose ses productions, l'étape suivante les relit.
+
+**Côté enseignant** (onglet Parcours) :
+
+- **Travail** : individuel ou en équipe. Les équipes se forment sur la page de chaque classe, section « Équipes » : au hasard, par 2 à 5, dans chaque groupe si la classe en a, puis à ajuster.
+- **Ouverture des étapes** :
+  - libre ;
+  - dans l'ordre : une étape s'ouvre quand la précédente est terminée ;
+  - après validation : vous validez l'étape précédente dans « Dossiers de projet ».
+- **Étapes** : une ligne `Titre | atelier | activité | adresse`, suivie si besoin de ces lignes :
+  ```
+    > consigne affichée à l'élève (plusieurs lignes possibles)
+    reçoit : cahier.json, gabarit.glb
+    produit : chassis.glb
+  ```
+  Une étape est terminée quand tous les fichiers de sa ligne « produit » sont déposés, ou quand l'application déclare l'activité terminée.
+- **Fichiers fournis** : vos gabarits et fichiers de départ, visibles dans tous les dossiers. Si l'élève dépose un fichier du même nom, c'est le sien qui est lu.
+- **Dossiers de projet** : l'avancement de chaque élève ou équipe étape par étape, la validation des étapes, et le téléchargement de leurs fichiers.
+
+**Côté élève** (portail) :
+
+- les étapes s'affichent avec leur consigne, les fichiers reçus et produits, et un cadenas tant qu'elles ne sont pas ouvertes ;
+- en équipe, l'élève voit ses coéquipiers par leur **identifiant** (jamais leur nom) ;
+- « Mon dossier de projet » permet de télécharger ses fichiers.
+
+**Côté application** (quelques lignes, l'application marche aussi hors atelier) :
+
+```js
+const info = await Centrale.etape();          // null si l'appli n'a pas été ouverte depuis un atelier
+if (info) {
+  info.etape.consigne;                          // texte de l'enseignant
+  for (const nom of info.etape.entrees) {       // ce que l'étape reçoit
+    const contenu = await Centrale.projet.charger(nom);   // JSON, texte ou Blob ; null s'il n'existe pas
+  }
+  await Centrale.projet.sauver("chassis.glb", blob);      // dépose une production (objet → JSON)
+}
+```
+
+En équipe, si un coéquipier a enregistré le même fichier depuis votre lecture, `sauver` lève une erreur avec `e.conflit = true` et `e.auteur`. L'application recharge alors le fichier, ou force l'enregistrement avec `{ forcer: true }`.
+
+Les étapes verrouillées refusent les dépôts. Les fichiers comptent dans l'espace de l'élève qui les dépose.
+
 ## 6. Fichiers du serveur
 
 Onglet **Fichiers** :

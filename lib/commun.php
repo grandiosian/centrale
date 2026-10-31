@@ -282,6 +282,52 @@ function creer_tables(PDO $pdo): void
     ajouter_colonne($pdo, 'eleves', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'cours', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'seances_modifiees', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
+    // Ateliers transversaux : parcours individuel ou en équipe, étapes qui reçoivent / produisent des fichiers
+    ajouter_colonne($pdo, 'parcours', 'mode', "TEXT NOT NULL DEFAULT 'individuel'");      // individuel | equipe
+    ajouter_colonne($pdo, 'parcours', 'deblocage', "TEXT NOT NULL DEFAULT 'libre'");      // libre | ordre | validation
+    ajouter_colonne($pdo, 'parcours_etapes', 'consigne', "TEXT NOT NULL DEFAULT ''");
+    ajouter_colonne($pdo, 'parcours_etapes', 'entrees', "TEXT NOT NULL DEFAULT ''");      // « cahier.json, chassis.glb »
+    ajouter_colonne($pdo, 'parcours_etapes', 'sorties', "TEXT NOT NULL DEFAULT ''");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS equipes (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        classe_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        nom       TEXT NOT NULL,
+        ordre     INTEGER NOT NULL DEFAULT 0
+    )");
+    ajouter_colonne($pdo, 'eleves', 'equipe_id', 'INTEGER REFERENCES equipes(id) ON DELETE SET NULL');
+    // Fichiers fournis par l'enseignant pour un parcours (gabarits, consignes, modèles de départ)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS parcours_fournis (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        parcours_id INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
+        nom         TEXT NOT NULL,
+        chemin      TEXT NOT NULL,
+        taille      INTEGER NOT NULL,
+        type        TEXT NOT NULL DEFAULT 'application/octet-stream',
+        maj         INTEGER NOT NULL,
+        UNIQUE (parcours_id, nom)
+    )");
+    // Dossier de projet : fichiers d'un élève (proprietaire « e12 ») ou d'une équipe (« q5 ») pour un parcours
+    $pdo->exec("CREATE TABLE IF NOT EXISTS projet_fichiers (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        parcours_id INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
+        proprietaire TEXT NOT NULL,
+        nom         TEXT NOT NULL,
+        chemin      TEXT NOT NULL,
+        taille      INTEGER NOT NULL,
+        type        TEXT NOT NULL DEFAULT 'application/octet-stream',
+        maj         INTEGER NOT NULL,
+        version     INTEGER NOT NULL DEFAULT 1,
+        auteur_id   INTEGER REFERENCES eleves(id) ON DELETE SET NULL,
+        etape       INTEGER,
+        UNIQUE (parcours_id, proprietaire, nom)
+    )");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS parcours_validations (
+        parcours_id  INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
+        proprietaire TEXT NOT NULL,
+        ordre        INTEGER NOT NULL,
+        valide_le    INTEGER NOT NULL,
+        PRIMARY KEY (parcours_id, proprietaire, ordre)
+    )");
     // Plans de classe : un placement par classe ENTIÈRE (groupe 0) ou par groupe
     $cols = array_column($pdo->query('PRAGMA table_info(placements)')->fetchAll(), 'name');
     if (!in_array('groupe_id', $cols, true)) {
@@ -571,7 +617,8 @@ function usage_eleve(int $eleve_id): int
     $st = db()->prepare('SELECT
             COALESCE((SELECT SUM(taille) FROM donnees WHERE eleve_id = :e), 0)
           + COALESCE((SELECT SUM(taille) FROM donnees_versions WHERE eleve_id = :e), 0)
-          + COALESCE((SELECT SUM(taille) FROM fichiers WHERE eleve_id = :e), 0)');
+          + COALESCE((SELECT SUM(taille) FROM fichiers WHERE eleve_id = :e), 0)
+          + COALESCE((SELECT SUM(taille) FROM projet_fichiers WHERE auteur_id = :e), 0)');
     $st->execute([':e' => $eleve_id]);
     return (int) $st->fetchColumn();
 }
@@ -1250,3 +1297,5 @@ function url_base(): string
     $chemin = rtrim(str_replace('\\', '/', dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/x/y'))), '/');
     return (est_https() ? 'https' : 'http') . '://' . $hote . $chemin;
 }
+
+require_once __DIR__ . '/projets.php';

@@ -12,6 +12,7 @@ require __DIR__ . '/../../lib/admin_suivi.php';
 require __DIR__ . '/../../lib/admin_organisation.php';
 require __DIR__ . '/../../lib/admin_fichiers.php';
 require __DIR__ . '/../../lib/admin_groupes.php';
+require __DIR__ . '/../../lib/admin_projets.php';
 require __DIR__ . '/../../lib/admin_import.php';
 
 header('X-Frame-Options: DENY');
@@ -102,6 +103,7 @@ function supprimer_eleves(string $condition, array $params): void
     $st->execute($params);
     foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $id) {
         effacer_fichiers_eleve((int) $id);
+        supprimer_fichiers_projet('proprietaire = ?', ['e' . (int) $id]);   // dossiers de projet individuels
     }
 }
 
@@ -347,7 +349,12 @@ if ($action !== null) {
             foreach (['donnees', 'donnees_versions', 'fichiers', 'progression', 'connexions'] as $table) {
                 $pdo->prepare("DELETE FROM $table WHERE eleve_id IN (SELECT id FROM eleves WHERE classe_id = ?)")->execute([$classe_id]);
             }
-            flash('Travail et avancement de la classe effacés. Les codes des élèves fonctionnent toujours.');
+            $st = $pdo->prepare('SELECT id FROM equipes WHERE classe_id = ?');
+            $st->execute([$classe_id]);
+            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $q) {
+                supprimer_fichiers_projet('proprietaire = ?', ['q' . (int) $q]);   // dossiers de projet des équipes
+            }
+                        flash('Travail et avancement de la classe effacés. Les codes des élèves fonctionnent toujours.');
             rediriger($retour_classe);
 
         case 'anonymiser':
@@ -630,6 +637,9 @@ match ($page) {
     'etablissements' => page_etablissements(),
     'edt'      => page_edt(),
     'salle'    => page_salle((int) ($_GET['id'] ?? 0)),
+    'projets' => page_projets(),
+    'projet_fichier' => telecharger_fichier_projet('projet', (int) ($_GET['id'] ?? 0)),
+    'fourni' => telecharger_fichier_projet('fournis', (int) ($_GET['id'] ?? 0)),
     'placement' => page_placement((int) ($_GET['classe'] ?? 0), (int) ($_GET['salle'] ?? 0), (int) ($_GET['groupe'] ?? 0)),
     'fichiers' => page_fichiers(),
     'import'   => page_import(),
@@ -964,6 +974,7 @@ function page_classe(int $id): void
 
         <?php section_organisation_classe($classe); ?>
         <?php section_groupes_classe($classe, $eleves); ?>
+        <?php section_equipes_classe($classe, $eleves); ?>
 
         <section id="eleves">
             <div class="titre-section">

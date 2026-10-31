@@ -335,3 +335,24 @@ details.repartition[open] > summary { margin-bottom: 12px; }
   margin-top: 12px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; }
 .apercu-eleve div { display: flex; flex-direction: column; gap: 2px; max-width: 70ch; }
 .apercu-eleve .aide { margin: 0; }
+
+/* Ateliers transversaux : dossiers de projet, équipes */
+.table-projets td.dossier { min-width: 180px; }
+.table-projets .membre { display: block; font-size: .9rem; white-space: nowrap; }
+.table-projets .membre .numero { font-size: .8rem; color: var(--doux); }
+.table-projets th.col-etape { min-width: 130px; font-size: .85rem; text-transform: none; letter-spacing: 0; }
+.num-etape { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--code-fond); font-size: .75rem; font-weight: 700; }
+td.etape-projet { font-size: .88rem; vertical-align: top; }
+td.etape-projet .statut { display: block; font-weight: 600; }
+td.etape-projet small { display: block; color: var(--doux); }
+td.etape-projet.st-termine { background: var(--ok-fond); }
+td.etape-projet.st-termine .statut { color: var(--ok); }
+td.etape-projet.st-commence { background: color-mix(in srgb, #f0b35a 18%, transparent); }
+td.etape-projet.verrouillee { color: var(--doux); }
+td.etape-projet form { margin-top: 6px; }
+td.etape-projet button.valide { color: var(--ok); border-color: var(--ok); }
+td.fichiers-projet a { display: block; font-size: .88rem; white-space: nowrap; }
+.liste-fournis { list-style: none; padding: 0; margin: 8px 0 14px; }
+.liste-fournis li { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.liste-fournis form { margin: 0; }
+input.nom-equipe { width: 9em; font-weight: 700; }

@@ -15,6 +15,8 @@ function action_suivi(string $action): bool
             $nom = mb_substr(trim((string) ($_POST['nom'] ?? '')), 0, 80);
             $description = mb_substr(trim((string) ($_POST['description'] ?? '')), 0, 500);
             $classes = implode(',', array_filter(array_map('trim', explode(',', (string) ($_POST['classes'] ?? '')))));
+            $mode = isset(MODES_PARCOURS[$_POST['mode'] ?? '']) ? $_POST['mode'] : 'individuel';
+            $deblocage = isset(DEBLOCAGES[$_POST['deblocage'] ?? '']) ? $_POST['deblocage'] : 'libre';
             [$etapes, $erreurs] = lire_etapes((string) ($_POST['etapes'] ?? ''));
             if ($nom === '') {
                 $erreurs[] = 'Donnez un nom au parcours.';
@@ -31,24 +33,78 @@ function action_suivi(string $action): bool
             }
             $pdo->beginTransaction();
             if ($id) {
-                $pdo->prepare('UPDATE parcours SET nom = ?, description = ?, classes = ? WHERE id = ?')
-                    ->execute([$nom, $description, $classes, $id]);
+                $pdo->prepare('UPDATE parcours SET nom = ?, description = ?, classes = ?, mode = ?, deblocage = ? WHERE id = ?')
+                    ->execute([$nom, $description, $classes, $mode, $deblocage, $id]);
                 $pdo->prepare('DELETE FROM parcours_etapes WHERE parcours_id = ?')->execute([$id]);
             } else {
-                $pdo->prepare('INSERT INTO parcours (nom, description, classes, cree_le) VALUES (?, ?, ?, ?)')
-                    ->execute([$nom, $description, $classes, time()]);
+                $pdo->prepare('INSERT INTO parcours (nom, description, classes, mode, deblocage, cree_le) VALUES (?, ?, ?, ?, ?, ?)')
+                    ->execute([$nom, $description, $classes, $mode, $deblocage, time()]);
                 $id = (int) $pdo->lastInsertId();
             }
-            $ins = $pdo->prepare('INSERT INTO parcours_etapes (parcours_id, ordre, titre, app, activite, url) VALUES (?, ?, ?, ?, ?, ?)');
+            $ins = $pdo->prepare('INSERT INTO parcours_etapes (parcours_id, ordre, titre, app, activite, url, consigne, entrees, sorties) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
             foreach ($etapes as $i => $et) {
-                $ins->execute([$id, $i, $et['titre'], $et['app'], $et['activite'], $et['url']]);
+                $ins->execute([$id, $i, $et['titre'], $et['app'], $et['activite'], $et['url'], $et['consigne'], $et['entrees'], $et['sorties']]);
             }
             $pdo->commit();
             flash("Parcours « $nom » enregistré (" . count($etapes) . ' étapes).');
-            rediriger('./?p=parcours');
+            rediriger('./?p=parcours&modifier=' . $id . '#fournis');
+
+        case 'ajouter_fourni':
+            $id = (int) ($_POST['parcours_id'] ?? 0);
+            $envoi = $_FILES['fichier'] ?? null;
+            if (!parcours_par_id($id) || !$envoi || is_array($envoi['error']) || $envoi['error'] !== UPLOAD_ERR_OK) {
+                flash('Envoi du fichier impossible (trop gros ou absent).', 'err');
+                rediriger('./?p=parcours&modifier=' . $id . '#fournis');
+            }
+            $nom = nom_fichier_propre((string) ($_POST['nom'] ?? '') ?: (string) $envoi['name']);
+            $type = preg_match('#^[a-z]+/[a-z0-9.+-]+$#i', (string) $envoi['type']) ? (string) $envoi['type'] : 'application/octet-stream';
+            $st = $pdo->prepare('SELECT chemin FROM parcours_fournis WHERE parcours_id = ? AND nom = ?');
+            $st->execute([$id, $nom]);
+            $ancien = $st->fetchColumn();
+            $chemin = ranger_fichier($envoi['tmp_name'], 'fournis/' . $id);
+            $pdo->prepare('INSERT INTO parcours_fournis (parcours_id, nom, chemin, taille, type, maj) VALUES (?, ?, ?, ?, ?, ?)
+                           ON CONFLICT (parcours_id, nom) DO UPDATE SET chemin = excluded.chemin, taille = excluded.taille, type = excluded.type, maj = excluded.maj')
+                ->execute([$id, $nom, $chemin, (int) filesize(chemin_stockage($chemin)), $type, time()]);
+            if ($ancien) {
+                effacer_fichier_stocke($ancien);
+            }
+            flash("Fichier « $nom » fourni aux élèves de ce parcours.");
+            rediriger('./?p=parcours&modifier=' . $id . '#fournis');
+
+        case 'supprimer_fourni':
+            $id = (int) ($_POST['parcours_id'] ?? 0);
+            $st = $pdo->prepare('SELECT id, chemin FROM parcours_fournis WHERE id = ? AND parcours_id = ?');
+            $st->execute([(int) ($_POST['fourni_id'] ?? 0), $id]);
+            if ($f = $st->fetch()) {
+                $pdo->prepare('DELETE FROM parcours_fournis WHERE id = ?')->execute([$f['id']]);
+                effacer_fichier_stocke($f['chemin']);
+                flash('Fichier fourni retiré.');
+            }
+            rediriger('./?p=parcours&modifier=' . $id . '#fournis');
+
+        case 'valider_etape':
+            $id = (int) ($_POST['parcours_id'] ?? 0);
+            $proprio = (string) ($_POST['proprietaire'] ?? '');
+            $ordre = (int) ($_POST['ordre'] ?? -1);
+            if (preg_match('/^[eq]\d+$/', $proprio) && $ordre >= 0) {
+                if (!empty($_POST['annuler'])) {
+                    $pdo->prepare('DELETE FROM parcours_validations WHERE parcours_id = ? AND proprietaire = ? AND ordre = ?')->execute([$id, $proprio, $ordre]);
+                } else {
+                    $pdo->prepare('INSERT OR REPLACE INTO parcours_validations (parcours_id, proprietaire, ordre, valide_le) VALUES (?, ?, ?, ?)')
+                        ->execute([$id, $proprio, $ordre, time()]);
+                }
+            }
+            rediriger('./?p=projets&parcours=' . $id . '&classe=' . (int) ($_POST['classe_id'] ?? 0) . '#' . $proprio);
 
         case 'supprimer_parcours':
-            $pdo->prepare('DELETE FROM parcours WHERE id = ?')->execute([(int) ($_POST['parcours_id'] ?? 0)]);
+            $id = (int) ($_POST['parcours_id'] ?? 0);
+            supprimer_fichiers_projet('parcours_id = ?', [$id]);
+            $st = $pdo->prepare('SELECT chemin FROM parcours_fournis WHERE parcours_id = ?');
+            $st->execute([$id]);
+            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $c) {
+                effacer_fichier_stocke($c);
+            }
+            $pdo->prepare('DELETE FROM parcours WHERE id = ?')->execute([$id]);
             flash('Parcours supprimé (la progression des élèves est conservée).');
             rediriger('./?p=parcours');
 
@@ -134,6 +190,26 @@ function lire_etapes(string $texte): array
         if ($ligne === '' || str_starts_with($ligne, '#')) {
             continue;
         }
+        // Lignes de détail sous une étape : « > consigne », « reçoit : a.json », « produit : b.glb »
+        $dernier = count($etapes) - 1;
+        if (str_starts_with($ligne, '>')) {
+            if ($dernier >= 0) {
+                $etapes[$dernier]['consigne'] = trim($etapes[$dernier]['consigne'] . "\n" . trim(substr($ligne, 1)));
+            }
+            continue;
+        }
+        if (preg_match('/^(re[çc]oit|lit|entr[ée]es?)\s*:\s*(.*)$/iu', $ligne, $m)) {
+            if ($dernier >= 0) {
+                $etapes[$dernier]['entrees'] = implode(', ', liste_noms($m[2]));
+            }
+            continue;
+        }
+        if (preg_match('/^(produit|d[ée]pose|sorties?)\s*:\s*(.*)$/iu', $ligne, $m)) {
+            if ($dernier >= 0) {
+                $etapes[$dernier]['sorties'] = implode(', ', liste_noms($m[2]));
+            }
+            continue;
+        }
         $champs = array_map('trim', explode('|', $ligne));
         $titre = mb_substr($champs[0] ?? '', 0, 120);
         $app = normaliser_app($champs[1] ?? '');
@@ -147,7 +223,7 @@ function lire_etapes(string $texte): array
             $erreurs[] = 'Ligne ' . ($n + 1) . ' : l\'adresse doit commencer par https://';
             continue;
         }
-        $etapes[] = ['titre' => $titre, 'app' => $app, 'activite' => $activite, 'url' => $url];
+        $etapes[] = ['titre' => $titre, 'app' => $app, 'activite' => $activite, 'url' => $url, 'consigne' => '', 'entrees' => '', 'sorties' => ''];
     }
     if (count($etapes) > 100) {
         $erreurs[] = '100 étapes maximum.';
@@ -157,7 +233,20 @@ function lire_etapes(string $texte): array
 
 function etapes_en_texte(array $etapes): string
 {
-    return implode("\n", array_map(fn($e) => rtrim(implode(' | ', [$e['titre'], $e['app'], $e['activite'], $e['url']]), ' |'), $etapes));
+    $lignes = [];
+    foreach ($etapes as $e) {
+        $lignes[] = rtrim(implode(' | ', [$e['titre'], $e['app'], $e['activite'], $e['url']]), ' |');
+        foreach (array_filter(explode("\n", (string) ($e['consigne'] ?? ''))) as $c) {
+            $lignes[] = '  > ' . $c;
+        }
+        if (($e['entrees'] ?? '') !== '') {
+            $lignes[] = '  reçoit : ' . $e['entrees'];
+        }
+        if (($e['sorties'] ?? '') !== '') {
+            $lignes[] = '  produit : ' . $e['sorties'];
+        }
+    }
+    return implode("\n", $lignes);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -371,7 +460,7 @@ function page_parcours(): void
     unset($_SESSION['brouillon_parcours']);
     $catalogue = catalogue_activites();
 
-    $courant = ['id' => 0, 'nom' => '', 'description' => '', 'classes' => '', 'etapes' => ''];
+    $courant = ['id' => 0, 'nom' => '', 'description' => '', 'classes' => '', 'etapes' => '', 'mode' => 'individuel', 'deblocage' => 'libre'];
     if ($modifier) {
         $st = $pdo->prepare('SELECT * FROM parcours WHERE id = ?');
         $st->execute([$modifier]);
@@ -379,13 +468,14 @@ function page_parcours(): void
             $se = $pdo->prepare('SELECT * FROM parcours_etapes WHERE parcours_id = ? ORDER BY ordre, id');
             $se->execute([$modifier]);
             $courant = ['id' => (int) $p['id'], 'nom' => $p['nom'], 'description' => $p['description'],
-                        'classes' => $p['classes'], 'etapes' => etapes_en_texte($se->fetchAll())];
+                        'classes' => $p['classes'], 'etapes' => etapes_en_texte($se->fetchAll()), 'mode' => $p['mode'], 'deblocage' => $p['deblocage']];
         }
     }
     if ($brouillon) {
         $courant = ['id' => (int) ($brouillon['parcours_id'] ?? 0), 'nom' => (string) ($brouillon['nom'] ?? ''),
                     'description' => (string) ($brouillon['description'] ?? ''), 'classes' => (string) ($brouillon['classes'] ?? ''),
-                    'etapes' => (string) ($brouillon['etapes'] ?? '')];
+                    'etapes' => (string) ($brouillon['etapes'] ?? ''), 'mode' => (string) ($brouillon['mode'] ?? 'individuel'),
+                    'deblocage' => (string) ($brouillon['deblocage'] ?? 'libre')];
     }
     $afficher_form = $nouveau || $modifier || $brouillon;
 
@@ -412,13 +502,28 @@ function page_parcours(): void
                         <span class="aide">Séparées par des virgules (ex. 5A, 5B). Vide = toutes.</span>
                         <input name="classes" value="<?= h($courant['classes']) ?>" placeholder="5A, 5B"></label>
                 </div>
+                <div class="deux-colonnes">
+                    <label>Travail
+                        <select name="mode"><?= options_html(MODES_PARCOURS, $courant['mode']) ?></select>
+                        <span class="aide">En équipe : un seul dossier de projet par équipe (équipes formées sur la page de chaque classe).</span></label>
+                    <label>Ouverture des étapes
+                        <select name="deblocage"><?= options_html(DEBLOCAGES, $courant['deblocage']) ?></select></label>
+                </div>
                 <label>Consigne générale (facultative)<input name="description" maxlength="500" value="<?= h($courant['description']) ?>"></label>
                 <label>Étapes, une par ligne
                     <span class="aide"><code>Titre | atelier | activité | adresse</code> — l'activité est facultative (vide = tout l'atelier),
-                        l'adresse est celle du logiciel à ouvrir.</span>
-                    <textarea name="etapes" rows="8" class="mono" placeholder="Modéliser le châssis | etabli3d | chassis | https://grandiosian.github.io/etabli3d/
-Programmer le suivi de ligne | blocs | suivi-ligne | https://grandiosian.github.io/blocs/
-Questionnaire bilan | quiz | bilan-robot | https://technoversailles.alwaysdata.net/apps/quiz/"><?= h($courant['etapes']) ?></textarea>
+                        l'adresse est celle du logiciel à ouvrir. Sous une étape, facultatif :
+                        <code>&gt; consigne</code>, <code>reçoit : fichier1, fichier2</code> (ce que l'étape lit dans le dossier de projet),
+                        <code>produit : fichier</code> (ce qu'elle doit y déposer ; l'étape est terminée quand tout est déposé).</span>
+                    <textarea name="etapes" rows="12" class="mono" placeholder="Cahier des charges | quiz | cdc-robot | https://technoversailles.alwaysdata.net/apps/quiz/
+  > Réponds aux questions pour fixer les dimensions du robot.
+  produit : cahier.json
+Modéliser le châssis | etabli3d | chassis | https://grandiosian.github.io/etabli3d/
+  reçoit : cahier.json, gabarit.glb
+  produit : chassis.glb
+Programmer le suivi de ligne | prog3d | suivi-ligne | https://grandiosian.github.io/programmation3d/
+  reçoit : chassis.glb
+  produit : programme.json"><?= h($courant['etapes']) ?></textarea>
                 </label>
                 <?php if ($catalogue): ?>
                     <details class="aide-catalogue"><summary>Activités connues (déclarées par vos applications)</summary>
@@ -435,16 +540,20 @@ Questionnaire bilan | quiz | bilan-robot | https://technoversailles.alwaysdata.n
             </form>
         <?php endif; ?>
 
+        <?php if ($courant['id'] && !$brouillon) section_fournis((int) $courant['id']); ?>
+
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
-                <thead><tr><th>Parcours</th><th>Classes</th><th>Étapes</th><th></th></tr></thead>
+                <thead><tr><th>Parcours</th><th>Travail</th><th>Classes</th><th>Étapes</th><th></th></tr></thead>
                 <tbody>
                 <?php foreach ($liste as $p): ?>
                     <tr>
                         <td><strong><?= h($p['nom']) ?></strong><?= $p['description'] ? '<br><span class="discret">' . h($p['description']) . '</span>' : '' ?></td>
+                        <td><?= h(MODES_PARCOURS[$p['mode']] ?? '') ?><?= $p['deblocage'] !== 'libre' ? '<br><span class="discret">' . ($p['deblocage'] === 'ordre' ? 'étapes dans l’ordre' : 'étapes après validation') . '</span>' : '' ?></td>
                         <td><?= $p['classes'] !== '' ? h($p['classes']) : '<span class="discret">toutes</span>' ?></td>
                         <td><?= (int) $p['nb'] ?></td>
                         <td class="actions">
+                            <a class="btn petit" href="./?p=projets&parcours=<?= (int) $p['id'] ?>">Dossiers de projet</a>
                             <a class="btn petit secondaire" href="./?p=suivi&vue=parcours:<?= (int) $p['id'] ?>">Suivi</a>
                             <a class="btn petit secondaire" href="./?p=parcours&modifier=<?= (int) $p['id'] ?>">Modifier</a>
                             <?= bouton('supprimer_parcours', 'Supprimer', ['parcours_id' => $p['id']], 'danger', 'Supprimer ce parcours ?') ?>
@@ -457,6 +566,35 @@ Questionnaire bilan | quiz | bilan-robot | https://technoversailles.alwaysdata.n
     </main>
     <?php
     pied();
+}
+
+/** Fichiers de départ fournis par l'enseignant (gabarit 3D, consigne PDF, modèle de programme…). */
+function section_fournis(int $parcours_id): void
+{
+    $fournis = fichiers_fournis($parcours_id);
+    ?>
+    <section id="fournis" class="carte" style="margin-top:16px">
+        <h3>Fichiers fournis aux élèves</h3>
+        <p class="aide">Ils sont dans le dossier de projet de chaque élève (ou équipe) dès le début. Une étape qui « reçoit » un fichier
+            du même nom lit d'abord celui de l'élève s'il en a déposé un, sinon le vôtre : pratique pour un gabarit de départ.</p>
+        <?php if ($fournis): ?>
+            <ul class="liste-fournis">
+                <?php foreach ($fournis as $f): ?>
+                    <li><a href="./?p=fourni&id=<?= (int) $f['id'] ?>"><?= h($f['nom']) ?></a> <span class="discret"><?= format_taille((int) $f['taille']) ?></span>
+                        <?= bouton('supprimer_fourni', 'Retirer', ['parcours_id' => $parcours_id, 'fourni_id' => $f['id']], 'danger', 'Retirer ce fichier fourni ?') ?></li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+        <form method="post" enctype="multipart/form-data" class="formulaire-ligne">
+            <?= csrf() ?>
+            <input type="hidden" name="action" value="ajouter_fourni">
+            <input type="hidden" name="parcours_id" value="<?= $parcours_id ?>">
+            <label>Fichier<input type="file" name="fichier" required></label>
+            <label>Nom dans le dossier (facultatif)<input name="nom" maxlength="120" placeholder="gabarit.glb"></label>
+            <button>Ajouter</button>
+        </form>
+    </section>
+    <?php
 }
 
 function page_ateliers(): void

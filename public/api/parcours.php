@@ -3,8 +3,9 @@
  * GET /api/parcours.php (en-tête X-Jeton)
  * Parcours de la classe de l'élève, avec son avancement à chaque étape.
  *
- * → { ok, parcours: [ { id, nom, description, taux, etapes: [
- *        { titre, app, activite, url, statut: a_faire|commence|termine, taux, texte } ] } ] }
+ * → { ok, parcours: [ { id, nom, description, mode, deblocage, equipe, coequipiers, sans_equipe, fichiers, taux, etapes: [
+ *        { ordre, titre, app, activite, url, consigne, entrees, sorties, deposees,
+ *          statut: a_faire|commence|termine, taux, texte, ouverte } ] } ] }
  */
 declare(strict_types=1);
 
@@ -36,25 +37,41 @@ $adresse = function (string $url) use ($remplacements): string {
 
 $res = [];
 foreach (parcours_pour_classe($eleve['classe']) as $p) {
+    // Avancement du dossier de projet : celui de l'élève, ou de son équipe (parcours en équipe)
+    $proprio = proprietaire_projet($eleve, $p);
+    $etats = etapes_projet($p, $proprio, $proprio['type'] === 'eleve' ? [$eleve['id'] => $prog] : null, $catalogue);
     $etapes = [];
     $somme = 0.0;
-    foreach ($p['etapes'] as $et) {
-        $etat = etat_etape($et['activite'], $prog[$et['app']] ?? [], $catalogue[$et['app']] ?? []);
-        $somme += $etat['taux'];
+    foreach ($p['etapes'] as $i => $et) {
+        $e = $etats[$i];
+        $somme += $e['taux'];
         $etapes[] = [
+            'ordre'    => $i,
             'titre'    => $et['titre'],
             'app'      => $et['app'],
             'activite' => $et['activite'],
             'url'      => $adresse($et['url']),
-            'statut'   => $etat['statut'],
-            'taux'     => round($etat['taux'], 3),
-            'texte'    => $etat['texte'],
+            'consigne' => $et['consigne'],
+            'entrees'  => $e['entrees'],
+            'sorties'  => $e['sorties'],
+            'deposees' => $e['deposees'],
+            'statut'   => $e['statut'],
+            'taux'     => round($e['taux'], 3),
+            'texte'    => $e['texte'],
+            'ouverte'  => $e['ouverte'],
         ];
     }
+    $membres = $proprio['type'] === 'equipe' ? identifiants_eleves(array_diff($proprio['membres'], [$eleve['id']])) : [];
     $res[] = [
         'id'          => (int) $p['id'],
         'nom'         => $p['nom'],
         'description' => $p['description'],
+        'mode'        => $p['mode'],
+        'deblocage'   => $p['deblocage'],
+        'equipe'      => $proprio['equipe']['nom'] ?? null,
+        'coequipiers' => array_values($membres),
+        'sans_equipe' => !empty($proprio['sans_equipe']),
+        'fichiers'    => count(fichiers_projet((int) $p['id'], $proprio['cle'])),
         'taux'        => $etapes ? round($somme / count($etapes), 3) : 0,
         'etapes'      => $etapes,
     ];
