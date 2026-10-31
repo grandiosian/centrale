@@ -73,10 +73,15 @@ jobs:
       - name: Copier la chaîne sur le serveur
         if: steps.config.outputs.pret == 'true'
         run: |
-          ssh ad 'mkdir -p bin .arduino15 Arduino/libraries'
-          rsync -az ~/chaine/bin/arduino-cli ad:bin/arduino-cli
-          rsync -az --delete --exclude arduino-cli.yaml ~/chaine/arduino15/ ad:.arduino15/
-          rsync -az --delete ~/chaine/Arduino/libraries/ ad:Arduino/libraries/
+          set +e
+          a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
+          a notice "serveur avant copie" "$(ssh ad 'df -h ~ | tail -1; quota -s 2>/dev/null | tail -2; du -sh ~ 2>/dev/null' 2>&1)"
+          ko=0
+          out=$( { ssh ad 'mkdir -p bin .arduino15 Arduino/libraries' &&
+            rsync -az ~/chaine/bin/arduino-cli ad:bin/arduino-cli &&
+            rsync -az --delete --exclude arduino-cli.yaml ~/chaine/arduino15/ ad:.arduino15/ &&
+            rsync -az --delete ~/chaine/Arduino/libraries/ ad:Arduino/libraries/; } 2>&1 ) || ko=1
+          [ $ko = 0 ] && a notice copie "chaîne copiée $(du -sh ~/chaine | cut -f1)" || { a error copie "$(echo "$out" | tail -c 3000)"; exit 1; }
 
       - name: Installer ou mettre à jour (arduino-cli, cœurs, MicroPython)
         if: steps.config.outputs.pret == 'true'
