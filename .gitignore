@@ -3,3 +3,4 @@ data/
 *.sqlite
 .DS_Store
 public/miroir/
+__pycache__/
