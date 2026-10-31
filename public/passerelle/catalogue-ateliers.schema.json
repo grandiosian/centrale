@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://technoversailles.alwaysdata.net/passerelle/catalogue-ateliers.schema.json",
+  "title": "Catalogue des ateliers d'une application (catalogue.ateliers v1)",
+  "description": "Fichier ateliers.json publié par chaque application, à côté de centrale.json. Il liste les ateliers créés dans l'application, disponibles sans serveur. La Centrale l'importe dans la page Ateliers (onglet « Ateliers des applications »). Les champs inconnus sont acceptés et ignorés.",
+  "type": "object",
+  "required": ["format", "version", "app", "ateliers"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "format": { "const": "catalogue.ateliers" },
+    "version": { "const": 1 },
+    "app": { "type": "string", "pattern": "^[a-z0-9_-]{1,40}$", "description": "Même identifiant que atelier.app dans centrale.json." },
+    "app_version": { "type": "string", "description": "Version de l'application qui a produit le fichier (= atelier.version de centrale.json)." },
+    "maj": { "type": "string", "description": "Date de production du fichier, AAAA-MM-JJ." },
+    "referentiel": { "type": "string", "description": "Identifiant du référentiel des compétences utilisé (technologie-c4-2024)." },
+    "ateliers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Atelier" }
+    }
+  },
+  "$defs": {
+    "Atelier": {
+      "type": "object",
+      "required": ["id", "titre"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_./-]{1,80}$", "description": "Stable : ne change jamais, même si le titre change." },
+        "titre": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "niveau": { "type": "string", "description": "6e, 5e, 4e, 3e, lycee, ou vide pour tous niveaux." },
+        "theme": { "enum": ["OST", "SFC", "CCRI", ""], "description": "Facultatif : déduit des compétences sinon." },
+        "resume": { "type": "string", "maxLength": 600 },
+        "duree": { "type": ["string", "number"], "description": "« 20 min », « 2 séances », ou un nombre de minutes." },
+        "competences": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^(OST|SFC|CCRI)\\d{2}(\\.[3-6]\\.\\d+)?$" },
+          "description": "Capacités (SFC15.5.1) ou sous-compétences (SFC15) du référentiel /passerelle/competences.json."
+        },
+        "activites": {
+          "type": "array",
+          "description": "Activités suivies par la Centrale (mêmes identifiants que Centrale.progression). Un atelier simple a une seule activité, de même identifiant.",
+          "items": {
+            "anyOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^[A-Za-z0-9_./-]{1,80}$" },
+                  "titre": { "type": "string", "maxLength": 120 },
+                  "total": { "type": "integer", "minimum": 0 },
+                  "competences": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            ]
+          }
+        },
+        "ouvrir": { "type": "string", "description": "Activité à ouvrir (#activite=<id>), ou lien relatif propre à l'application commençant par # ou ? (« #at-lampe »)." },
+        "fichier": { "type": "string", "description": "Contenu de l'atelier publié avec l'application (relatif à ateliers.json), pour les applications dont les ateliers sont des fichiers." },
+        "version": { "type": ["string", "number"], "description": "Version de l'atelier, augmentée à chaque modification de son contenu." },
+        "auteur": { "type": "string", "maxLength": 80 },
+        "etiquettes": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -78,13 +78,17 @@ function md_en_html(string $md): string
     return $html;
 }
 
-$md = (string) file_get_contents(__DIR__ . '/SPECIFICATION.md');
+// Documents publiés : ?doc=competences, ?doc=donnees (par défaut : la spécification du descripteur)
+const DOCS_PASSERELLE = ['' => ['SPECIFICATION.md', 'Passerelle des ateliers'], 'competences' => ['COMPETENCES.md', 'Compétences'],
+                         'donnees' => ['DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md', 'Données, bonnes pratiques et compatibilité']];
+$doc = DOCS_PASSERELLE[(string) ($_GET['doc'] ?? '')] ?? DOCS_PASSERELLE[''];
+$md = (string) file_get_contents(__DIR__ . '/' . $doc[0]);
 ?><!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Passerelle des ateliers — Centrale élèves</title>
+<title><?= htmlspecialchars($doc[1]) ?> — Centrale élèves</title>
 <style>
     :root { color-scheme: light dark; --fond: #f6f7fb; --carte: #fff; --texte: #1d2433; --doux: #5b6577; --code: #eef1f7; --lien: #2f6fdb; }
     @media (prefers-color-scheme: dark) { :root { --fond: #141821; --carte: #1c2230; --texte: #e6e9f0; --doux: #9aa4b6; --code: #262d3d; --lien: #7aa7ff; } }
@@ -106,8 +110,11 @@ $md = (string) file_get_contents(__DIR__ . '/SPECIFICATION.md');
 </head>
 <body>
 <main>
-    <p class="fichiers">Centrale élèves · <a href="SPECIFICATION.md">SPECIFICATION.md</a> ·
-        <a href="passerelle-atelier.schema.json">passerelle-atelier.schema.json</a> · <a href="modele-centrale.json">modele-centrale.json</a></p>
+    <p class="fichiers">Centrale élèves · <a href="./">Descripteur (centrale.json)</a> · <a href="./?doc=donnees">Données et compatibilité</a> ·
+        <a href="./?doc=competences">Compétences</a><br>Fichiers : <a href="<?= htmlspecialchars($doc[0]) ?>"><?= htmlspecialchars($doc[0]) ?></a> ·
+        <a href="passerelle-atelier.schema.json">passerelle-atelier.schema.json</a> · <a href="modele-centrale.json">modele-centrale.json</a> ·
+        <a href="catalogue-ateliers.schema.json">catalogue-ateliers.schema.json</a> · <a href="modele-ateliers.json">modele-ateliers.json</a> ·
+        <a href="competences.json">competences.json</a></p>
     <article><?= md_en_html($md) ?></article>
 </main>
 </body>

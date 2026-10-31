@@ -398,6 +398,30 @@
     });
   }
 
+  // Ateliers des applications : filtre par application, niveau, recherche ; ateliers retirés masqués
+  var cat = document.getElementById('catalogue-ateliers');
+  if (cat && document.getElementById('cat-recherche')) {
+    var catNiveau = '', catChamp = document.getElementById('cat-recherche'), catApp = document.getElementById('cat-app'), catRet = document.getElementById('cat-retires');
+    var catFiltrer = function () {
+      var q = catChamp.value.trim().toLowerCase(), n = 0;
+      cat.querySelectorAll('.table-catalogue tbody tr').forEach(function (tr) {
+        var ok = (!catApp.value || tr.dataset.app === catApp.value) && (!catNiveau || tr.dataset.niveau === catNiveau)
+          && (catRet.checked || !tr.dataset.retire) && (!q || tr.dataset.texte.indexOf(q) >= 0);
+        tr.hidden = !ok; if (ok) n++;
+      });
+      document.getElementById('cat-rien').hidden = n > 0;
+    };
+    cat.querySelectorAll('.seg-niveaux button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        catNiveau = b.dataset.niveau;
+        cat.querySelectorAll('.seg-niveaux button').forEach(function (x) { x.classList.toggle('actif', x === b); });
+        catFiltrer();
+      });
+    });
+    catChamp.addEventListener('input', catFiltrer); catApp.addEventListener('change', catFiltrer); catRet.addEventListener('change', catFiltrer);
+    catFiltrer();
+  }
+
   // Onglet Compétences : filtre par niveau, recherche, « seulement celles évaluées », copie des codes au clic
   var ref = document.getElementById('referentiel');
   if (ref && document.getElementById('ref-recherche')) {

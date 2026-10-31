@@ -1,0 +1,38 @@
+{
+  "$schema": "https://technoversailles.alwaysdata.net/passerelle/catalogue-ateliers.schema.json",
+  "format": "catalogue.ateliers",
+  "version": 1,
+  "app": "monapp",
+  "app_version": "1.0.0",
+  "maj": "2026-10-31",
+  "referentiel": "technologie-c4-2024",
+  "ateliers": [
+    {
+      "id": "e5-1",
+      "titre": "Brancher la salle",
+      "niveau": "5e",
+      "resume": "Relier quatre ordinateurs à un switch et vérifier qu’ils communiquent.",
+      "duree": "20 min",
+      "competences": ["SFC15.5.1"],
+      "activites": [{ "id": "e5-1", "titre": "Brancher la salle", "total": 5, "competences": ["SFC15.5.1"] }],
+      "ouvrir": "e5-1",
+      "version": 1
+    },
+    {
+      "id": "lampe-de-poche",
+      "titre": "La lampe de poche",
+      "niveau": "5e",
+      "resume": "Séquence en plusieurs feuilles : constituants, chaîne d’énergie, mesures.",
+      "duree": "3 séances",
+      "competences": ["SFC11.5.1", "CCRI22.5.1"],
+      "activites": [
+        { "id": "lampe-de-poche/P1", "titre": "P1 · Les constituants", "total": 6, "competences": ["SFC11.5.1"] },
+        { "id": "lampe-de-poche/P2", "titre": "P2 · Mesurer", "total": 4, "competences": ["CCRI22.5.1"] }
+      ],
+      "ouvrir": "#at-lampe-de-poche",
+      "fichier": "ateliers/lampe-de-poche.json",
+      "version": 3,
+      "auteur": "Équipe techno"
+    }
+  ]
+}

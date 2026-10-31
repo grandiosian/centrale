@@ -16,7 +16,13 @@ Chaque application branchée sur la Centrale publie un **descripteur d'atelier**
 Les fichiers associés :
 
 - [`passerelle-atelier.schema.json`](passerelle-atelier.schema.json) : le schéma JSON 2020-12, qui valide n'importe quel `centrale.json` ;
-- [`modele-centrale.json`](modele-centrale.json) : un modèle vierge à copier.
+- [`modele-centrale.json`](modele-centrale.json) : un modèle vierge à copier ;
+- [`catalogue-ateliers.schema.json`](catalogue-ateliers.schema.json) et [`modele-ateliers.json`](modele-ateliers.json) : le catalogue des ateliers `ateliers.json` (§ 2.8).
+
+Deux documents communs à toutes les applications complètent cette spécification :
+
+- [Données, bonnes pratiques et compatibilité](./?doc=donnees) (`DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md`) : principes (sans serveur d'abord, ateliers publiés avec l'application, dépôt Nuage d'urgence), fichiers publiés, procédure d'import des ateliers, adresses, stockage, échanges de fichiers, versions ;
+- [Compétences](./?doc=competences) (`COMPETENCES.md`) : référentiel, choix des codes, déclaration, constats, bilan.
 
 ---
 
@@ -43,6 +49,7 @@ Toutes les sections obligatoires sont présentes, même vides. Une application p
 | `progression` | oui | `champs` : sens de `faites`, `total`, `statut`, et de `score`, `score_max`, `details` s'ils sont utilisés |
 | `donnees` | oui | une entrée par clé passée à `Centrale.sauver` (`{}` si aucune) |
 | `fichiers` | oui | `utilises: false`, ou ce que l'application reçoit, produit et attend en ressources |
+| `ateliers` | non | `catalogue` : emplacement de `ateliers.json` s'il n'est pas à côté de `centrale.json` (§ 2.8) |
 | `centrale` | non | module chargé, serveur par défaut, sites à autoriser, mode de connexion, fonctions du module utilisées, navigation dans les parcours (`parcours`, § 2.6) |
 | `stockage_local` | non | clés gardées dans le navigateur (dépannage) |
 | `acces_javascript` | non | `objet` (`window.X`) et `membres` |
@@ -186,6 +193,18 @@ Centrale.progression('exo-plaque', { statut: 'termine', faites: 3, total: 3,
 
 **Bilan** : moyenne haute de tous les constats d'une capacité (ceux de l'enseignant et ceux des applications), c'est-à-dire la moyenne arrondie au niveau supérieur.
 
+### 2.8 Catalogue des ateliers (`ateliers.json`)
+
+Chaque application publie, à côté de `centrale.json`, la liste des ateliers créés chez elle : **`ateliers.json`**, format `catalogue.ateliers` v1 ([schéma](catalogue-ateliers.schema.json), [modèle](modele-ateliers.json)). Les ateliers eux-mêmes sont publiés avec l'application et restent disponibles sans serveur.
+
+```json
+{ "format": "catalogue.ateliers", "version": 1, "app": "netsim", "app_version": "1.6.0",
+  "ateliers": [ { "id": "e5-1", "titre": "Brancher la salle", "niveau": "5e", "competences": ["SFC15.5.1"],
+                  "activites": [{ "id": "e5-1", "titre": "Brancher la salle", "total": 5 }], "ouvrir": "e5-1" } ] }
+```
+
+Un autre emplacement se déclare dans `centrale.json` : `"ateliers": { "catalogue": "data/ateliers.json" }` (relatif à `centrale.json`). Les champs et la procédure d'import sont détaillés dans [Données, bonnes pratiques et compatibilité](./?doc=donnees), § 4 et 5.
+
 ## 3. Règles
 
 1. **Ce que déclare `centrale.json` correspond à ce que l'application envoie réellement.** Le plus sûr est de produire le fichier à partir du code, comme TechnoStudio, ou de le vérifier contre l'application, comme le fait l'outil de vérification de NetSim.
@@ -204,6 +223,7 @@ Centrale.progression('exo-plaque', { statut: 'termine', faites: 3, total: 3,
 - **Sites à autoriser** : chaque `centrale.sites_a_autoriser` absent des origines autorisées est signalé, avec un bouton pour l'ajouter.
 - **Parcours** : l'enchaînement des étapes est vérifié avec les `fichiers` déclarés : fichier qu'un atelier ne déclare pas recevoir ou produire (motifs `*` acceptés), fichier reçu que rien ne produit ni ne fournit, atelier qui n'utilise pas encore le dossier de projet (`fichiers.utilises: false` ou `dossier_projet: false`).
 - **Navigation dans les parcours** : `centrale.parcours` est affiché sur la fiche de la passerelle (§ 2.6).
+- **Ateliers des applications** (onglet de la page Ateliers) : « Importer » lit `ateliers.json` (à défaut, regroupe les activités de `centrale.json`), range les ateliers avec leurs compétences, marque « retiré » ce qui n'est plus publié, et ajoute les activités au catalogue. Ils sont aussi servis aux applications par `GET /api/catalogue.php`.
 - **Manifeste `postMessage`** : si l'adresse n'a pas de `centrale.json` mais publie `passerelle/manifest.json` (`"protocol": "passerelle"`), la Centrale en tire seulement la fiche (nom, adresse, description) et le signale.
 
 Pistes non encore faites : valider les valeurs des clés de `donnees` avec leur schéma dans la page Travail, signaler dans le suivi les activités hors `liste` et hors `dynamiques`.

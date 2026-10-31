@@ -127,6 +127,11 @@
       "then": { "anyOf": [{ "required": ["recoit"] }, { "required": ["produit"] }, { "required": ["ressources"] }] }
     },
 
+    "ateliers": {
+      "description": "Catalogue des ateliers de l'application (ateliers.json, format catalogue.ateliers v1), s'il n'est pas à côté de centrale.json.",
+      "type": "object",
+      "properties": { "catalogue": { "type": "string", "description": "Adresse relative à centrale.json, ou absolue." } }
+    },
     "centrale": {
       "type": "object",
       "properties": {

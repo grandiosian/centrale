@@ -573,3 +573,10 @@ a.usage.app::before { content: "⚙ "; }
 .table-progression .case-seq { text-align: center; }
 .table-progression .case-seq input { width: 18px; height: 18px; }
 .table-progression tr.non-placee .cap-progression { box-shadow: inset 4px 0 0 #f0a030; }
+
+/* Ateliers des applications (catalogue importé) */
+.filtres-catalogue { flex-wrap: wrap; gap: 10px; margin: 18px 0 8px; }
+.table-catalogue td { vertical-align: top; }
+.table-catalogue .code-comp { margin: 0 2px 2px 0; }
+.liste-activites { margin: 4px 0 0; padding-left: 18px; font-size: .88rem; }
+.table-imports td.actions form { display: inline; }

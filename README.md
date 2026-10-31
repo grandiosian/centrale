@@ -255,6 +255,19 @@ Centrale.afficherConnexion(element, {
 
 `Centrale.init({ boutonRetour: false })` masque le bouton retour automatique, si l'application préfère le placer elle-même avec `Centrale.retour()`.
 
+### Ateliers des applications (import)
+
+Les ateliers sont créés **dans les applications** et publiés avec elles : ils marchent sans serveur. La Centrale les importe pour les ranger.
+
+- Onglet **Ateliers → « Ateliers des applications »** : « Importer les ateliers de toutes les applications », ou « Importer / Mettre à jour » pour une seule.
+- La Centrale lit le catalogue `ateliers.json` publié à côté de `centrale.json`. À défaut, elle regroupe les activités de `centrale.json` en ateliers et le signale.
+- Bilan affiché : ajoutés, modifiés, retirés (jamais effacés), inchangés. Les activités rejoignent la bibliothèque, les parcours et le suivi.
+- Filtres par application, niveau, texte ou code de compétence ; « Ouvrir » lance l'atelier sans connexion.
+- Un fichier exporté d'une application (atelier `.json`, `ateliers.json`, `.technostudio.json`) peut aussi être importé à la main : il reste marqué « pas encore dans l'application » tant qu'elle ne le publie pas.
+- Les autres applications lisent ce catalogue : `GET /api/catalogue.php?app=&niveau=&competence=`.
+
+Règles communes : [`public/passerelle/DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md`](public/passerelle/DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md) et [`public/passerelle/COMPETENCES.md`](public/passerelle/COMPETENCES.md), lisibles en ligne sur `/passerelle/?doc=donnees` et `/passerelle/?doc=competences`.
+
 ### Dans une application
 
 ```js
@@ -534,7 +547,7 @@ L'empreinte d'un code élève est calculée ainsi : `HMAC-SHA256(clé secrète, 
 
 ## 10. Référence de l'API
 
-Toutes les requêtes, sauf `login.php`, demandent l'en-tête `X-Jeton` reçu à la connexion.
+Toutes les requêtes, sauf `login.php`, `catalogue.php` et `compilation.php` (état), demandent l'en-tête `X-Jeton` reçu à la connexion.
 
 | Requête | Rôle |
 |---|---|
@@ -554,6 +567,7 @@ Toutes les requêtes, sauf `login.php`, demandent l'en-tête `X-Jeton` reçu à 
 | `GET parcours.php` | Parcours de la classe avec l'avancement de l'élève |
 | `GET ateliers.php` | Ateliers proposés à la classe, avec l'avancement et les activités |
 | `GET session.php?app=` | Vérifie un jeton (passage d'une application à l'autre) |
+| `GET catalogue.php?app=&niveau=&competence=` | Ateliers importés depuis les applications, avec l'adresse qui les ouvre (sans connexion, sans donnée d'élève) |
 | `GET compilation.php` | État du compilateur des cartes (sans connexion) |
 | `POST compilation.php` `{carte, code}` | Compile pour `uno`, `nano`, `esp32` (C++) ou `microbit` (MicroPython) → `.hex` / `.bin` ; `{enCours, travail}` au-delà de 25 s |
 | `GET compilation.php?travail=` | Résultat d’une compilation longue |

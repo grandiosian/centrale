@@ -703,6 +703,10 @@ function section_fournis(int $parcours_id): void
 
 function page_ateliers(): void
 {
+    if (($_GET['vue'] ?? '') === 'catalogue') {
+        page_catalogue_ateliers();
+        return;
+    }
     $pdo = db();
     $liste = $pdo->query('SELECT * FROM ateliers ORDER BY ordre, nom')->fetchAll();
     $catalogue = catalogue_activites();
@@ -746,6 +750,7 @@ function page_ateliers(): void
         <p class="sous">Les ateliers apparaissent sur le portail des élèves (<a href="../" target="_blank"><?= h(url_base()) ?>/</a>).
             L'élève les ouvre d'un clic, déjà connecté, et revient au portail avec le bouton « ← Mes ateliers ».</p>
         <?php messages(); ?>
+        <?php onglets_ateliers('', nombre_ateliers_catalogue()); ?>
         <?php if (!$modifier && !$brouillon) carte_brancher_passerelle(); ?>
 
         <?php if ($suggestions && !$afficher_form): ?>

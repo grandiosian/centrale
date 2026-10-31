@@ -337,6 +337,7 @@ function creer_tables(PDO $pdo): void
         UNIQUE (app, activite, classe_id, groupe_id)
     )");
     creer_tables_competences($pdo);   // évaluations des compétences, compétences des étapes de parcours
+    creer_tables_catalogue($pdo);     // ateliers importés depuis les applications
     $pdo->exec("CREATE TABLE IF NOT EXISTS parcours_validations (
         parcours_id  INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
         proprietaire TEXT NOT NULL,
@@ -1386,3 +1387,4 @@ require_once __DIR__ . '/projets.php';
 require_once __DIR__ . '/passerelles.php';
 require_once __DIR__ . '/bibliotheque.php';
 require_once __DIR__ . '/competences.php';
+require_once __DIR__ . '/catalogue_ateliers.php';

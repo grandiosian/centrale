@@ -19,6 +19,7 @@ require __DIR__ . '/../../lib/admin_bibliotheque.php';
 require __DIR__ . '/../../lib/admin_import.php';
 require __DIR__ . '/../../lib/admin_tester.php';
 require __DIR__ . '/../../lib/admin_competences.php';
+require __DIR__ . '/../../lib/admin_catalogue.php';
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
@@ -259,6 +260,7 @@ if ($action !== null) {
     action_bibliotheque($action); // propositions aux classes, ajout aux parcours, essai
     action_tester($action);       // élèves test : tester à leur place
     action_competences($action);  // progression par séquence
+    action_catalogue($action);    // ateliers importés depuis les applications
 
     switch ($action) {
         case 'deconnexion':
