@@ -63,17 +63,21 @@ jobs:
       - name: Installer ou mettre à jour (arduino-cli, cœurs, MicroPython)
         if: steps.config.outputs.pret == 'true'
         run: |
+          set +e
           # Résultats en annotations : lisibles dans l'onglet Actions et par l'API
           a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
           ssh ad 'bash technostudio-compilation/code/installer-centrale.sh' > installation.log 2>&1; r=$?
-          a notice installation "$(grep -E '^(== |arduino-cli|Version|espace|déjà|!!|[0-9.]+[MG]\s)' installation.log | tail -c 3000)"
-          a notice etat "$(tail -n 1 installation.log)"
-          [ $r -eq 0 ] || { a error installation "$(tail -c 3000 installation.log)"; exit 1; }
+          # journal complet, en morceaux (une annotation fait 3500 caractères au plus)
+          sed -e 's/\x1b\[[0-9;]*m//g' installation.log | grep -v '^\s*$' | grep -vE 'Downloading|\[=+' > journal.txt || true
+          n=0; while [ $n -lt 8 ]; do part=$(tail -c +$((n * 3400 + 1)) journal.txt | head -c 3400); [ -z "$part" ] && break; a notice "installation $((n + 1))" "$part"; n=$((n + 1)); done
+          [ $r -eq 0 ] || { a error installation "code $r"; exit 1; }
 
       - name: Essais de compilation sur le serveur
         if: steps.config.outputs.pret == 'true'
         run: |
+          set +e
           a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
+          a notice diagnostic "$(ssh ad 'echo "PATH=$PATH"; command -v node; node --version; ls -d /usr/alwaysdata/node/* 2>&1 | tail -3; grep -v -A3 cles ~/technostudio-compilation/config.json | grep -v "[a-f0-9]\{32\}"; ~/bin/arduino-cli core list; ls ~/technostudio-compilation/code/microbit ~/technostudio-compilation/code/node_modules 2>&1' 2>&1)"
           ko=0
           for c in uno nano microbit esp32; do
             out=$(ssh ad "C=~/technostudio-compilation; N=\$(sed -n 's/.*\"node\": *\"\\([^\"]*\\)\".*/\\1/p' \$C/config.json); \$N \$C/code/compiler-cli.js essai $c --dossier \$C/travail" 2>&1); r=$?
