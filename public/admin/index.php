@@ -17,6 +17,7 @@ require __DIR__ . '/../../lib/admin_accueil.php';
 require __DIR__ . '/../../lib/admin_passerelles.php';
 require __DIR__ . '/../../lib/admin_bibliotheque.php';
 require __DIR__ . '/../../lib/admin_import.php';
+require __DIR__ . '/../../lib/admin_tester.php';
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
@@ -89,9 +90,15 @@ function jeton_compte_test(): string
         attribuer_surnom($eid, (int) $classe['id']);
     }
     $pdo->prepare('UPDATE eleves SET actif = 1 WHERE id = ?')->execute([$eid]);
+    return jeton_session_eleve($eid);
+}
+
+/** Session de 2 h au nom d'un élève, ouverte par l'enseignant (aperçu, élèves test). Seule l'empreinte du jeton est gardée. */
+function jeton_session_eleve(int $eleve_id): string
+{
     $jeton = bin2hex(random_bytes(32));
-    $pdo->prepare('INSERT INTO sessions (jeton_hash, eleve_id, expire) VALUES (?, ?, ?)')
-        ->execute([hash('sha256', $jeton), $eid, time() + 2 * 3600]);
+    db()->prepare('INSERT INTO sessions (jeton_hash, eleve_id, expire) VALUES (?, ?, ?)')
+        ->execute([hash('sha256', $jeton), $eleve_id, time() + 2 * 3600]);
     return $jeton;
 }
 
@@ -138,6 +145,31 @@ function supprimer_eleves(string $condition, array $params): void
     foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $id) {
         effacer_fichiers_eleve((int) $id);
         supprimer_fichiers_projet('proprietaire = ?', ['e' . (int) $id]);   // dossiers de projet individuels
+    }
+}
+
+/** Efface le travail et l'avancement d'une classe (données, fichiers, progression, dossiers de projet, validations). Les codes restent valables. */
+function effacer_travail_classe(int $classe_id): void
+{
+    $pdo = db();
+    supprimer_eleves('classe_id = ?', [$classe_id]);
+    $proprios = [];
+    $st = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ?');
+    $st->execute([$classe_id]);
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $e) {
+        $proprios[] = 'e' . (int) $e;
+    }
+    foreach (['donnees', 'donnees_versions', 'fichiers', 'progression', 'connexions'] as $table) {
+        $pdo->prepare("DELETE FROM $table WHERE eleve_id IN (SELECT id FROM eleves WHERE classe_id = ?)")->execute([$classe_id]);
+    }
+    $st = $pdo->prepare('SELECT id FROM equipes WHERE classe_id = ?');
+    $st->execute([$classe_id]);
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $q) {
+        supprimer_fichiers_projet('proprietaire = ?', ['q' . (int) $q]);   // dossiers de projet des équipes
+        $proprios[] = 'q' . (int) $q;
+    }
+    foreach ($proprios as $p) {   // étapes validées par l'enseignant
+        $pdo->prepare('DELETE FROM parcours_validations WHERE proprietaire = ?')->execute([$p]);
     }
 }
 
@@ -207,7 +239,7 @@ if ($action !== null) {
     $retour_eleve = './?p=eleve&id=' . $eleve_id;
 
     // Sans la clé secrète, aucun code ne peut être créé ni vérifié : on l'explique au lieu de planter
-    $actions_codes = ['generer', 'regenerer', 'regenerer_classe', 'reinitialiser_tous_codes', 'apercu_eleve', 'essayer_activite', 'verifier_codes', 'import_classe'];
+    $actions_codes = ['generer', 'regenerer', 'regenerer_classe', 'reinitialiser_tous_codes', 'apercu_eleve', 'essayer_activite', 'verifier_codes', 'import_classe', 'creer_classes_test'];
     if (in_array($action, $actions_codes, true) && etat_cle() !== 'ok') {
         if (in_array($action, ['reinitialiser_tous_codes', 'verifier_codes', 'import_classe'], true)) {
             header('Content-Type: application/json; charset=utf-8');
@@ -224,6 +256,7 @@ if ($action !== null) {
     action_import($action);       // import Pronote (réponse JSON)
     action_groupes($action);      // groupes d'une classe (GR1, GR2…)
     action_bibliotheque($action); // propositions aux classes, ajout aux parcours, essai
+    action_tester($action);       // élèves test : tester à leur place
 
     switch ($action) {
         case 'deconnexion':
@@ -357,15 +390,7 @@ if ($action !== null) {
             rediriger('./?p=classes');
 
         case 'vider_travail':
-            supprimer_eleves('classe_id = ?', [$classe_id]);
-            foreach (['donnees', 'donnees_versions', 'fichiers', 'progression', 'connexions'] as $table) {
-                $pdo->prepare("DELETE FROM $table WHERE eleve_id IN (SELECT id FROM eleves WHERE classe_id = ?)")->execute([$classe_id]);
-            }
-            $st = $pdo->prepare('SELECT id FROM equipes WHERE classe_id = ?');
-            $st->execute([$classe_id]);
-            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $q) {
-                supprimer_fichiers_projet('proprietaire = ?', ['q' . (int) $q]);   // dossiers de projet des équipes
-            }
+            effacer_travail_classe($classe_id);
                         flash('Travail et avancement de la classe effacés. Les codes des élèves fonctionnent toujours.');
             rediriger($retour_classe);
 

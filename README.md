@@ -220,6 +220,18 @@ L'onglet **Bibliothèque** de l'espace enseignant réunit toutes les activités 
   - dans la carte de chaque atelier, seules les activités proposées et celles déjà commencées apparaissent. Un réglage en bas de la Bibliothèque permet de les montrer toutes ;
   - dans l'application elle-même, l'élève peut toujours tout ouvrir.
 
+### Élèves test : tester à la place d'un élève
+
+Onglets **Ateliers** et **Parcours**, carte « Tester à la place d'un élève » :
+
+- **Créer les classes de test** : 5TEST et 4TEST, 3 élèves fictifs chacune. Le chiffre du nom donne le niveau. Leurs codes s'affichent une fois, pour essayer aussi la connexion par code. Toute classe nommée `TEST`, `5TEST`, `4 TEST`… compte comme classe de test.
+- **Choisir un élève test**, puis :
+  - **Ouvrir son portail ↗** : nouvel onglet connecté comme cet élève (2 h, sans code), avec ses ateliers, ses parcours, son dossier de projet et « Étape suivante », comme en classe ;
+  - **Tester ↗** sur une ligne d'atelier : l'atelier s'ouvre directement, connecté ;
+  - **Tester ↗** sur une ligne de parcours : son portail, avec le parcours. Si le parcours n'est pas proposé à sa classe, la Centrale le dit.
+- L'élève choisi est gardé d'une page à l'autre. Seuls les élèves des classes de test sont proposés : on ne travaille jamais dans le dossier d'un vrai élève.
+- **Remettre les élèves test à zéro** : efface leur travail, leur avancement, leurs dossiers de projet et les étapes validées, pour rejouer un parcours depuis le début.
+
 ### Ateliers du portail
 
 Onglet **Ateliers** de l'espace enseignant : icône, nom, identifiant (`app`), adresse, classes concernées.

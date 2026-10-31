@@ -591,6 +591,7 @@ Programmer la lampe | technostudio | charte-lampe-de-poche/P1 | https://grandios
 
         <?php if ($courant['id'] && !$brouillon) { carte_enchainement((int) $courant['id']); section_fournis((int) $courant['id']); } ?>
 
+        <?php $avec_test = $liste && !$afficher_form ? carte_tester('./?p=parcours') : false; ?>
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
                 <thead><tr><th>Parcours</th><th>Travail</th><th>Classes</th><th>Étapes</th><th></th></tr></thead>
@@ -602,6 +603,7 @@ Programmer la lampe | technostudio | charte-lampe-de-poche/P1 | https://grandios
                         <td><?= $p['classes'] !== '' ? h($p['classes']) : '<span class="discret">toutes</span>' ?></td>
                         <td><?= (int) $p['nb'] ?></td>
                         <td class="actions">
+                            <?= $avec_test ? bouton_tester('parcours:' . (int) $p['id'], 'Ouvrir le portail de l’élève test choisi au-dessus, pour suivre ce parcours à sa place') : '' ?>
                             <a class="btn petit" href="./?p=projets&parcours=<?= (int) $p['id'] ?>">Dossiers de projet</a>
                             <a class="btn petit secondaire" href="./?p=suivi&vue=parcours:<?= (int) $p['id'] ?>">Suivi</a>
                             <a class="btn petit secondaire" href="./?p=parcours&modifier=<?= (int) $p['id'] ?>">Modifier</a>
@@ -732,6 +734,7 @@ function page_ateliers(): void
             </form>
         <?php endif; ?>
 
+        <?php $avec_test = $liste && !$afficher_form ? carte_tester('./?p=ateliers') : false; ?>
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
                 <thead><tr><th></th><th>Atelier</th><th>Passerelle</th><th>Activités</th><th>Ouvertures (7 j)</th><th>Classes</th><th>État</th><th></th></tr></thead>
@@ -754,6 +757,7 @@ function page_ateliers(): void
                         <td><?= $a['classes'] !== '' ? h($a['classes']) : '<span class="discret">toutes</span>' ?></td>
                         <td><?= $a['actif'] ? 'Visible' : 'Masqué' ?></td>
                         <td class="actions">
+                            <?= $avec_test ? bouton_tester('app:' . $a['app'], 'Ouvrir cet atelier connecté comme l’élève test choisi au-dessus') : '' ?>
                             <a class="btn petit secondaire" href="./?p=suivi&vue=app:<?= rawurlencode($a['app']) ?>">Suivi</a>
                             <a class="btn petit secondaire" href="./?p=ateliers&modifier=<?= (int) $a['id'] ?>">Modifier</a>
                             <?= bouton('supprimer_atelier', 'Retirer', ['atelier_id' => $a['id']], 'danger', 'Retirer cet atelier du portail ?') ?>
