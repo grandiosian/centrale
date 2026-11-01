@@ -399,7 +399,14 @@ function plan_propre(string $json): ?array
             'label' => mb_substr(trim((string) ($o['label'] ?? '')), 0, 20),
         ];
     }
-    return ['largeur' => $largeur, 'hauteur' => $hauteur, 'objets' => $objets];
+    $vue = is_array($p['vue'] ?? null) ? $p['vue'] : [];
+    return [
+        'largeur' => $largeur,
+        'hauteur' => $hauteur,
+        'sol'     => in_array($p['sol'] ?? '', ['uni', 'bois', 'parquet'], true) ? $p['sol'] : 'uni',
+        'vue'     => ['iso' => !empty($vue['iso']), 'angle' => max(0, min(359, (int) ($vue['angle'] ?? 0))), 'rot' => max(0, min(3, (int) ($vue['rot'] ?? 0))), 'portrait' => !empty($vue['portrait']), 'miroirX' => !empty($vue['miroirX']), 'miroirY' => !empty($vue['miroirY'])],
+        'objets'  => $objets,
+    ];
 }
 
 function plan_de(array $salle): array

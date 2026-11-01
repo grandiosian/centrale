@@ -141,6 +141,79 @@ function date_fr(string $date): string
         . ['', 'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'][(int) date('n', $t)] : $date;
 }
 
+/**
+ * Ateliers de la bibliothèque (catalogue des ateliers, sinon un atelier par groupe d'activités), avec tout ce que la
+ * Centrale en connaît : résumé, compétences, activités (détail de centrale.json, suivi, propositions), ressources.
+ * Renvoie [ateliers par clé « app|atelier », clé de l'atelier par « app|activite »].
+ */
+function ateliers_bibliotheque(array $items, array $props): array
+{
+    $par_act = [];
+    foreach ($items as $x) {
+        $par_act[$x['app'] . '|' . $x['activite']] = $x;
+    }
+    $ressources = [];
+    foreach (db()->query('SELECT app, nom, taille FROM ressources ORDER BY nom') as $r) {
+        $ressources[$r['app']][] = ['nom' => $r['nom'], 'taille' => format_taille((int) $r['taille'])];
+    }
+    $details = [];   // détail des activités dans centrale.json, par application
+    $detail = function (string $app, string $id) use (&$details): array {
+        if (!isset($details[$app])) {
+            $details[$app] = activites_descripteur(descripteur_de($app));
+        }
+        return $details[$app][$id] ?? [];
+    };
+    $activite = function (string $app, array $a) use ($par_act, $props, $detail): array {
+        $cle = $app . '|' . $a['id'];
+        $x = $par_act[$cle] ?? null;
+        $d = $detail($app, $a['id']);
+        $texte = fn($v) => is_string($v) ? mb_substr(trim($v), 0, 600) : '';
+        return [
+            'id' => $a['id'], 'titre' => (string) ($a['titre'] ?? $a['id']),
+            'total' => isset($a['total']) && is_numeric($a['total']) ? (int) $a['total'] : null,
+            'competences' => liste_codes_competences(is_array($a['competences'] ?? null) ? implode(',', $a['competences']) : (string) ($a['competences'] ?? '')),
+            'resume' => $texte($d['resume'] ?? $d['description'] ?? ''),
+            'categorie' => $texte($d['categorie_titre'] ?? ''), 'type' => $texte($d['type'] ?? ''), 'duree' => $texte($d['duree'] ?? ''),
+            'questions' => array_values(array_filter(array_map($texte, (array) ($d['questions'] ?? [])))),
+            'dans_bibliotheque' => $x !== null, 'essayer' => $x !== null && $x['atelier'] !== null,
+            'terminees' => $x['terminees'] ?? 0, 'commencees' => $x['commencees'] ?? 0,
+            'propositions' => array_map(fn($q) => ['cible' => $q['classe'] . ($q['groupe'] ? ' · ' . $q['groupe'] : ''),
+                'pour_le' => $q['pour_le'] ? date_fr($q['pour_le']) : '', 'consigne' => (string) $q['consigne']], $props[$cle] ?? []),
+        ];
+    };
+    $niveaux = ['6e' => '6', '5e' => '5', '4e' => '4', '3e' => '3', 'lycee' => 'lycee'];
+    $res = [];
+    $atelier_de = [];
+    foreach (catalogue_ateliers(null, false) as $r) {
+        $cle = $r['app'] . '|' . $r['atelier'];
+        $acts = array_map(fn($a) => $activite($r['app'], $a), $r['activites']);
+        foreach ($acts as $a) {
+            $atelier_de[$r['app'] . '|' . $a['id']] ??= $cle;
+        }
+        $res[$cle] = ['cle' => $cle, 'app' => $r['app'], 'nom_app' => $r['nom_app'] ?? $r['app'], 'icone' => $r['icone_app'] ?? '',
+            'atelier' => $r['atelier'], 'titre' => $r['titre'], 'niveau' => $niveaux[$r['niveau']] ?? '', 'theme' => $r['theme'],
+            'resume' => $r['resume'], 'duree' => $r['duree'], 'version' => $r['version'], 'auteur' => $r['auteur'],
+            'source' => SOURCES_CATALOGUE[$r['source']] ?? $r['source'], 'ouvrir' => adresse_ouvrir_atelier($r), 'fichier' => $r['fichier'],
+            'competences' => $r['codes'], 'activites' => $acts, 'ressources' => $ressources[$r['app']] ?? []];
+    }
+    // Activités hors catalogue (application sans ateliers importés) : un atelier par groupe
+    foreach ($items as $x) {
+        $k = $x['app'] . '|' . $x['activite'];
+        if (isset($atelier_de[$k])) {
+            continue;
+        }
+        $cle = $x['app'] . '|groupe:' . ($x['groupe'] !== '' ? $x['groupe'] : $x['activite']);
+        $atelier_de[$k] = $cle;
+        $res[$cle] ??= ['cle' => $cle, 'app' => $x['app'], 'nom_app' => $x['atelier']['nom'] ?? $x['app'], 'icone' => $x['atelier']['icone'] ?? '',
+            'atelier' => '', 'titre' => $x['groupe'] !== '' ? $x['groupe'] : $x['titre'], 'niveau' => $x['niveau'], 'theme' => '',
+            'resume' => '', 'duree' => '', 'version' => '', 'auteur' => '', 'source' => 'activités de la bibliothèque (pas d’atelier importé)',
+            'ouvrir' => '', 'fichier' => '', 'competences' => [], 'activites' => [], 'ressources' => $ressources[$x['app']] ?? []];
+        $res[$cle]['activites'][] = $activite($x['app'], ['id' => $x['activite'], 'titre' => $x['titre'], 'total' => $x['total'], 'competences' => $x['competences']]);
+        $res[$cle]['competences'] = array_values(array_unique(array_merge($res[$cle]['competences'], liste_codes_competences($x['competences']))));
+    }
+    return [$res, $atelier_de];
+}
+
 function page_bibliotheque(): void
 {
     $pdo = db();
@@ -177,6 +250,23 @@ function page_bibliotheque(): void
     $f_vue = (string) ($_GET['vue'] ?? '');
     $f_comp = (string) ($_GET['competence'] ?? '');
     $toutes = !portail_seulement_proposees();
+    [$ateliers_b, $atelier_de] = ateliers_bibliotheque($items, $props);
+    // Groupe d'activités qui est un seul atelier (TechnoStudio) : le bouton « Voir l'atelier » va dans son titre
+    $ateliers_groupe = [];
+    foreach ($items as $x) {
+        $ateliers_groupe[$x['app'] . '|' . $x['groupe']][$atelier_de[$x['app'] . '|' . $x['activite']]] = true;
+    }
+    $libelles = [];
+    foreach ($ateliers_b as $at) {
+        foreach (array_merge($at['competences'], ...array_column($at['activites'], 'competences')) as $code) {
+            $k = $index_comp[$code] ?? null;
+            $libelles[$code] ??= ['texte' => $k['texte'] ?? 'Code inconnu du référentiel', 'theme' => $k['theme'] ?? '', 'couleur' => couleur_theme($k['theme'] ?? null)];
+        }
+    }
+    $par_app_b = [];
+    foreach ($ateliers_b as $at) {
+        $par_app_b[$at['app']][] = $at;
+    }
 
     entete('Bibliothèque');
     barre('bibliotheque');
@@ -225,7 +315,38 @@ function page_bibliotheque(): void
             </select>
             <?php endif; ?>
             <button type="button" id="b-condense" class="btn petit secondaire" aria-pressed="false" title="Affichage condensé : une ligne par activité">Condensé</button>
+            <button type="button" id="b-voir-ateliers" class="btn petit secondaire" aria-expanded="false" aria-controls="b-panneau-ateliers"
+                title="Choisir un ou plusieurs ateliers pour n'afficher que leurs activités, voir leur détail ou les comparer">Ateliers…</button>
             <span class="discret" id="b-compte"></span>
+            <div class="sel-ateliers" id="b-sel-ateliers" hidden>
+                <strong id="b-sel-ateliers-n"></strong>
+                <span class="puces-sel" id="b-puces-ateliers"></span>
+                <button type="button" class="petit" id="b-comparer">Comparer</button>
+                <button type="button" class="lien-bouton" id="b-effacer-ateliers">Tout afficher</button>
+            </div>
+        </div>
+
+        <div class="carte panneau-ateliers" id="b-panneau-ateliers" hidden>
+            <p class="aide">Cochez des ateliers : la bibliothèque n'affiche plus que leurs activités. « Détail » montre tout ce que
+                la Centrale sait d'un atelier ; « Comparer » met les ateliers cochés côte à côte.</p>
+            <div class="panneau-ateliers-apps">
+            <?php foreach ($par_app_b as $app => $liste): ?>
+                <section data-app="<?= h($app) ?>">
+                    <h3><?= h($liste[0]['icone'] ?: '🧩') ?> <?= h($liste[0]['nom_app']) ?></h3>
+                    <ul>
+                    <?php foreach ($liste as $at): $nb = count($at['activites']); ?>
+                        <li class="ligne-atelier" data-cle="<?= h($at['cle']) ?>">
+                            <label><input type="checkbox" value="<?= h($at['cle']) ?>" aria-label="Choisir l'atelier <?= h($at['titre']) ?>">
+                                <span><?php if (isset(COULEURS_NIVEAUX[$at['niveau']])): ?><span class="puce-niveau" style="--niv:<?= COULEURS_NIVEAUX[$at['niveau']] ?>"><?= h(NIVEAUX_BIBLIOTHEQUE[$at['niveau']]) ?></span><?php endif; ?>
+                                <span><?= h($at['titre']) ?></span>
+                                <small class="discret"><?= $nb ?> activité<?= $nb > 1 ? 's' : '' ?></small></span></label>
+                            <button type="button" class="petit secondaire voir-atelier" data-cle="<?= h($at['cle']) ?>">Détail</button>
+                        </li>
+                    <?php endforeach; ?>
+                    </ul>
+                </section>
+            <?php endforeach; ?>
+            </div>
         </div>
 
         <form method="post" id="form-retirer"><?= csrf() ?><input type="hidden" name="action" value="retirer_proposition">
@@ -257,9 +378,12 @@ function page_bibliotheque(): void
                 <?php endif;
                 if ($x['groupe'] !== $groupe_courant):
                     $groupe_courant = $x['groupe'];
-                    if ($groupe_courant !== ''): ?><li class="biblio-groupe"><?= h($groupe_courant) ?></li><?php endif;
-                endif; ?>
-                <li class="biblio-item" data-niveau="<?= h($x['niveau']) ?>" data-app="<?= h($x['app']) ?>"
+                    $un_atelier = count($ateliers_groupe[$x['app'] . '|' . $groupe_courant]) === 1 ? array_key_first($ateliers_groupe[$x['app'] . '|' . $groupe_courant]) : null;
+                    if ($groupe_courant !== ''): ?><li class="biblio-groupe"><?= h($groupe_courant) ?>
+                        <?php if ($un_atelier): ?><button type="button" class="lien-bouton voir-atelier" data-cle="<?= h($un_atelier) ?>">Voir l’atelier</button><?php endif; ?></li><?php endif;
+                endif;
+                $cle_atelier = $atelier_de[$cle]; ?>
+                <li class="biblio-item" data-niveau="<?= h($x['niveau']) ?>" data-app="<?= h($x['app']) ?>" data-atelier="<?= h($cle_atelier) ?>"
                     data-classes="<?= h(implode(' ', array_unique(array_map(fn($q) => 'c:' . $q['classe_id'], $p)))) ?>"
                     data-texte="<?= h(mb_strtolower($x['titre'] . ' ' . $x['groupe'] . ' ' . $x['activite'] . ' ' . $x['description'])) ?>"
                     data-competences="<?= h(implode(' ', liste_codes_competences($x['competences'] ?? ''))) ?>">
@@ -273,6 +397,7 @@ function page_bibliotheque(): void
                         <?php if ($x['description'] !== ''): ?><div class="discret"><?= h($x['description']) ?></div><?php endif; ?>
                         <div class="biblio-infos">
                             <?php if ($x['total']): ?><span><?= (int) $x['total'] ?> étape<?= $x['total'] > 1 ? 's' : '' ?></span><?php endif; ?>
+                            <?php if (!$un_atelier || $groupe_courant === ''): ?><button type="button" class="lien-bouton voir-atelier" data-cle="<?= h($cle_atelier) ?>">Voir l’atelier</button><?php endif; ?>
                             <?php if ($x['commencees']): ?><span title="Élèves qui l'ont terminée / commencée">✓ <?= $x['terminees'] ?> / <?= $x['commencees'] ?> élève<?= $x['commencees'] > 1 ? 's' : '' ?></span><?php endif; ?>
                             <?php foreach ($p as $q): ?>
                                 <span class="proposee" title="<?= h(trim(($q['pour_le'] ? 'Pour le ' . date_fr($q['pour_le']) . '. ' : '') . $q['consigne'])) ?>">
@@ -325,6 +450,17 @@ function page_bibliotheque(): void
                 <button type="button" class="lien" id="b-aucune">Tout décocher</button>
             </div>
         </form>
+
+        <dialog class="dialogue-atelier" id="b-dialogue" aria-labelledby="b-dialogue-titre">
+            <div class="dialogue-tete">
+                <h2 id="b-dialogue-titre"></h2>
+                <button type="button" class="petit secondaire" id="b-fermer" aria-label="Fermer">Fermer</button>
+            </div>
+            <div id="b-dialogue-corps"></div>
+        </dialog>
+        <script type="application/json" id="b-donnees-ateliers"><?= json_encode(['ateliers' => $ateliers_b, 'competences' => $libelles,
+            'niveaux' => NIVEAUX_BIBLIOTHEQUE, 'couleurs' => COULEURS_NIVEAUX,
+            'themes' => array_combine(['OST', 'SFC', 'CCRI'], array_map('couleur_theme', ['OST', 'SFC', 'CCRI']))], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 
         <section class="carte reglage-portail">
             <h2>Ce que voient les élèves</h2>

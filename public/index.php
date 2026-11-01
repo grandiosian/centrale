@@ -44,14 +44,17 @@ body {
         linear-gradient(var(--grille) 1px, transparent 1px), linear-gradient(90deg, var(--grille) 1px, transparent 1px),
         linear-gradient(var(--grille-fine) 1px, transparent 1px), linear-gradient(90deg, var(--grille-fine) 1px, transparent 1px);
     background-size: 40px 40px, 40px 40px, 8px 8px, 8px 8px;
-    min-height: 100vh;
+    min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
 }
-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
-         padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--bord); }
+footer.pied-portail { display: flex; justify-content: space-between; align-items: center; gap: 4px 20px; flex-wrap: wrap;
+         padding: 8px 20px; margin-top: 0; flex: none; background: var(--surface); border-top: 1px solid var(--bord); font-size: .75rem; line-height: 1.3; color: var(--doux); }
+footer.pied-portail strong { color: var(--encre); }
+header { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+         padding: 24px 20px; min-height: 84px; background: var(--surface); border-bottom: 1px solid var(--bord); }
 .marque { font-weight: 800; font-size: 1.05rem; letter-spacing: -.01em; color: var(--encre); }
 #qui { display: flex; align-items: center; gap: 10px; font-size: .95rem; }
 #qui code { font: 600 .9rem ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; }
-main { max-width: 900px; margin: 0 auto; padding: 28px 16px 64px; }
+main { flex: 1; width: 100%; max-width: 900px; margin: 0 auto; padding: 12px 16px 12px; }
 h1 { margin: 0 0 6px; font-size: 1.75rem; line-height: 1.2; letter-spacing: -.015em; }
 h2.section { font-size: 1.25rem; margin: 32px 0 12px; }
 .sous { color: var(--doux); margin: 0 0 20px; }
@@ -67,7 +70,10 @@ button[disabled] { opacity: .45; cursor: default; }
 
 /* ---------- Connexion : la fiche ---------- */
 #ecran-connexion { max-width: 620px; margin: 4vh auto 0; }
-#ecran-connexion h1 { font-size: clamp(1.7rem, 4.5vw, 2.3rem); }
+.marque-bandeau { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 800; font-size: clamp(1.6rem, 3.6vw, 2.4rem); letter-spacing: -.01em; color: var(--encre); white-space: nowrap; }
+#ecran-connexion h1 { font-size: clamp(1.4rem, 3.4vw, 1.8rem); font-weight: 700; letter-spacing: -.02em; margin: 0 0 6px; }
+#ecran-connexion h1 { color: var(--encre); }
+#ecran-connexion .sous { font-size: .95rem; line-height: 1.5; max-width: 52ch; margin: 0 0 16px; }
 .fiche {
     margin-top: 22px; padding: 22px 24px 10px; background: var(--surface);
     border: 2px dashed var(--doux); border-radius: 4px;            /* comme la fiche découpée */
@@ -110,13 +116,20 @@ button[disabled] { opacity: .45; cursor: default; }
 .fiche-pied { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 6px; }
 .fiche-pied button { padding: 11px 22px; font-size: 1.02rem; }
 .fiche-pied .astuce { color: var(--doux); font-size: .88rem; }
+/* code et bouton centrés dans le cadre pointillé */
+.fiche { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.fiche .ligne-code { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+.fiche .ligne-code input { text-align: center; width: 100%; max-width: 420px; }
+.fiche-pied { flex-direction: column; justify-content: center; width: 100%; margin-top: 16px; }
+.fiche-invite { margin: 0 0 14px; max-width: 46ch; color: var(--doux); font-size: .95rem; line-height: 1.5; }
+.visuellement-cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 #erreur-code { color: var(--erreur); font-weight: 600; min-height: 1.5em; margin: 8px 0 0; }
-.aide-connexion { margin: 18px 4px 0; color: var(--doux); font-size: .93rem; max-width: 60ch; }
-.aide-connexion strong { color: var(--texte); }
+.aide-connexion { margin: 18px 4px 0; color: var(--encre); font-size: .93rem; max-width: 60ch; }
+.aide-connexion strong { color: var(--encre); }
 /* Communiqué + RGPD, sous la fiche de connexion */
 .presentation { margin: 22px 4px 0; }
-.presentation h2 { font-size: 1.15rem; margin: 0 0 8px; letter-spacing: -.01em; }
-.presentation p { margin: 0; }
+.presentation h2 { font-size: 1.15rem; margin: 0 0 8px; letter-spacing: -.01em; color: var(--encre); }
+.presentation p { margin: 0; color: var(--encre); }
 .presentation .rgpd { margin-top: 14px; border-top: 1px solid var(--bord); padding-top: 12px; }
 .presentation summary { cursor: pointer; font-weight: 700; color: var(--encre); }
 .presentation summary:hover { text-decoration: underline; }
@@ -216,17 +229,17 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
 </head>
 <body>
 <header>
-    <span class="marque">Technologie</span>
+    <span class="marque-bandeau">TechnoVersailles</span>
     <div id="qui" hidden></div>
 </header>
 
 <main>
     <section id="ecran-connexion" hidden>
-        <h1>Ton code est sur ta fiche</h1>
-        <p class="sous">Tape-le une seule fois : tu retrouves ensuite tous tes ateliers et ton travail.</p>
 
         <form class="fiche" id="form-code" autocomplete="off" novalidate>
-            <label for="centrale-code">Mon code</label>
+            <h1>Ton code est sur ta fiche</h1>
+            <label for="centrale-code" class="visuellement-cache">Mon code</label>
+            <p class="fiche-invite">Tape-le une seule fois : tu retrouves ensuite tous tes ateliers et ton travail.</p>
             <div class="ligne-code">
                 <input id="centrale-code" name="code" required spellcheck="false" autocapitalize="off" autocorrect="off"
                        inputmode="text" placeholder="4C-LHA-9943-kfmz-tqpr" aria-describedby="cotes-aide erreur-code">
@@ -244,16 +257,13 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
             <p id="erreur-code" role="alert"></p>
         </form>
 
-        <p class="aide-connexion"><strong>Code refusé ?</strong> Vérifie chaque lettre de ta fiche.
-            Si ça ne marche toujours pas, ton professeur peut t'en donner un nouveau.
-            Ne prête jamais ton code : c'est lui qui protège ton travail.</p>
+        <p class="aide-connexion"><strong>Code refusé ?</strong> Vérifie chaque lettre. Sinon, demande un nouveau code à ton professeur.
+            Ne prête jamais ton code.</p>
 
         <section class="carte presentation" aria-labelledby="presentation-titre">
             <h2 id="presentation-titre">Un seul endroit pour tout ton travail de techno</h2>
-            <p>Ce site réunit les applications de technologie : réseau, modélisation 3D, programmation de cartes…
-                Tu te connectes <strong>une fois</strong> avec ton code, tu ouvres un atelier, et
-                <strong>ton travail est enregistré tout seul</strong>. Tu le retrouves sur n'importe quel
-                ordinateur, et ton professeur voit ton avancement pour t'aider.</p>
+            <p>Tu te connectes <strong>une fois</strong>, ton travail est <strong>enregistré tout seul</strong>
+                et tu le retrouves sur n'importe quel ordinateur.</p>
             <details class="rgpd">
                 <summary>Tes données sont protégées (RGPD)</summary>
                 <ul>
@@ -287,6 +297,20 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
         <div class="grille" id="liste-ateliers"></div>
     </section>
 </main>
+
+<footer class="pied-portail">
+    <span><strong>Technologie</strong> · site éducatif</span>
+    <?php
+    // version de la Centrale, lue dans lib/commun.php (sans charger la bibliothèque)
+    $version_centrale = '';
+    if (is_file(__DIR__ . '/../lib/commun.php') && preg_match("/VERSION_CENTRALE = '([^']+)'/", (string) file_get_contents(__DIR__ . '/../lib/commun.php'), $m)) {
+        $version_centrale = $m[1];
+    }
+    ?>
+    <?php if ($version_centrale !== ''): ?><span>Version <?= htmlspecialchars($version_centrale) ?></span><?php endif; ?>
+    <span>Respect du RGPD : aucune donnée nominative n’est envoyée au serveur, les noms restent sur le poste de l’élève et de l’enseignant.</span>
+    <span>Accès réservé aux élèves et enseignants de l’établissement.</span>
+</footer>
 <div id="chargement" hidden>Ouverture de l'atelier…</div>
 
 <script src="js/centrale-client.js?v=<?= $v ?>"></script>

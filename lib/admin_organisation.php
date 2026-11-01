@@ -183,6 +183,10 @@ function action_organisation(string $action): bool
                 flash('Placement illisible.', 'err');
                 rediriger($retour);
             }
+            if (!salle_compatible($pdo, $cid, $sid)) {
+                flash('Cette salle n’appartient pas à l’établissement de la classe.', 'err');
+                rediriger('./?p=classe&id=' . $cid . '#organisation');
+            }
             $st = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ?' . ($gid ? ' AND groupe_id = ?' : ''));
             $st->execute($gid ? [$cid, $gid] : [$cid]);
             $eleves = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
@@ -203,6 +207,76 @@ function action_organisation(string $action): bool
             }
             $pdo->commit();
             flash('Plan de classe enregistré (' . count($deja) . ' élèves placés).');
+            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
+
+        case 'enregistrer_version':
+            $cid = (int) ($p['classe_id'] ?? 0);
+            $sid = (int) ($p['salle_id'] ?? 0);
+            $gid = (int) ($p['groupe_id'] ?? 0);
+            $g = $gid ? groupe_par_id($gid) : null;
+            $gid = $g && (int) $g['classe_id'] === $cid ? $gid : 0;
+            $nom = mb_substr(trim((string) ($p['nom_version'] ?? '')), 0, 60);
+            $carte = json_decode((string) ($p['placement'] ?? ''), true);
+            if ($nom === '' || !is_array($carte)) {
+                flash('Donnez un nom à la version du plan.', 'err');
+                rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
+            }
+            if (!salle_compatible($pdo, $cid, $sid)) {
+                flash('Cette salle n’appartient pas à l’établissement de la classe.', 'err');
+                rediriger('./?p=classe&id=' . $cid . '#organisation');
+            }
+            $propre = carte_placement_valide($pdo, $cid, $gid, $sid, $carte);
+            $insertion = $pdo->prepare('INSERT INTO plans_versions (classe_id, groupe_id, salle_id, nom, carte, cree_le) VALUES (?, ?, ?, ?, ?, ?)');
+            // premier enregistrement pour ce plan : le plan en cours (tel qu'enregistré avant) est gardé comme « Plan initial »,
+            // pour pouvoir y revenir comme aux autres versions
+            $st = $pdo->prepare('SELECT COUNT(*) FROM plans_versions WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?');
+            $st->execute([$cid, $gid, $sid]);
+            if (!(int) $st->fetchColumn()) {
+                $st = $pdo->prepare('SELECT eleve_id, place FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?');
+                $st->execute([$cid, $gid, $sid]);
+                $initial = array_map('intval', array_column($st->fetchAll(), 'eleve_id', 'place'));
+                if ($initial) {
+                    $insertion->execute([$cid, $gid, $sid, 'Plan initial', json_encode((object) $initial), date('Y-m-d H:i')]);
+                }
+            }
+            $insertion->execute([$cid, $gid, $sid, $nom, json_encode((object) $propre), date('Y-m-d H:i')]);
+            flash('Version « ' . $nom . ' » enregistrée (' . count($propre) . ' élèves placés).');
+            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
+
+        case 'charger_version':
+            $cid = (int) ($p['classe_id'] ?? 0);
+            $sid = (int) ($p['salle_id'] ?? 0);
+            $gid = (int) ($p['groupe_id'] ?? 0);
+            $st = $pdo->prepare('SELECT nom, carte FROM plans_versions WHERE id = ? AND classe_id = ? AND salle_id = ? AND groupe_id = ?');
+            $st->execute([(int) ($p['version_id'] ?? 0), $cid, $sid, $gid]);
+            $version = $st->fetch();
+            if (!$version) {
+                flash('Version introuvable.', 'err');
+                rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
+            }
+            if (!salle_compatible($pdo, $cid, $sid)) {
+                flash('Cette salle n’appartient pas à l’établissement de la classe.', 'err');
+                rediriger('./?p=classe&id=' . $cid . '#organisation');
+            }
+            // la version est revalidée : élèves et places encore présents
+            $propre = carte_placement_valide($pdo, $cid, $gid, $sid, json_decode((string) $version['carte'], true) ?: []);
+            $pdo->beginTransaction();
+            $pdo->prepare('DELETE FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?')->execute([$cid, $gid, $sid]);
+            $ins = $pdo->prepare('INSERT INTO placements (classe_id, groupe_id, salle_id, place, eleve_id) VALUES (?, ?, ?, ?, ?)');
+            foreach ($propre as $place => $eleve) {
+                $ins->execute([$cid, $gid, $sid, (string) $place, $eleve]);
+            }
+            $pdo->commit();
+            flash('Version « ' . $version['nom'] . ' » chargée (' . count($propre) . ' élèves placés).');
+            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
+
+        case 'supprimer_version':
+            $cid = (int) ($p['classe_id'] ?? 0);
+            $sid = (int) ($p['salle_id'] ?? 0);
+            $gid = (int) ($p['groupe_id'] ?? 0);
+            $pdo->prepare('DELETE FROM plans_versions WHERE id = ? AND classe_id = ? AND salle_id = ? AND groupe_id = ?')
+                ->execute([(int) ($p['version_id'] ?? 0), $cid, $sid, $gid]);
+            flash('Version supprimée.');
             rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
 
         case 'classe_etablissement':
@@ -302,6 +376,28 @@ function action_organisation(string $action): bool
 }
 
 /** Valide un cours récurrent envoyé par formulaire. Renvoie les champs, ou un message d'erreur. */
+/** Placements acceptés pour une classe, un groupe et une salle : seulement des places élèves et des élèves de la classe, sans doublon. */
+function carte_placement_valide(PDO $pdo, int $cid, int $gid, int $sid, array $carte): array
+{
+    $st = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ?' . ($gid ? ' AND groupe_id = ?' : ''));
+    $st->execute($gid ? [$cid, $gid] : [$cid]);
+    $eleves = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+    $st = $pdo->prepare('SELECT * FROM salles WHERE id = ?');
+    $st->execute([$sid]);
+    $salle = $st->fetch();
+    $places = $salle ? array_column(array_filter(plan_de($salle)['objets'], fn($o) => in_array($o['type'], TYPES_PLACES, true)), 'id') : [];
+    $propre = [];
+    $deja = [];
+    foreach ($carte as $place => $eleve) {
+        $eleve = (int) $eleve;
+        if (in_array((string) $place, $places, true) && in_array($eleve, $eleves, true) && !isset($deja[$eleve])) {
+            $propre[(string) $place] = $eleve;
+            $deja[$eleve] = true;
+        }
+    }
+    return $propre;
+}
+
 function lire_cours(array $p): array|string
 {
     [$cid, $gid] = lire_classe_groupe((string) ($p['classe_id'] ?? ''));
@@ -933,6 +1029,18 @@ function page_salle(int $id): void
                             <option value="0">Aucun</option><option value="1">Un par place</option><option value="0.5">Un pour deux places</option></select></label>
                         <button type="button" class="secondaire petit" id="r-generer">Générer (remplace le plan)</button>
                     </details>
+                    <fieldset class="vue-salle">
+                        <legend>Affichage du plan</legend>
+                        <label>Sol<select id="sol">
+                            <option value="uni">Uni</option><option value="bois">Bois</option><option value="parquet">Parquet</option></select></label>
+                        <label><input type="checkbox" id="vue-iso"> Vue 3/4 (isométrique)</label>
+                        <label class="curseur-angle">Angle de la vue 3/4 <span id="vue-angle-valeur">0°</span>
+                            <input type="range" id="vue-angle" min="0" max="359" step="1" value="0"></label>
+                        <label><input type="checkbox" id="vue-portrait"> Portrait (salle en hauteur)</label>
+                        <label><input type="checkbox" id="vue-miroir-x"> Miroir horizontal</label>
+                        <label><input type="checkbox" id="vue-miroir-y"> Miroir vertical</label>
+                        <p class="aide">Appliqué au plan de placement, à l'aperçu et à l'impression. Cet éditeur reste dans le sens réel de la salle.</p>
+                    </fieldset>
                 </aside>
                 <div class="zone-plan carte">
                     <div class="outils-objet" id="outils" hidden>
@@ -962,6 +1070,34 @@ function page_salle(int $id): void
     pied();
 }
 
+/** Vrai si la salle appartient à l'établissement de la classe : une classe ne se place que dans les salles de son collège. */
+function salle_compatible(PDO $pdo, int $classe_id, int $salle_id): bool
+{
+    $st = $pdo->prepare('SELECT 1 FROM classes c JOIN salles s ON s.etablissement_id = c.etablissement_id WHERE c.id = ? AND s.id = ?');
+    $st->execute([$classe_id, $salle_id]);
+    return (bool) $st->fetchColumn();
+}
+
+/** Salle à utiliser pour une classe : la salle demandée si elle convient, sinon la salle de son établissement où la classe a déjà un plan, sinon la première. Null si l'établissement n'a aucune salle. */
+function salle_pour_classe(PDO $pdo, int $classe_id, int $salle_id): ?int
+{
+    if (salle_compatible($pdo, $classe_id, $salle_id)) {
+        return $salle_id;
+    }
+    $st = $pdo->prepare('SELECT s.id FROM salles s JOIN classes c ON c.etablissement_id = s.etablissement_id
+        WHERE c.id = ? ORDER BY (SELECT COUNT(*) FROM placements p WHERE p.classe_id = c.id AND p.salle_id = s.id) DESC, s.nom LIMIT 1');
+    $st->execute([$classe_id]);
+    $id = $st->fetchColumn();
+    return $id ? (int) $id : null;
+}
+
+/** Lien vers le plan d'une classe, dans une salle qui lui convient (sinon sa fiche, si son établissement n'a pas de salle). */
+function lien_placement_classe(int $classe_id, int $salle_id): string
+{
+    $sid = salle_pour_classe(db(), $classe_id, $salle_id);
+    return $sid ? './?p=placement&classe=' . $classe_id . '&salle=' . $sid : './?p=classe&id=' . $classe_id . '#organisation';
+}
+
 function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
 {
     $classe = classe_par_id($classe_id);
@@ -980,6 +1116,11 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
     if (!$classe || !$salle) {
         rediriger('./');
     }
+    if (!salle_compatible(db(), $classe_id, $salle_id)) {
+        $sid = salle_pour_classe(db(), $classe_id, $salle_id);
+        flash('Salle changée : celle de l’établissement de la classe.');
+        rediriger($sid ? './?p=placement&classe=' . $classe_id . '&salle=' . $sid : './?p=classe&id=' . $classe_id . '#organisation');
+    }
     $st = db()->prepare("SELECT id, etiquette, actif FROM eleves WHERE classe_id = ?" . ($groupe_id ? ' AND groupe_id = ?' : '') . "
         ORDER BY CASE WHEN etiquette GLOB '[0-9]*' THEN CAST(etiquette AS INTEGER) ELSE 9999 END, etiquette");
     $st->execute($groupe_id ? [$classe_id, $groupe_id] : [$classe_id]);
@@ -987,6 +1128,13 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
     $st = db()->prepare('SELECT place, eleve_id FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?');
     $st->execute([$classe_id, $groupe_id, $salle_id]);
     $placement = array_map('intval', array_column($st->fetchAll(), 'eleve_id', 'place'));
+    // barre des classes : précédente, suivante, et une pastille par classe (la classe affichée est soulignée)
+    // classées par établissement (les classes sans établissement en dernier), puis par nom : la barre se lit par collège
+    $toutes = db()->query('SELECT c.id, c.nom, c.etablissement_id, e.nom AS college FROM classes c LEFT JOIN etablissements e ON e.id = c.etablissement_id
+        ORDER BY (e.nom IS NULL), e.nom, c.nom')->fetchAll();
+    $position = array_search($classe_id, array_map('intval', array_column($toutes, 'id')), true);
+    $precedente = $position > 0 ? $toutes[$position - 1] : null;
+    $suivante = ($position !== false && $position < count($toutes) - 1) ? $toutes[$position + 1] : null;
     $autres = db()->prepare('SELECT id, nom FROM salles WHERE etablissement_id = ? AND id <> ? ORDER BY nom');
     $autres->execute([$salle['etablissement_id'], $salle_id]);
     $donnees = [
@@ -995,6 +1143,26 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
         'eleves' => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif']], $eleves),
         'placement' => (object) $placement,
     ];
+    // versions du plan de cette classe, cette salle et ce groupe (la plus récente d'abord)
+    $st = db()->prepare('SELECT id, nom, cree_le, carte FROM plans_versions WHERE classe_id = ? AND salle_id = ? AND groupe_id = ? ORDER BY id DESC');
+    $st->execute([$classe_id, $salle_id, $groupe_id]);
+    $versions = $st->fetchAll();
+    // version appliquée : celle dont le placement est identique au plan affiché (la plus récente d'abord)
+    $normaliser = function (array $c): array { $c = array_map('intval', $c); ksort($c); return $c; };
+    $actuel = $normaliser($placement);
+    $version_appliquee = null;
+    foreach ($versions as $v) {
+        if ($normaliser(json_decode((string) $v['carte'], true) ?: []) === $actuel) {
+            $version_appliquee = (int) $v['id'];
+            break;
+        }
+    }
+    $nom_applique = null;
+    foreach ($versions as $v) {
+        if ((int) $v['id'] === $version_appliquee) {
+            $nom_applique = $v['nom'];
+        }
+    }
     entete('Plan de classe ' . $titre);
     barre('classes');
     ?>
@@ -1007,6 +1175,24 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
                 <a class="btn petit secondaire" href="./?p=salle&id=<?= $salle_id ?>">Modifier la salle</a>
             </div>
         </div>
+        <nav class="classes-rail" aria-label="Changer de classe">
+            <?php if ($precedente): ?>
+                <a class="btn petit secondaire" href="<?= h(lien_placement_classe((int) $precedente['id'], $salle_id)) ?>" title="Classe précédente : <?= h($precedente['nom']) ?>" aria-label="Classe précédente : <?= h($precedente['nom']) ?>">‹</a>
+            <?php endif; ?>
+            <?php $college_precedent = null; ?>
+            <?php foreach ($toutes as $c): ?>
+                <?php $college = (string) ($c['college'] ?? ''); ?>
+                <?php if ($college !== $college_precedent): ?>
+                    <?php if ($college_precedent !== null): ?><span class="rail-separateur" aria-hidden="true"></span><?php endif; ?>
+                    <span class="rail-college"><?= h($college !== '' ? $college : 'Sans établissement') ?></span>
+                    <?php $college_precedent = $college; ?>
+                <?php endif; ?>
+                <a class="classe-lien<?= (int) $c['id'] === $classe_id ? ' actuelle' : '' ?>" href="<?= h(lien_placement_classe((int) $c['id'], $salle_id)) ?>"<?= (int) $c['id'] === $classe_id ? ' aria-current="page"' : '' ?>><?= pastille_classe((int) $c['id']) ?></a>
+            <?php endforeach; ?>
+            <?php if ($suivante): ?>
+                <a class="btn petit secondaire" href="<?= h(lien_placement_classe((int) $suivante['id'], $salle_id)) ?>" title="Classe suivante : <?= h($suivante['nom']) ?>" aria-label="Classe suivante : <?= h($suivante['nom']) ?>">›</a>
+            <?php endif; ?>
+        </nav>
         <?php if ($groupes): ?>
             <nav class="choix-groupe" aria-label="Classe entière ou groupe">
                 <a class="btn petit <?= $groupe_id ? 'secondaire' : '' ?>" href="./?p=placement&classe=<?= $classe_id ?>&salle=<?= $salle_id ?>">Classe entière</a>
@@ -1017,6 +1203,52 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
         <?php endif; ?>
         <?php messages(); ?>
         <?php liste_locale(); ?>
+        <div id="barre-vue"></div>
+        <section class="versions-plan carte" aria-label="Versions du plan">
+            <p class="aide">Versions : gardez plusieurs plans (début d’année, Toussaint, atelier…) et revenez à l’un d’eux.
+                « Enregistrer comme version » garde le plan affiché (le premier enregistrement garde aussi le plan initial) ; « Charger » remplace le plan en cours (enregistrez d’abord vos changements).</p>
+            <div class="versions-ligne">
+                <form method="post" class="versions-form" id="form-version">
+                    <?= csrf() ?>
+                    <input type="hidden" name="action" value="enregistrer_version">
+                    <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
+                    <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
+                    <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
+                    <input type="hidden" name="placement" id="champ-version">
+                    <input type="text" name="nom_version" maxlength="60" required placeholder="Nom (ex. Toussaint, AT-xyz)" aria-label="Nom de la version">
+                    <button type="submit" class="petit">Enregistrer comme version</button>
+                </form>
+                <?php if ($versions): ?>
+                    <p class="versions-applique aide">Plan appliqué : <?= $nom_applique !== null ? '<strong>' . h($nom_applique) . '</strong>' : ($actuel ? 'plan modifié, aucune version identique' : 'aucun élève placé') ?></p>
+                    <form method="post" class="versions-form" onsubmit="return confirm('Remplacer le plan en cours par cette version ?');">
+                        <?= csrf() ?>
+                        <input type="hidden" name="action" value="charger_version">
+                        <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
+                        <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
+                        <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
+                        <select name="version_id" aria-label="Version à charger">
+                            <?php foreach ($versions as $v): ?>
+                                <option value="<?= (int) $v['id'] ?>"><?= (int) $v['id'] === $version_appliquee ? '✓ ' : '' ?><?= h($v['nom']) ?> · <?= h($v['cree_le']) ?> (<?= count(json_decode((string) $v['carte'], true) ?: []) ?> élèves)</option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" class="petit secondaire">Charger</button>
+                    </form>
+                    <form method="post" class="versions-form" onsubmit="return confirm('Supprimer cette version du plan ?');">
+                        <?= csrf() ?>
+                        <input type="hidden" name="action" value="supprimer_version">
+                        <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
+                        <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
+                        <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
+                        <select name="version_id" aria-label="Version à supprimer">
+                            <?php foreach ($versions as $v): ?>
+                                <option value="<?= (int) $v['id'] ?>"><?= h($v['nom']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" class="petit secondaire">Supprimer</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </section>
         <form method="post" id="form-placement">
             <?= csrf() ?>
             <input type="hidden" name="action" value="enregistrer_placement">

@@ -55,13 +55,17 @@ Vérification : `https://VOTRECOMPTE.alwaysdata.net/api/` affiche `{"ok":true,�
 
 Dans l'espace enseignant, classe par classe :
 
-1. Collez la liste des élèves (« Léa D. », un par ligne) dans **Générer des codes**.
+1. Collez la liste des élèves (« Léa D. », un par ligne) dans **Générer des codes**. Pour un élève seul, utilisez **Ajouter un élève** : nom, prénom, besoins (PPS, PAP, PAI, PPRE) et sortie éventuelle. Le code s'affiche ensuite.
    Votre navigateur garde les noms et n'envoie au serveur **que leur nombre**. Le serveur attribue des numéros : 01, 02, 03…
 2. **Imprimez les fiches** (nom + code, à découper) et **téléchargez le CSV** (Classe ; Numéro ; Nom ; Code).
    Les codes ne seront plus jamais affichés.
 3. Rangez le CSV dans un **dossier privé de votre Nuage**. C'est votre fichier de correspondance.
 
 Sur un autre ordinateur, ou après avoir vidé le navigateur : **Charger mon fichier de noms (CSV)** affiche à nouveau les noms à côté des numéros. Ils ne sont jamais envoyés au serveur.
+
+**Trombinoscope** (page de la classe) : une image (feuille) par établissement, gardée sur l'ordinateur avec les noms et stockée dans IndexedDB (les images sont trop lourdes pour le stockage texte). Dans l'image, les classes se suivent de haut en bas, dans l'ordre saisi (« Ordre des classes ») ; chaque classe occupe 3 rangées de 10 photos, rangées par ordre alphabétique des noms du désanonymiseur (30 élèves au plus). Les valeurs sont en pixels de l'image d'origine, et les réglages par défaut sont ceux de la version 156 × 200 px. Le visage est centré sur le plan de classe et dans les bulles. Rien n'est envoyé au serveur ; **Oublier sur cet ordinateur** efface les images et les réglages.
+
+Élève sorti de l'établissement : cliquez sur l'icône 🚪 (première colonne de la liste de la classe). La date du jour est gardée automatiquement, mais rien n'est à saisir. Il reste visible, grisé, et ne se place plus ; sa case du trombinoscope est conservée. La date est dans la première colonne du CSV global, « Sortie définitive », relue au chargement ; un cadre vide remet l'élève en activité.
 
 Code perdu : **Nouveau code** sur la ligne de l'élève (l'ancien cesse de fonctionner).
 
@@ -395,6 +399,8 @@ Onglet **Emploi du temps** : une grille par semaine, par établissement, avec l'
 ### Plans de classe
 
 - **Plan de la salle**, dessiné une seule fois. On y place les tables, les postes informatiques, les places élèves, la paillasse, le bureau, le tableau, la porte et les fenêtres.
+  - **Vue 3/4** : la salle en perspective isométrique, sur une dalle, avec murs de fond, mobilier en volumes et chaises bleues. Quatre angles (0°, 90°, 180°, 270°) et un bouton **Tour** qui les fait défiler, à régler dans l'éditeur ou dans la barre **Présentation** (accueil et plan de placement), qui s'applique à tous les plans affichés sur cet ordinateur.
+  - **Affichage** : sol uni, bois ou parquet (couleurs adaptées au mode nuit), salle en portrait, miroir horizontal ou vertical. Ces réglages s'appliquent au plan de placement, à l'aperçu et à l'impression (A4 suit l'orientation) ; les noms restent droits et lisibles. L'éditeur garde le sens réel de la salle.
   - On glisse les éléments pour les déplacer. On peut les tourner, les redimensionner, les dupliquer ou leur donner une étiquette, au clavier ou avec la souris.
   - La **disposition rapide** génère des rangées de tables, avec ou sans ordinateurs.
 - **Placement d'une classe dans une salle** : on clique sur un élève puis sur une place, ou on le glisse. On peut aussi faire un placement aléatoire, vider la salle, ou imprimer.

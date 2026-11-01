@@ -325,7 +325,7 @@ if ($action !== null) {
             header('Content-Type: text/plain; charset=utf-8');
             header('Content-Disposition: attachment; filename="cle_secrete_centrale_' . date('Y-m-d') . '.txt"');
             header('Cache-Control: no-store');
-            echo "Centrale élèves — clé secrète des codes élèves (" . url_base() . ")\r\n\r\n"
+            echo "Centrale — clé secrète des codes élèves (" . url_base() . ")\r\n\r\n"
                 . "Gardez ce fichier dans un dossier privé de votre Nuage, avec la liste des élèves.\r\n"
                 . "Si le fichier de la clé est perdu sur le serveur, les codes ne fonctionnent plus :\r\n"
                 . "espace enseignant → tableau de bord → Clé secrète des codes → Restaurer, puis collez la ligne ci-dessous.\r\n\r\n"
@@ -500,6 +500,20 @@ if ($action !== null) {
             $pdo->prepare('DELETE FROM eleves WHERE id = ? AND classe_id = ?')->execute([$eleve_id, $classe_id]);
             flash('Élève supprimé, avec son travail.');
             rediriger($retour_classe . '#eleves');
+
+        case 'reinitialiser_classe':
+            // Action définitive : tous les élèves de la classe, leur travail et leurs fichiers. Confirmée par le nom de la classe.
+            $classe = classe_par_id($classe_id);
+            if (!$classe || (string) ($_POST['confirmation'] ?? '') !== $classe['nom']) {
+                flash('Réinitialisation annulée : le nom de la classe ne correspond pas.', 'err');
+                rediriger($retour_classe);
+            }
+            effacer_travail_classe($classe_id);
+            $pdo->prepare('DELETE FROM sessions WHERE eleve_id IN (SELECT id FROM eleves WHERE classe_id = ?)')->execute([$classe_id]);
+            $pdo->prepare('DELETE FROM placements WHERE classe_id = ?')->execute([$classe_id]);
+            $pdo->prepare('DELETE FROM eleves WHERE classe_id = ?')->execute([$classe_id]);
+            flash('Classe réinitialisée : élèves et travail supprimés. Recréez les élèves avec « Générer les codes ».');
+            rediriger($retour_classe . '#form-generer');
 
         /* ----- Travail d'un élève ----- */
 
@@ -699,7 +713,7 @@ function page_installation(): void
     entete('Installation');
     ?>
     <main class="etroit">
-        <h1>Centrale élèves</h1>
+        <h1><?= logo_centrale(56) ?></h1>
         <p class="sous">Première utilisation : choisissez le mot de passe administrateur.
             Il protège la gestion des classes, des codes et du travail des élèves. Au moins 10 caractères.</p>
         <?php messages(); ?>
@@ -719,15 +733,21 @@ function page_connexion(): void
 {
     entete('Connexion');
     ?>
-    <main class="etroit">
-        <h1>Centrale élèves</h1>
-        <p class="sous">Espace enseignant</p>
+    <main class="connexion">
         <?php messages(); ?>
-        <form method="post" class="carte">
+        <form method="post" class="carte-connexion">
+            <div class="connexion-tete">
+                <?= logo_centrale(64) ?>
+                <p class="connexion-titre">Espace enseignant</p>
+            </div>
             <?= csrf() ?>
             <input type="hidden" name="action" value="connexion">
-            <label>Mot de passe<input type="password" name="mdp" required autofocus autocomplete="current-password"></label>
-            <button>Se connecter</button>
+            <label class="champ-mdp">
+                <span>Mot de passe</span>
+                <input type="password" name="mdp" required autofocus autocomplete="current-password" placeholder="Votre mot de passe">
+            </label>
+            <button class="bouton-connexion">Se connecter</button>
+            <p class="connexion-pied">Accès réservé à l'enseignant. Les noms des élèves restent sur cet ordinateur.</p>
         </form>
     </main>
     <?php
@@ -964,6 +984,7 @@ function page_classe(int $id): void
     ?>
     <main>
         <p class="fil"><a href="./?p=classes">← Toutes les classes</a></p>
+        <?php nav_classes($id); ?>
         <div class="titre-classe">
             <h1><?= pastille_classe($classe, '', 'grande') ?>Classe <?= h($nom) ?></h1>
             <details class="renommer">
@@ -1037,8 +1058,36 @@ function page_classe(int $id): void
         <?php section_organisation_classe($classe); ?>
         <?php section_groupes_classe($classe, $eleves); ?>
         <?php section_equipes_classe($classe, $eleves); ?>
+        <?php section_trombinoscope_classe($classe, $eleves); ?>
 
         <section id="eleves">
+            <?php nav_classes($id); ?>
+            <details class="carte verification" id="verification">
+                <summary>Vérifier la correspondance (noms, codes, identifiants)</summary>
+                <p class="aide">Compare, élève par élève, ce qui est sur le serveur et ce qui est gardé sur cet ordinateur. Rien n'est envoyé.</p>
+                <div id="verif-resultat" data-classe="<?= h($nom) ?>" data-prefixe="<?= h($prefixe_codes) ?>"></div>
+            </details>
+            <details class="carte reinit-classe">
+                <summary>Réinitialiser cette classe (supprime élèves et travail, puis réimporte depuis Pronote)</summary>
+                <p class="alerte-bloc"><strong>Action définitive.</strong> Supprime sur le serveur tous les élèves de cette classe, leur travail, leurs fichiers, leur progression et leurs codes. Les élèves sont ensuite recréés depuis le fichier Pronote, numérotés 01, 02… dans l'ordre alphabétique, avec de nouveaux codes à distribuer.</p>
+                <label>Fichier Pronote de la classe
+                    <input type="file" accept=".csv,text/csv,.txt" id="reinit-fichier"></label>
+                <div id="reinit-apercu" data-classe="<?= h($nom) ?>"></div>
+                <form method="post" id="form-reinit" hidden>
+                    <?= csrf() ?>
+                    <input type="hidden" name="action" value="reinitialiser_classe">
+                    <input type="hidden" name="classe_id" value="<?= $id ?>">
+                    <label>Pour confirmer, tapez le nom de la classe : <strong><?= h($nom) ?></strong>
+                        <input name="confirmation" autocomplete="off"></label>
+                    <div class="ligne-actions"><button class="danger">Réinitialiser et réimporter</button></div>
+                </form>
+            </details>
+            <details class="carte corriger-noms">
+                <summary>Corriger les noms depuis un fichier Pronote</summary>
+                <p class="aide">Compare les noms actuels de cette classe avec l'export Pronote et propose le format « NOM Prénom ». Rien n'est appliqué avant votre accord.</p>
+                <input type="file" accept=".csv,text/csv,.txt" id="corriger-fichier" aria-label="Fichier Pronote">
+                <div id="corriger-resultat" data-classe="<?= h($nom) ?>"></div>
+            </details>
             <div class="titre-section">
                 <h2>Élèves (<?= count($eleves) ?>)</h2>
                 <?php if ($eleves): ?>
@@ -1047,16 +1096,19 @@ function page_classe(int $id): void
             </div>
             <?php if ($eleves): ?>
                 <div class="defile"><table>
-                    <thead><tr><th>N°</th><th>Nom (sur cet ordinateur)</th><th>Identifiant</th><th>Dernière connexion</th><th>Espace</th><th></th></tr></thead>
+                    <thead><tr><th>Statut</th><th>N°</th><th class="masquable">Photo</th><th>Nom (sur cet ordinateur)</th><th>Identifiant</th><th>Mot de passe</th><th class="masquable">Dernière connexion</th><th class="masquable">Espace</th><th></th></tr></thead>
                     <tbody>
                     <?php foreach ($eleves as $e): $ch = ['classe_id' => $id, 'eleve_id' => $e['id']]; ?>
                         <tr class="<?= $e['actif'] ? '' : 'inactif' ?>">
+                            <td class="statut-cellule"><?php if (est_pseudonyme($e['etiquette'])): ?><span class="statuts"><button type="button" class="statut-pastille statut-sortie" data-statut="sortie" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>" aria-pressed="false">Sortie</button><button type="button" class="statut-pastille statut-exclu" data-statut="exclu" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>" aria-pressed="false">Exclu</button><button type="button" class="statut-pastille statut-changement" data-statut="changement" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>" aria-pressed="false">Changement de classe</button></span><?php endif; ?></td>
                             <td class="numero"><?= est_pseudonyme($e['etiquette']) ? h($e['etiquette']) : '?' ?></td>
+                            <td class="photo-cellule masquable"><?php if (est_pseudonyme($e['etiquette'])): ?><span class="trombi-photo photo-eleve sans-photo" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>"></span><?php endif; ?></td>
                             <td><?= nom_eleve($nom, $e['etiquette']) ?><?= $e['groupe_id'] && isset($noms_groupes[$e['groupe_id']]) ? ' <span class="badge-groupe">' . h($noms_groupes[$e['groupe_id']]) . '</span>' : '' ?><?= $e['actif'] ? '' : ' <span class="discret">(désactivé)</span>' ?></td>
                             <td class="identifiant"><span class="surnom" data-surnom="<?= h($e['surnom']) ?>" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>"><span class="discret"><?= h($prefixe_codes) ?>-</span><?= h($e['surnom']) ?></span>
                                 <?= bouton('nouveau_surnom', '↻', $ch, 'lien-bouton', '', 'Donner un nouveau surnom au hasard') ?></td>
-                            <td><?= quand($e['derniere_connexion'] ? (int) $e['derniere_connexion'] : null) ?></td>
-                            <td><?= format_taille((int) $e['espace']) ?><?= jauge((int) $e['espace'], $quota) ?></td>
+                            <td class="code-cellule"><?php if (est_pseudonyme($e['etiquette'])): ?><span class="code-local" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>"></span> <button type="button" class="lien-bouton voir-code" hidden>Voir</button><?php endif; ?></td>
+                            <td class="masquable"><?= quand($e['derniere_connexion'] ? (int) $e['derniere_connexion'] : null) ?></td>
+                            <td class="masquable"><?= format_taille((int) $e['espace']) ?><?= jauge((int) $e['espace'], $quota) ?></td>
                             <td class="actions">
                                 <a class="btn petit" href="./?p=eleve&id=<?= (int) $e['id'] ?>">Travail</a>
                                 <?= bouton('regenerer', 'Nouveau code', $ch, 'secondaire', "L'ancien code de cet élève ne fonctionnera plus. Continuer ?") ?>
@@ -1104,6 +1156,30 @@ function page_classe(int $id): void
                     ], $json) ?></script>
                 </section>
             <?php endif; ?>
+
+            <form method="post" class="carte" id="form-ajout-eleve" data-classe="<?= h($nom) ?>">
+                <?= csrf() ?>
+                <input type="hidden" name="action" value="generer">
+                <input type="hidden" name="classe_id" value="<?= $id ?>">
+                <input type="hidden" name="nombre" value="1">
+                <h3>Ajouter un élève</h3>
+                <p class="aide">Le nom, les besoins et la sortie restent sur cet ordinateur. Le serveur crée seulement l'élève et son code, qui s'affiche ensuite à donner à l'élève.</p>
+                <div class="deux-colonnes">
+                    <label>Nom
+                        <input id="ae-nom" maxlength="40" placeholder="ex. BARBIER" autocomplete="off"></label>
+                    <label>Prénom
+                        <input id="ae-prenom" maxlength="40" placeholder="ex. William" autocomplete="off"></label>
+                </div>
+                <fieldset class="besoins-choix">
+                    <legend>Besoins</legend>
+                    <label class="case"><input type="checkbox" id="ae-pps"> PPS</label>
+                    <label class="case"><input type="checkbox" id="ae-pap"> PAP</label>
+                    <label class="case"><input type="checkbox" id="ae-pai"> PAI</label>
+                    <label class="case"><input type="checkbox" id="ae-ppre"> PPRE</label>
+                </fieldset>
+                <label class="case"><input type="checkbox" id="ae-sortie"> Sortie définitive (sorti de l'établissement)</label>
+                <div class="ligne-actions"><button>Ajouter l'élève</button></div>
+            </form>
 
             <form method="post" class="carte" id="form-generer" data-classe="<?= h($nom) ?>">
                 <?= csrf() ?>
@@ -1414,9 +1490,80 @@ function liste_locale(): void
         <span class="etat-liste">Noms non chargés sur cet ordinateur</span>
         <label class="bouton-fichier">Charger mon fichier de noms (CSV)<input type="file" accept=".csv,text/csv" class="charger-liste"></label>
         <button type="button" class="lien-bouton exporter-liste">Télécharger la liste</button>
+        <button type="button" class="lien-bouton sauver-zip">Tout sauvegarder (.desanonim)</button>
+        <label class="bouton-fichier">Tout charger (.desanonim)<input type="file" accept=".desanonim,.zip,application/json,application/zip" class="charger-zip"></label>
         <button type="button" class="lien-bouton oublier-liste" hidden>Oublier sur cet ordinateur</button>
         <span class="discret">Les noms ne sont jamais envoyés au serveur.</span>
     </div>
+    <?php
+}
+
+/** Trombinoscope : un spritesheet (image unique) pour toutes les classes, gardé sur l'ordinateur de l'enseignant. */
+function section_trombinoscope_classe(array $classe, array $eleves): void
+{
+    $numeros = array_filter($eleves, fn($e) => est_pseudonyme($e['etiquette']));
+    if (!$numeros) {
+        return;
+    }
+    $nom = $classe['nom'];
+    $champs = [
+        'x0' => 'Position de la 1re photo : X (px)', 'y0' => 'Position de la 1re photo : Y (px)',
+        'pasX' => 'Écart entre deux photos : horizontal (px)', 'pasY' => 'Écart entre deux rangées : vertical (px)',
+        'photoL' => 'Taille de la photo : largeur (px)', 'photoH' => 'Taille de la photo : hauteur (px)',
+        'faceX' => 'Centre du visage : X (%)', 'faceY' => 'Centre du visage : Y (%)',
+    ];
+    ?>
+    <section id="trombinoscope" data-classe="<?= h($nom) ?>">
+        <div class="titre-section">
+            <h2>Trombinoscope</h2>
+        </div>
+        <details class="carte trombi-reglages">
+            <summary>Réglages du trombinoscope (feuilles des établissements)</summary>
+            <p class="aide">Une image (feuille) par établissement, gardée sur cet ordinateur avec les noms : elle n'est jamais envoyée au serveur.
+                Dans chaque image, les classes se suivent de haut en bas, dans l'ordre indiqué. Chaque classe occupe 3 rangées de 10 photos
+                (30 élèves au plus), rangées par ordre alphabétique des noms du désanonymiseur. Les valeurs sont en pixels de l'image d'origine.</p>
+            <div id="feuilles"></div>
+            <div class="ligne-actions">
+                <input type="text" id="nouvelle-feuille" maxlength="40" placeholder="Nom de l'établissement, ex. Hautier">
+                <button type="button" class="secondaire petit" id="ajouter-feuille">Ajouter une feuille</button>
+            </div>
+        </details>
+        <ul class="trombi">
+            <?php foreach ($numeros as $e): ?>
+                <li data-numero="<?= h($e['etiquette']) ?>">
+                    <div class="trombi-photo sans-photo" data-classe="<?= h($nom) ?>" data-numero="<?= h($e['etiquette']) ?>"></div>
+                    <div class="trombi-nom"><span class="numero"><?= h($e['etiquette']) ?></span> <?= nom_eleve($nom, $e['etiquette']) ?></div>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+        <details class="carte ordre-photos" id="ordre-photos" data-classe="<?= h($nom) ?>">
+            <summary>Ordre des élèves pour les photos</summary>
+            <p class="aide">Les photos suivent l'ordre alphabétique des noms ci-dessus. Les élèves en fin de liste, au-delà de 30, n'ont pas de case dans l'image.</p>
+            <ol class="ordre-liste"></ol>
+        </details>
+    </section>
+    <?php
+}
+
+/** Boutons pour passer d'une classe à l'autre (précédente, suivante, toutes), classe courante en surbrillance. */
+function nav_classes(int $id): void
+{
+    $toutes = db()->query('SELECT c.id, c.nom FROM classes c LEFT JOIN etablissements et ON et.id = c.etablissement_id
+        ORDER BY et.nom IS NULL, et.nom, c.nom')->fetchAll();
+    if (count($toutes) < 2) {
+        return;
+    }
+    $pos = array_search($id, array_map(fn($c) => (int) $c['id'], $toutes), true);
+    $prec = $pos > 0 ? $toutes[$pos - 1] : null;
+    $suiv = $pos !== false && $pos < count($toutes) - 1 ? $toutes[$pos + 1] : null;
+    ?>
+    <nav class="sauts-classes" aria-label="Autres classes">
+        <?php if ($prec): ?><a class="btn petit secondaire" href="./?p=classe&id=<?= (int) $prec['id'] ?>" title="Classe précédente">‹ <?= h($prec['nom']) ?></a><?php endif; ?>
+        <?php foreach ($toutes as $c): ?>
+            <a class="btn petit <?= (int) $c['id'] === $id ? '' : 'secondaire' ?>" href="./?p=classe&id=<?= (int) $c['id'] ?>"<?= (int) $c['id'] === $id ? ' aria-current="page"' : '' ?>><?= h($c['nom']) ?></a>
+        <?php endforeach; ?>
+        <?php if ($suiv): ?><a class="btn petit secondaire" href="./?p=classe&id=<?= (int) $suiv['id'] ?>" title="Classe suivante"><?= h($suiv['nom']) ?> ›</a><?php endif; ?>
+    </nav>
     <?php
 }
 
@@ -1441,7 +1588,7 @@ function barre(string $actif = 'classes'): void
     ?>
     <header class="barre">
         <nav>
-            <a href="./" class="marque">Centrale élèves</a>
+            <a href="./" class="marque"><?= logo_centrale(34) ?></a>
             <?php foreach ($liens as $cle => [$url, $libelle]): ?>
                 <a href="<?= $url ?>" class="onglet<?= $cle === $actif ? ' actif' : '' ?>"><?= $libelle ?></a>
             <?php endforeach; ?>
@@ -1465,7 +1612,8 @@ function entete(string $titre): void
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title><?= h($titre) ?> · Centrale élèves</title>
+<title><?= h($titre) ?> · Centrale</title>
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="admin.css?v=<?= $v ?>">
 </head>
 <body>

@@ -11,6 +11,17 @@ const DOSSIER_DATA = __DIR__ . '/../data';
 const VERSION_CENTRALE = '1.0';
 
 /** Connexion à la base SQLite (créée automatiquement au premier appel). */
+/** Logo de la Centrale : le mot « Centrale » entouré d'un rectangle arrondi relié à quatre nœuds. Dessiné en ligne (couleurs du thème). */
+function logo_centrale(int $hauteur = 40): string
+{
+    $largeur = (int) round($hauteur * 150 / 62);
+    return '<svg class="logo" role="img" aria-label="Centrale" width="' . $largeur . '" height="' . $hauteur . '" viewBox="0 -12 150 62">'
+        . '<rect x="2.5" y="2.5" width="145" height="45" rx="7" fill="none" style="stroke:var(--accent)" stroke-width="5"/>'
+        . '<path d="M63 2.5 A12 12 0 0 1 87 2.5 Z" style="fill:var(--accent)"/>'
+        . '<text x="75" y="25" text-anchor="middle" dominant-baseline="central" style="fill:var(--texte)" '
+        . 'font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700">Centrale</text></svg>';
+}
+
 function db(): PDO
 {
     static $pdo = null;
@@ -228,6 +239,16 @@ function creer_tables(PDO $pdo): void
             place     TEXT NOT NULL,
             eleve_id  INTEGER NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
             PRIMARY KEY (classe_id, salle_id, place)
+        );
+        -- Versions nommées d'un plan (début d'année, Toussaint, atelier…) : carte = { place: eleve_id }
+        CREATE TABLE IF NOT EXISTS plans_versions (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            classe_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+            groupe_id INTEGER NOT NULL DEFAULT 0,
+            salle_id  INTEGER NOT NULL REFERENCES salles(id) ON DELETE CASCADE,
+            nom       TEXT NOT NULL,
+            carte     TEXT NOT NULL DEFAULT '{}',
+            cree_le   TEXT NOT NULL DEFAULT ''
         );
         -- Cours récurrents (emploi du temps de la semaine type)
         CREATE TABLE IF NOT EXISTS cours (

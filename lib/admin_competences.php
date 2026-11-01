@@ -111,6 +111,11 @@ function page_referentiel(): void
     $usages = usages_competences();
     $nb_notes = array_column(db()->query('SELECT code, COUNT(*) AS n FROM evaluations GROUP BY code')->fetchAll(), 'n', 'code');
     $total = count(array_filter(index_competences(), fn($k) => $k['type'] === 'capacite'));
+    // Nombre d'activités d'ateliers (applications) qui travaillent une capacité, puis cumul par sous-compétence, compétence, thème
+    $nb_cap = fn(string $code): int => count(array_filter($usages[$code] ?? [], fn($x) => !empty($x['app'])));
+    $nb_sous = fn(array $s): int => array_sum(array_map(fn($k) => $nb_cap($k['code']), $s['capacites']));
+    $nb_comp = fn(array $c): int => array_sum(array_map($nb_sous, $c['sous']));
+    $nb_ateliers = fn(int $n): string => '<small class="discret nb-ateliers">' . ($n ? $n . ' atelier' . ($n > 1 ? 's' : '') : 'aucun atelier') . '</small>';
     ?>
     <div class="filtres filtres-ref">
         <div class="seg-niveaux" role="group" aria-label="Niveau">
@@ -120,6 +125,11 @@ function page_referentiel(): void
         </div>
         <label>Rechercher<input type="search" id="ref-recherche" placeholder="réseau, matériau, SFC15…"></label>
         <label class="case"><input type="checkbox" id="ref-utilisees"> Seulement celles travaillées (parcours ou applications)</label>
+        <label>Trier<select id="ref-tri">
+            <option value="">Ordre du référentiel</option>
+            <option value="plus">Le plus d’ateliers d’abord</option>
+            <option value="moins">Le moins d’ateliers d’abord</option>
+        </select></label>
     </div>
     <p class="aide"><?= $total ?> capacités. <?= h(referentiel()['codes'] ?? '') ?> Cliquez un code pour le copier, puis collez-le dans une étape de parcours :
         <code>compétences : SFC15.5.1, CCRI16.5.1</code>. Les applications lisent le même référentiel :
@@ -127,19 +137,19 @@ function page_referentiel(): void
         Échelle : <?php foreach (echelle_maitrise() as $n => $m) echo pastille_maitrise($n) . ' ' . h($m['libelle']) . ' '; ?> ; bilan = moyenne haute de tous les constats.</p>
 
     <?php foreach ($ref['themes'] as $t): ?>
-        <section class="carte theme-ref" data-theme="<?= h($t['code']) ?>" style="--t:<?= h($t['couleur'] ?? '#888') ?>">
+        <section class="carte theme-ref" data-theme="<?= h($t['code']) ?>" data-nb="<?= array_sum(array_map($nb_comp, $t['competences'])) ?>" style="--t:<?= h($t['couleur'] ?? '#888') ?>">
             <h2><span class="code-theme"><?= h($t['code']) ?></span> <?= h($t['titre']) ?>
                 <?php if (!empty($t['technostudio'])): ?><small class="discret" title="Code utilisé par TechnoStudio">· TechnoStudio <?= h($t['technostudio']) ?></small><?php endif; ?></h2>
             <?php foreach ($t['competences'] as $c): ?>
-                <div class="competence-ref">
-                    <h3><?= puce_competence($c['code'], 'copier') ?> <?= h($c['titre']) ?></h3>
+                <div class="competence-ref" data-nb="<?= $nb_comp($c) ?>">
+                    <h3><?= puce_competence($c['code'], 'copier') ?> <?= h($c['titre']) ?> <?= $nb_ateliers($nb_comp($c)) ?></h3>
                     <?php foreach ($c['sous'] as $s): ?>
-                        <div class="sous-ref" data-texte="<?= h(mb_strtolower($s['code'] . ' ' . $s['titre'] . ' ' . implode(' ', $s['connaissances']))) ?>">
-                            <h4><?= puce_competence($s['code'], 'copier') ?> <?= h($s['titre']) ?></h4>
+                        <div class="sous-ref" data-nb="<?= $nb_sous($s) ?>" data-texte="<?= h(mb_strtolower($s['code'] . ' ' . $s['titre'] . ' ' . implode(' ', $s['connaissances']))) ?>">
+                            <h4><?= puce_competence($s['code'], 'copier') ?> <?= h($s['titre']) ?> <?= $nb_ateliers($nb_sous($s)) ?></h4>
                             <table class="table-ref">
                                 <tbody>
                                 <?php foreach ($s['capacites'] as $k): $u = $usages[$k['code']] ?? []; ?>
-                                    <tr data-niveau="<?= h($k['niveau']) ?>" data-utilisee="<?= $u ? '1' : '' ?>" data-texte="<?= h(mb_strtolower($k['code'] . ' ' . $k['texte'])) ?>">
+                                    <tr data-niveau="<?= h($k['niveau']) ?>" data-nb="<?= $nb_cap($k['code']) ?>" data-utilisee="<?= $u ? '1' : '' ?>" data-texte="<?= h(mb_strtolower($k['code'] . ' ' . $k['texte'])) ?>">
                                         <td class="col-code"><?= puce_competence($k['code'], 'copier') ?></td>
                                         <td class="col-niv"><span class="niv-ref n<?= h($k['niveau'][0]) ?>"><?= h($k['niveau']) ?></span></td>
                                         <td><?= h($k['texte']) ?></td>
