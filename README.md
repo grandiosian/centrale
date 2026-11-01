@@ -589,8 +589,8 @@ Codes d'erreur : 400 (demande incomplète), 401 (non connecté ou session expir�
 
 `api/compilation.php` compile les programmes des cartes pour les applications (TechnoStudio) : Arduino Uno et Nano, ESP32 et micro:bit (MicroPython). Le compilateur lui-même (arduino-cli, cœurs, MicroPython) est installé **hors du site**, dans `~/technostudio-compilation/`, par le workflow **Chaîne de compilation** (`.github/workflows/compilation.yml`). Ce workflow utilise les mêmes secrets que le déploiement, tourne chaque nuit et à la demande (Actions → Run workflow), et compile un essai par carte.
 
-- Cartes installées : Arduino Uno, Nano et micro:bit. La chaîne arduino-cli est préparée sur la machine GitHub puis copiée, car alwaysdata interrompt arduino-cli pendant l'installation des cœurs.
-- ESP32 en C++ : environ 700 Mo de plus, au-delà de l'espace actuel du compte. Pour l'installer, mettre la variable de dépôt `COMPILATION_ESP32 = oui` (Settings → Secrets and variables → Actions → Variables) et relancer le workflow.
+- Cartes installées : Arduino Uno, Nano, ESP32 (C++, cœur 2.0.17) et micro:bit. La chaîne arduino-cli est préparée sur la machine GitHub puis copiée, car alwaysdata interrompt arduino-cli pendant l'installation des cœurs.
+- ESP32 en C++ : environ 700 Mo de plus, installé par défaut (hébergement de 100 Go). Pour s'en passer, mettre la variable de dépôt `COMPILATION_ESP32 = non` (Settings → Secrets and variables → Actions → Variables) et relancer le workflow.
 - Accès : élève connecté (`X-Jeton`) ou clé enseignant (`X-Cle`, lisible dans `~/technostudio-compilation/config.json`).
 - Limite : 15 compilations par minute et par élève, une compilation à la fois.
 - Code et détails : dépôt [TechnoStudio](https://github.com/grandiosian/TechnoStudio), dossier `serveur-compilation/`.

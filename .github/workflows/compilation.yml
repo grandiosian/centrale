@@ -38,8 +38,8 @@ jobs:
 
       - name: Préparer la chaîne de compilation (machine GitHub)
         env:
-          # ESP32 en C++ : ≈ 700 Mo de plus sur le serveur. Variable du dépôt COMPILATION_ESP32=oui pour l'activer.
-          ESP32: ${{ vars.COMPILATION_ESP32 || 'non' }}
+          # ESP32 en C++ : ≈ 700 Mo de plus sur le serveur (hébergement de 100 Go). Variable du dépôt COMPILATION_ESP32=non pour s'en passer.
+          ESP32: ${{ vars.COMPILATION_ESP32 || 'oui' }}
         run: |
           set +e
           bash ts/serveur-compilation/preparer-chaine.sh ~/chaine > preparation.log 2>&1; r=$?
@@ -105,7 +105,7 @@ jobs:
           a() { t="${3//'%'/'%25'}"; t="${t//$'\n'/'%0A'}"; echo "::$1 title=$2::${t:0:3500}"; }
           a notice diagnostic "$(ssh ad 'ulimit -a | grep -iE "memory|virtual|cpu"; cat /sys/fs/cgroup/memory.max 2>/dev/null; grep -E "\"(node|cli|dossier)\"" ~/technostudio-compilation/config.json; ~/bin/arduino-cli core list; du -sh ~/.arduino15 ~/Arduino' 2>&1)"
           ko=0
-          for c in uno nano microbit $( [ "${{ vars.COMPILATION_ESP32 || 'non' }}" = oui ] && echo esp32 ); do
+          for c in uno nano microbit $( [ "${{ vars.COMPILATION_ESP32 || 'oui' }}" = oui ] && echo esp32 ); do
             out=$(ssh ad "C=~/technostudio-compilation; N=\$(sed -n 's/.*\"node\": *\"\\([^\"]*\\)\".*/\\1/p' \$C/config.json); \$N \$C/code/compiler-cli.js essai $c --dossier \$C/travail" 2>&1); r=$?
             if [ $r -eq 0 ]; then a notice "serveur $c" "$out"; else a error "serveur $c" "$out"; ko=1; fi
           done
@@ -130,8 +130,8 @@ jobs:
           echo "::notice title=API depuis GitHub Pages::$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: https://grandiosian.github.io' "$API") (200 : site autorisé ; 403 : ajouter https://grandiosian.github.io dans Réglages → Sites autorisés)"
           echo "::notice title=API sans connexion::$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"carte":"uno","code":"void setup(){}"}' "$API") (attendu : 401)"
           ko=0
-          for c in uno microbit $( [ "${{ vars.COMPILATION_ESP32 || 'non' }}" = oui ] && echo esp32 ); do
-            case $c in uno) prog='void setup(){pinMode(13,OUTPUT);}\nvoid loop(){digitalWrite(13,!digitalRead(13));delay(300);}';;
+          for c in uno nano microbit $( [ "${{ vars.COMPILATION_ESP32 || 'oui' }}" = oui ] && echo esp32 ); do
+            case $c in uno|nano) prog='void setup(){pinMode(13,OUTPUT);}\nvoid loop(){digitalWrite(13,!digitalRead(13));delay(300);}';;
               esp32) prog='void setup(){pinMode(2,OUTPUT);}\nvoid loop(){digitalWrite(2,!digitalRead(2));delay(300);}';;
               *) prog='from microbit import *\ndisplay.scroll(\"Centrale\")';; esac
             r=$(curl -s -m 60 -X POST -H 'Content-Type: application/json' -H "X-Cle: $CLE" -d "{\"carte\":\"$c\",\"code\":\"$prog\"}" "$API")
