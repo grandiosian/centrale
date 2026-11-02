@@ -1045,6 +1045,7 @@ function page_salle(int $id): void
                 <div class="zone-plan carte">
                     <div class="outils-objet" id="outils" hidden>
                         <strong id="outil-titre"></strong>
+                        <span class="discret" id="outil-taille"></span>
                         <label>Étiquette<input id="outil-label" maxlength="20"></label>
                         <button type="button" class="petit secondaire" data-outil="rotation" title="Tourner (R)">⟳ Tourner</button>
                         <button type="button" class="petit secondaire" data-outil="largeur-" title="Plus étroit">↔−</button>

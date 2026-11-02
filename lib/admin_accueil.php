@@ -175,6 +175,13 @@ function dash_icone(string $nom): string
         'connexions' => '<circle cx="9" cy="8" r="3.6"/><path d="M2.5 20c.8-3.6 3.4-5.6 6.5-5.6s5.7 2 6.5 5.6"/><path d="M16 4.6a3.6 3.6 0 0 1 0 6.8"/>',
         'prochain' => '<path d="M4 12h14M13 6l6 6-6 6"/>',
         'oeil'     => '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+        'theme'    => '<circle cx="8.5" cy="8.5" r="3.2"/><path d="M8.5 2v1.6M2 8.5h1.6M3.7 3.7l1.1 1.1M13.3 3.7l-1.1 1.1"/><path d="M8 19.5h9.5a3.2 3.2 0 0 0 0-6.4 4.6 4.6 0 0 0-8.7 1.4A2.7 2.7 0 0 0 8 19.5z"/>',
+        'soleil'   => '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
+        'nuage'    => '<path d="M7 18.5h10a4 4 0 0 0 0-8 5.5 5.5 0 0 0-10.4 1.6A3.2 3.2 0 0 0 7 18.5z"/>',
+        'pluie'    => '<path d="M7 15.5h10a4 4 0 0 0 0-8 5.5 5.5 0 0 0-10.4 1.6A3.2 3.2 0 0 0 7 15.5z"/><path d="M8 18.5l-1 2.5M12 18.5l-1 2.5M16 18.5l-1 2.5"/>',
+        'neige'    => '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/>',
+        'orage'    => '<path d="M7 15.5h10a4 4 0 0 0 0-8 5.5 5.5 0 0 0-10.4 1.6A3.2 3.2 0 0 0 7 15.5z"/><path d="M12.5 15l-2 4.5h3l-1.5 3"/>',
+        'lune'     => '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
         'pause'    => '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>',
     ];
     return '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' . ($formes[$nom] ?? '') . '</svg>';
@@ -186,6 +193,23 @@ function pastille_menu(array $classe, string $groupe = ''): string
     $html = pastille_classe($classe, $groupe, $groupe !== '' ? 'petite' : '');   // les groupes ont une pastille plus petite
     $court = preg_replace('/-[A-Z]{3}$/', '', nom_court_classe($classe)) ?? '';
     return str_replace('>' . h(nom_court_classe($classe)) . '<', '>' . h($court) . '<', $html);
+}
+
+/** Ambiances de l'accueil : « auto » suit le moment ; les autres sont choisies dans le menu Thème. */
+function themes_apercu(): array
+{
+    return [
+        'auto'      => ['nom' => 'Automatique', 'groupe' => 'Réglages'],
+        'neutre'    => ['nom' => 'Neutre', 'groupe' => 'Réglages'],
+        'classique' => ['nom' => 'Classique', 'groupe' => 'Réglages'],
+        'printemps' => ['nom' => 'Printemps', 'groupe' => 'Saisons', 'meteo' => ['t' => 14, 'ciel' => 'Doux', 'icone' => 'soleil']],
+        'ete'       => ['nom' => 'Été', 'groupe' => 'Saisons', 'meteo' => ['t' => 27, 'ciel' => 'Ensoleillé', 'icone' => 'soleil']],
+        'automne'   => ['nom' => 'Automne', 'groupe' => 'Saisons', 'meteo' => ['t' => 11, 'ciel' => 'Couvert', 'icone' => 'nuage']],
+        'hiver'     => ['nom' => 'Hiver', 'groupe' => 'Saisons', 'meteo' => ['t' => -1, 'ciel' => 'Neige', 'icone' => 'neige']],
+        'pluie'     => ['nom' => 'Pluie', 'groupe' => 'Météo', 'meteo' => ['t' => 9, 'ciel' => 'Pluie', 'icone' => 'pluie']],
+        'orage'     => ['nom' => 'Orage', 'groupe' => 'Météo', 'meteo' => ['t' => 19, 'ciel' => 'Orage', 'icone' => 'orage']],
+        'nuit'      => ['nom' => 'Nuit étoilée', 'groupe' => 'Météo', 'meteo' => ['t' => 8, 'ciel' => 'Nuit claire', 'icone' => 'lune']],
+    ];
 }
 
 function page_tableau_de_bord(): void
@@ -411,6 +435,10 @@ function page_tableau_de_bord(): void
                             <div><dt>Reste</dt><dd id="barre-reste">--</dd></div>
                         </dl>
                         <div class="barre-piste"><div class="barre-remplie" id="barre-fill"></div></div>
+                        <p class="horloge-meteo" id="horloge-meteo" hidden>
+                            <?php foreach (['soleil', 'nuage', 'pluie', 'neige', 'orage', 'lune'] as $icone): ?><span class="meteo-ico" data-icone="<?= $icone ?>" hidden><?= dash_icone($icone) ?></span><?php endforeach; ?>
+                            <span id="horloge-temp"></span><span id="horloge-ciel"></span><small>aperçu</small>
+                        </p>
                     </div>
                     </div>
                     <div class="dz dz-bas-centre">
@@ -463,6 +491,19 @@ function page_tableau_de_bord(): void
                     <div class="dz dz-centre-bas">
                     </div>
                     <div class="dz dz-bas-droite">
+                        <div class="theme-menu" id="theme-menu">
+                            <button type="button" class="dash-widget" id="theme-apercu" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-liste" title="Changer l’ambiance de l’accueil (aperçu)"><?= dash_icone('theme') ?><span>Thème : <span id="theme-apercu-nom">Automatique</span></span></button>
+                            <ul class="theme-liste" id="theme-liste" role="menu" hidden>
+                                <?php $groupe_precedent = null; ?>
+                                <?php foreach (themes_apercu() as $cle => $theme): ?>
+                                    <?php if ($theme['groupe'] !== $groupe_precedent): ?>
+                                        <li role="presentation" class="theme-groupe"><?= h($theme['groupe']) ?></li>
+                                        <?php $groupe_precedent = $theme['groupe']; ?>
+                                    <?php endif; ?>
+                                    <li role="none"><button type="button" role="menuitemradio" aria-checked="<?= $cle === 'auto' ? 'true' : 'false' ?>" class="theme-option" data-theme="<?= h($cle) ?>"><?= h($theme['nom']) ?></button></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
                         <form method="post" target="_blank" id="form-apercu" class="dash-forme">
                             <?= csrf() ?>
                             <input type="hidden" name="action" value="apercu_eleve">
@@ -478,6 +519,7 @@ function page_tableau_de_bord(): void
         </div>
 
         <div id="dash-stock" hidden>
+        <script type="application/json" id="json-themes"><?= json_encode(themes_apercu(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
         <script type="application/json" id="json-plans-classes"><?= json_encode($plans_classes, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
         <?php if ($plan_suivant): ?>
         <div class="ec-plan" id="plan-suivant">
@@ -614,6 +656,7 @@ function page_tableau_de_bord(): void
             if (b && demo) b.addEventListener('click', function () {
                 if (demo.hidden) {
                     demo.hidden = false; if (reel) reel.hidden = true;
+                    document.getElementById('dash-vue').classList.add('halo-actif');
                     document.getElementById('simuler-titre').textContent = 'Arrêter la simulation'; b.setAttribute('aria-pressed', 'true');
                     if (window.dashVuePlan) window.dashVuePlan(demo.querySelector('.ec-plan'));
                     if (window.dashHorloge) { var t0 = window.dashHorloge.maintenant(); window.dashHorloge.regler(t0, t0 + 55 * 60); document.getElementById('dash-horloge').hidden = true; }
@@ -625,6 +668,7 @@ function page_tableau_de_bord(): void
                     })();
                 } else {
                     clearTimeout(tdemo); demo.hidden = true; if (reel) reel.hidden = false;
+                    document.getElementById('dash-vue').classList.remove('halo-actif');
                     document.getElementById('simuler-titre').textContent = 'Simuler un cours'; b.setAttribute('aria-pressed', 'false');
                     if (window.dashVuePlan) window.dashVuePlan(window.dashPlanParDefaut());
                     if (window.dashHorloge) window.dashHorloge.reelle();
@@ -788,6 +832,7 @@ function page_tableau_de_bord(): void
                 var t = maintenant(), debut = reglage.debut, fin = reglage.fin;
                 var k = Math.min(1, Math.max(0, (t - debut) / (fin - debut)));
                 horloge.style.setProperty('--horloge-c', couleurDuree(k));
+                vue.style.setProperty('--halo-c', couleurDuree(k));
                 if (k <= 0) secteur.setAttribute('d', '');
                 else if (k >= 0.9999) secteur.setAttribute('d', 'M0,-' + R + ' A' + R + ',' + R + ' 0 1,1 0,' + R + ' A' + R + ',' + R + ' 0 1,1 0,-' + R + ' Z');
                 else {
@@ -805,9 +850,12 @@ function page_tableau_de_bord(): void
                 document.getElementById('horloge-heure').textContent = hm(t % 86400);
                 resteTxt.textContent = t < fin ? Math.ceil((fin - t) / 60) + ' min' : 'terminé';
             }
-            /* Ambiance : la couleur du fond suit le moment (cours, entre les cours, soir à partir de 18 h). */
+            /* Ambiance : la couleur du fond suit le moment (cours, entre les cours, soir à partir de 18 h).
+               Le menu « Thème » permet d'essayer les saisons et la météo ; « Automatique » rend la main au moment. */
+            var THEMES_APERCU = JSON.parse(document.getElementById('json-themes').textContent), themeCle = 'auto';
             function ambiance() {
                 var jour = maintenant() % 86400;
+                if (themeCle !== 'auto') { vue.dataset.ambiance = themeCle; return; }
                 vue.dataset.ambiance = reglage ? 'cours' : jour >= 18 * 3600 ? 'soir' : 'entre';
             }
             function regler(debut, fin) {
@@ -825,6 +873,44 @@ function page_tableau_de_bord(): void
             setInterval(dessinerHorloge, 1000);
             ambiance();
             setInterval(ambiance, 30000);
+            /* Menu Thème : choix d'une ambiance, et ligne météo d'aperçu dans le bloc horloge */
+            var boutonTheme = document.getElementById('theme-apercu'), listeTheme = document.getElementById('theme-liste');
+            function meteoLigne(m) {
+                var ligne = document.getElementById('horloge-meteo');
+                ligne.hidden = !m;
+                if (!m) return;
+                document.getElementById('horloge-temp').textContent = m.t + ' °C';
+                document.getElementById('horloge-ciel').textContent = m.ciel;
+                ligne.querySelectorAll('.meteo-ico').forEach(function (el) { el.hidden = el.dataset.icone !== m.icone; });
+            }
+            function appliquerTheme(cle) {
+                themeCle = cle;
+                if (window.PlanSalle3D) PlanSalle3D.ambiance(cle);
+                document.getElementById('theme-apercu-nom').textContent = THEMES_APERCU[cle].nom;
+                listeTheme.querySelectorAll('[data-theme]').forEach(function (b) { b.setAttribute('aria-checked', b.dataset.theme === cle ? 'true' : 'false'); });
+                meteoLigne(THEMES_APERCU[cle].meteo);
+                ambiance();
+            }
+            function ouvrirMenuTheme(ouvrir) {
+                listeTheme.hidden = !ouvrir;
+                boutonTheme.setAttribute('aria-expanded', ouvrir ? 'true' : 'false');
+                if (ouvrir) listeTheme.querySelector('[aria-checked="true"]').focus();
+            }
+            boutonTheme.addEventListener('click', function (e) { e.stopPropagation(); ouvrirMenuTheme(listeTheme.hidden); });
+            listeTheme.addEventListener('click', function (e) {
+                var option = e.target.closest('[data-theme]');
+                if (!option) return;
+                appliquerTheme(option.dataset.theme);
+                ouvrirMenuTheme(false);
+                boutonTheme.focus();
+            });
+            document.addEventListener('click', function (e) {
+                if (!listeTheme.hidden && !document.getElementById('theme-menu').contains(e.target)) ouvrirMenuTheme(false);
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && !listeTheme.hidden) { ouvrirMenuTheme(false); boutonTheme.focus(); }
+            });
+            appliquerTheme('auto');
 
             /* Prochain cours : l'anneau montre le temps restant (tour par heure), le chiffre le total. */
             var compte = document.getElementById('dash-compte');

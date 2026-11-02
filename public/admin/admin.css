@@ -4,6 +4,14 @@
     --err-fond: #fbe9e6; --alerte: #9a5b00; --code-fond: #efece6;
     --sol: #e9e1d0; --sol-trait: #cbbc9c;
     --mur: #2f7086; --socle: #eceff2; --socle-sombre: #cdd4db;
+    /* Widgets du tableau de bord */
+    --carte-fond: rgba(255, 255, 255, .95); --carte-bord: rgba(0, 0, 0, .08);
+    --carte-ombre: 0 3px 14px rgba(0, 0, 0, .16); --carte-ombre-survol: 0 6px 20px rgba(0, 0, 0, .2);
+    --alerte-bord: #c62828; --alerte-texte: #b71c1c; --alerte-doux: #8c2a25; --alerte-fond: #fff3f2;
+    --valider-bord: #2e7d32; --valider-texte: #1b5e20; --valider-fond: #eefaf0;
+    --simuler-bord: #1565c0; --simuler-texte: #0d47a1; --simuler-fond: #e8f2ff; --simuler-actif: #1565c0;
+    --ciel-1: #cfe9f7; --ciel-2: #f4f1e6; --ciel-3: #f7e7c9;
+    --ciel-cours-1: #ffe3a3; --ciel-cours-2: #fff6e2; --ciel-cours-3: #f7d7a0;
     color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -13,6 +21,13 @@
         --err-fond: #3a1f1b; --alerte: #f0b35a; --code-fond: #2a2e35;
         --sol: #4f463b; --sol-trait: #3a3229;
         --mur: #1f4a5c; --socle: #5b626c; --socle-sombre: #444b54;
+        --carte-fond: rgba(31, 34, 40, .94); --carte-bord: rgba(255, 255, 255, .1);
+        --carte-ombre: 0 3px 14px rgba(0, 0, 0, .5); --carte-ombre-survol: 0 6px 20px rgba(0, 0, 0, .6);
+        --alerte-bord: #f08a77; --alerte-texte: #ffb4a8; --alerte-doux: #f0c0b6; --alerte-fond: #3a1f1b;
+        --valider-bord: #3f9b5f; --valider-texte: #8fd3a5; --valider-fond: #1b3324;
+        --simuler-bord: #6aa9d6; --simuler-texte: #a9d2f5; --simuler-fond: #1a2c40; --simuler-actif: #2f78b5;
+        --ciel-1: #1a2233; --ciel-2: #222636; --ciel-3: #2b2430;
+        --ciel-cours-1: #4a3a1c; --ciel-cours-2: #2e2a22; --ciel-cours-3: #3d2f1a;
         color-scheme: dark;
     }
 }
@@ -913,7 +928,7 @@ main.accueil-dash { padding: 0; }
 .dash-horloge { border-color: var(--horloge-c, var(--bord)); }
 /* Compte à rebours et bouton Simuler dans un même cadre (toujours, avec ou sans cours prévu) */
 .compte-carte { display: flex; flex-direction: column; align-items: center; width: fit-content; box-sizing: border-box; padding: 10px 14px 12px;
-    background: rgba(255, 255, 255, .95); border: 1px solid rgba(0, 0, 0, .08); border-radius: 16px; box-shadow: 0 3px 14px rgba(0, 0, 0, .16); }
+    background: var(--carte-fond); border: 1px solid var(--carte-bord); border-radius: 16px; box-shadow: var(--carte-ombre); }
 .compte-carte .dash-compte { padding: 0; background: none; border: 0; box-shadow: none; }
 .compte-carte .dash-compte:hover { box-shadow: none; }
 .compte-carte > .dz-simuler { margin-top: 10px; }
@@ -932,14 +947,61 @@ main.accueil-dash { padding: 0; }
 .barre-remplie { height: 100%; width: 0; background: var(--accent); transition: width .9s linear; }
 .dash-barre-reste { margin-top: 4px; text-align: center; font-size: .85rem; font-weight: 600; }
 /* Alerte : session non désanonymisée */
-.dash-alerte { border-color: #b3261e; color: #b3261e; }
-.dash-alerte:hover { border-color: #b3261e; color: #8c1d16; }
+.dash-alerte { border-color: var(--alerte-bord); color: var(--alerte-texte); }
+.dash-alerte:hover { border-color: var(--alerte-bord); color: var(--alerte-texte); }
 .dash-widget[hidden] { display: none; }
 
 /* ---------- Tableau de bord : fond selon le moment, widgets en zones ---------- */
-.dash-vue { background: linear-gradient(180deg, #cfe9f7 0%, #f4f1e6 60%, #f7e7c9 100%); transition: background 1.2s ease; }
-.dash-vue[data-ambiance="cours"] { background: linear-gradient(180deg, #ffe3a3 0%, #fff6e2 55%, #f7d7a0 100%); }
+.dash-vue { background: linear-gradient(180deg, var(--ciel-1) 0%, var(--ciel-2) 60%, var(--ciel-3) 100%); transition: background 1.2s ease; }
+.dash-vue[data-ambiance="cours"] { background: linear-gradient(180deg, var(--ciel-cours-1) 0%, var(--ciel-cours-2) 55%, var(--ciel-cours-3) 100%); }
 .dash-vue[data-ambiance="soir"] { background: linear-gradient(180deg, #141d3d 0%, #3b2d63 45%, #b8506a 82%, #f29a5c 100%); }
+/* Thèmes d'aperçu : saisons et météo (clair ; le mode sombre les assombrit) */
+.dash-vue[data-ambiance="printemps"] { background: linear-gradient(180deg, #d6efcf 0%, #f7f4e6 60%, #fbdfe9 100%); }
+.dash-vue[data-ambiance="ete"] { background: linear-gradient(180deg, #8ccff0 0%, #eaf7ff 55%, #fff0c4 100%); }
+.dash-vue[data-ambiance="automne"] { background: linear-gradient(180deg, #f3c79a 0%, #f5ead6 60%, #d9a06b 100%); }
+.dash-vue[data-ambiance="hiver"] { background: linear-gradient(180deg, #c3d6e8 0%, #eef4f9 60%, #ffffff 100%); }
+.dash-vue[data-ambiance="pluie"] { background: linear-gradient(180deg, #aebbc9 0%, #d5dde6 60%, #bcc7d3 100%); }
+.dash-vue[data-ambiance="orage"] { background: linear-gradient(180deg, #5a6478 0%, #8d97a8 60%, #aeb6c2 100%); }
+.dash-vue[data-ambiance="nuit"] { background: linear-gradient(180deg, #0c1528 0%, #1a2547 60%, #2b3466 100%); }
+@media (prefers-color-scheme: dark) {
+    .dash-vue[data-ambiance="printemps"] { background: linear-gradient(180deg, #1f2d27 0%, #232830 60%, #2d2631 100%); }
+    .dash-vue[data-ambiance="ete"] { background: linear-gradient(180deg, #1c3144 0%, #263240 55%, #3a3425 100%); }
+    .dash-vue[data-ambiance="automne"] { background: linear-gradient(180deg, #3a2a1d 0%, #2b2620 60%, #3d2a1c 100%); }
+    .dash-vue[data-ambiance="hiver"] { background: linear-gradient(180deg, #1f2a36 0%, #29323d 60%, #343c48 100%); }
+    .dash-vue[data-ambiance="pluie"] { background: linear-gradient(180deg, #1b222b 0%, #252d37 60%, #2b333d 100%); }
+    .dash-vue[data-ambiance="orage"] { background: linear-gradient(180deg, #151922 0%, #222832 60%, #2a303b 100%); }
+    .dash-vue[data-ambiance="nuit"] { background: linear-gradient(180deg, #070b16 0%, #0f1830 60%, #18224a 100%); }
+}
+/* Thème neutre : fond uni, sans décor */
+.dash-vue[data-ambiance="neutre"] { background: var(--fond); }
+/* Halo de simulation : une lueur sur les bords de la vue, qui avance vers le centre pendant le cours (couleur = --halo-c) */
+.dash-vue.halo-actif::before { content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    animation: halo-avance 4s ease-out infinite; }
+@keyframes halo-avance {
+    0% { box-shadow: inset 0 0 24px 0 var(--halo-c, #1565c0); opacity: 1; }
+    100% { box-shadow: inset 0 0 200px 30px var(--halo-c, #1565c0); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .dash-vue.halo-actif::before { animation: none; box-shadow: inset 0 0 90px 10px var(--halo-c, #1565c0); opacity: .6; }
+}
+
+/* Menu Thème : liste au-dessus du bouton */
+.theme-menu { position: relative; }
+.theme-liste { position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 8; min-width: 220px; max-height: 60vh; overflow: auto; margin: 0; padding: 6px;
+    list-style: none; background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; box-shadow: 0 12px 30px rgba(0, 0, 0, .25); }
+.theme-liste[hidden] { display: none; }
+.theme-groupe { padding: 8px 10px 2px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--doux); }
+.theme-option { display: block; width: 100%; padding: 7px 10px; font: inherit; text-align: left; color: var(--texte); background: none; border: 0; border-radius: 8px; cursor: pointer; }
+.theme-option:hover, .theme-option:focus-visible { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.theme-option[aria-checked="true"] { font-weight: 700; color: var(--accent); }
+.theme-option[aria-checked="true"]::before { content: "✓  "; }
+
+/* Ligne météo dans le bloc horloge (aperçu) */
+.horloge-meteo { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: .85rem; font-weight: 600; color: var(--texte); font-variant-numeric: tabular-nums; }
+.horloge-meteo[hidden] { display: none; }
+.horloge-meteo small { font-size: .7rem; font-weight: 500; color: var(--doux); }
+.meteo-ico[hidden] { display: none; }
+.meteo-ico .ico { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dash-plan .ec-sous-titre { align-self: flex-start; margin-left: 14px; padding: 6px 12px; border-radius: 999px;
     background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--texte); box-shadow: 0 1px 6px rgba(0, 0, 0, .1); }
 /* Zones posées sur la vue : seuls les widgets reçoivent la souris */
@@ -952,26 +1014,26 @@ main.accueil-dash { padding: 0; }
 .dz-bas-droite { right: 14px; bottom: 14px; }
 /* Widgets : pastilles blanches, icône en trait */
 .dash-widget { display: inline-flex; align-items: center; gap: 9px; padding: 8px 15px; font: inherit; font-weight: 600; color: var(--texte);
-    background: rgba(255, 255, 255, .94); border: 1px solid rgba(0, 0, 0, .08); border-radius: 12px; box-shadow: 0 3px 12px rgba(0, 0, 0, .14); cursor: pointer; text-align: left; }
-.dash-widget:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(0, 0, 0, .18); }
+    background: var(--carte-fond); border: 1px solid var(--carte-bord); border-radius: 12px; box-shadow: var(--carte-ombre); cursor: pointer; text-align: left; }
+.dash-widget:hover { transform: translateY(-1px); box-shadow: var(--carte-ombre-survol); }
 .dash-widget .ico { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dash-widget small { display: block; font-size: .72rem; font-weight: 500; color: var(--doux); }
 .dash-widget strong { display: block; }
 /* Alerte : grande, en tête */
-.dash-alerte { padding: 12px 18px 12px 14px; border: 2px solid #c62828; color: #b71c1c; background: #fff3f2; }
+.dash-alerte { padding: 12px 18px 12px 14px; border: 2px solid var(--alerte-bord); color: var(--alerte-texte); background: var(--alerte-fond); }
 .dash-alerte .ico { width: 30px; height: 30px; }
 .dash-alerte strong { font-size: 1.05rem; }
-.dash-alerte small { color: #8c2a25; }
+.dash-alerte small { color: var(--alerte-doux); }
 /* À valider : vert, sous les alertes */
-.dash-valider { color: #1b5e20; border-color: #2e7d32; background: #eefaf0; }
-.dash-valider .compte-pastille { background: #2e7d32; color: #fff; }
+.dash-valider { color: var(--valider-texte); border-color: var(--valider-bord); background: var(--valider-fond); }
+.dash-valider .compte-pastille { background: var(--valider-bord); color: #fff; }
 /* Simuler : bleu, en haut au centre */
-.dash-simuler { color: #0d47a1; border-color: #1565c0; background: #e8f2ff; }
-.dash-simuler[aria-pressed="true"] { background: #1565c0; color: #fff; }
+.dash-simuler { color: var(--simuler-texte); border-color: var(--simuler-bord); background: var(--simuler-fond); }
+.dash-simuler[aria-pressed="true"] { background: var(--simuler-actif); color: #fff; }
 /* Prochain cours : en bas à droite */
 .dash-prochain { padding: 10px 16px; }
 .dash-prochain strong { font-size: 1rem; }
-.dash-horloge { background: rgba(255, 255, 255, .94); }
+.dash-horloge { background: var(--carte-fond); }
 
 /* ---------- Tableau de bord : horloge en haut à droite, compte à rebours du prochain cours ---------- */
 .dz-haut-droite { top: 14px; right: 14px; flex-direction: column; align-items: flex-end; }
@@ -991,8 +1053,8 @@ main.accueil-dash { padding: 0; }
 /* Prochain cours : anneau + chiffre, texte descriptif dessous ; en bas au centre */
 .dz-bas-centre { bottom: 14px; left: 50%; transform: translateX(-50%); align-items: center; }
 .dash-compte { display: flex; flex-direction: column; align-items: center; width: 250px; box-sizing: border-box; padding: 10px 14px 12px; font: inherit; color: var(--texte);
-    background: rgba(255, 255, 255, .95); border: 1px solid rgba(0, 0, 0, .08); border-radius: 16px; box-shadow: 0 3px 14px rgba(0, 0, 0, .16); cursor: pointer; }
-.dash-compte:hover { box-shadow: 0 6px 20px rgba(0, 0, 0, .2); }
+    background: var(--carte-fond); border: 1px solid var(--carte-bord); border-radius: 16px; box-shadow: var(--carte-ombre); cursor: pointer; }
+.dash-compte:hover { box-shadow: var(--carte-ombre-survol); }
 .compte-cadran { position: relative; width: 96px; display: block; }
 .compte-anneau { display: block; width: 100%; height: auto; }
 .compte-fond { fill: none; stroke: var(--bord); stroke-width: 10; }
@@ -1002,7 +1064,7 @@ main.accueil-dash { padding: 0; }
 .compte-texte small { display: block; font-size: .72rem; color: var(--doux); }
 .compte-texte strong { display: block; font-size: .95rem; }
 .compte-texte em { display: block; font-style: normal; font-size: .78rem; color: var(--doux); }
-.dash-compte-vide { margin: 0; padding: 8px 14px; border-radius: 12px; background: rgba(255, 255, 255, .92); font-weight: 600; }
+.dash-compte-vide { margin: 0; padding: 8px 14px; border-radius: 12px; background: var(--carte-fond); font-weight: 600; }
 
 /* Tablette : widgets un peu plus compacts, la vue garde toute la place */
 @media (max-width: 1024px) {
@@ -1167,7 +1229,7 @@ main.connexion .messages, main.connexion .message { width: min(380px, 100%); mar
 .dash-simuler-rond[aria-pressed="true"] { animation: simuler-pouls 1.6s ease-out infinite; }
 @keyframes simuler-pouls { 0% { box-shadow: 0 0 0 0 rgba(21, 101, 192, .55); } 70% { box-shadow: 0 0 0 14px rgba(21, 101, 192, 0); } 100% { box-shadow: 0 0 0 0 rgba(21, 101, 192, 0); } }
 .dash-simuler-rond[aria-pressed="true"] { background: #0d47a1; }
-.simuler-titre { font-size: .72rem; font-weight: 600; color: #0d47a1; background: rgba(255, 255, 255, .9); padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.simuler-titre { font-size: .72rem; font-weight: 600; color: var(--simuler-texte); background: var(--carte-fond); padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
 @media (max-width: 1099px) {
 }
 @media (max-width: 720px) {

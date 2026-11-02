@@ -689,6 +689,7 @@ window.PlanSalle = (function () {
       outils.hidden = !o;
       if (o) {
         document.getElementById('outil-titre').textContent = TYPES[o.type].nom;
+        afficherTaille(o);
         champLabel.value = o.label || '';
         champLabel.placeholder = estPlace(o) ? 'numéro auto' : '';
       }
@@ -733,14 +734,21 @@ window.PlanSalle = (function () {
     svg.addEventListener('pointerup', function () { if (glisse) { glisse = null; rendre(); } });
     svg.addEventListener('pointerdown', function () { choisir(null); });
 
+    /** Portes et fenêtres se règlent au décimètre près (épaisseur comme largeur) ; le reste au demi-mètre. */
+    function pasDe(o) { return o.type === 'porte' || o.type === 'fenetre' ? 0.1 : 0.5; }
+    function afficherTaille(o) {
+      document.getElementById('outil-taille').textContent = o.l.toFixed(1) + ' × ' + o.h.toFixed(1) + ' m';
+    }
+
     function action(nom) {
       var o = objet(choisi);
       if (!o) return;
+      var pas = pasDe(o);
       if (nom === 'rotation') { o.r = ((o.r || 0) + 90) % 360; }
-      else if (nom === 'largeur+') { o.l = Math.min(20, o.l + 0.5); }
-      else if (nom === 'largeur-') { o.l = Math.max(0.5, o.l - 0.5); }
-      else if (nom === 'hauteur+') { o.h = Math.min(20, o.h + 0.5); }
-      else if (nom === 'hauteur-') { o.h = Math.max(0.5, o.h - 0.5); }
+      else if (nom === 'largeur+') { o.l = Math.min(20, Math.round((o.l + pas) * 10) / 10); }
+      else if (nom === 'largeur-') { o.l = Math.max(pas, Math.round((o.l - pas) * 10) / 10); }
+      else if (nom === 'hauteur+') { o.h = Math.min(20, Math.round((o.h + pas) * 10) / 10); }
+      else if (nom === 'hauteur-') { o.h = Math.max(pas, Math.round((o.h - pas) * 10) / 10); }
       else if (nom === 'dupliquer') {
         var c = Object.assign({}, o, { id: nouvelId(), label: '' });
         c.x += largeurVue(o); if (c.x + largeurVue(c) > plan.largeur) { c.x = o.x; c.y += hauteurVue(o); }
@@ -750,6 +758,7 @@ window.PlanSalle = (function () {
         choisir(null); return;
       }
       borner(o);
+      afficherTaille(o);
       rendre();
     }
     outils.querySelectorAll('[data-outil]').forEach(function (b) { b.onclick = function () { action(b.dataset.outil); }; });
