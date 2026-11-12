@@ -45,6 +45,17 @@ function creer_tables_catalogue(PDO $pdo): void
         modifie_le  INTEGER NOT NULL,
         PRIMARY KEY (app, atelier)
     )");
+    // Périodes de disponibilité d'un atelier (dates) : voir disponibilite_atelier().
+    $pdo->exec("CREATE TABLE IF NOT EXISTS atelier_periodes (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        app       TEXT NOT NULL,
+        atelier   TEXT NOT NULL,                     -- identifiant de l'atelier dans le catalogue
+        classe_id INTEGER REFERENCES classes(id) ON DELETE CASCADE,   -- NULL = toutes les classes
+        debut     TEXT NOT NULL DEFAULT '',          -- AAAA-MM-JJ inclus (vide = sans borne)
+        fin       TEXT NOT NULL DEFAULT '',          -- AAAA-MM-JJ inclus (vide = sans borne)
+        cree_le   INTEGER NOT NULL DEFAULT 0
+    )");
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_periodes_atelier ON atelier_periodes (app, atelier)');
     $pdo->exec("CREATE TABLE IF NOT EXISTS imports_ateliers (
         id      INTEGER PRIMARY KEY AUTOINCREMENT,
         app     TEXT NOT NULL,
@@ -527,3 +538,109 @@ function adresse_ouvrir_atelier(array $r): string
     $sans = preg_replace('/[?#].*$/', '', $u) ?? $u;
     return $o[0] === '#' || $o[0] === '?' ? $sans . $o : $sans . '#activite=' . rawurlencode($o);
 }
+
+/* ---------- Périodes de disponibilité des ateliers ----------
+   Une période : du … au … (dates incluses ; vide = sans borne), pour une classe ou pour toutes.
+   Aucune période pour une classe = atelier ouvert en permanence (comportement historique).
+   Plusieurs périodes = ouvert pendant chacune. Hors période : « bientôt » (une période doit encore venir)
+   ou « fermé » (toutes passées). Les applications restent ouvrables sans la Centrale : ces périodes règlent
+   ce que le portail, les parcours et les propositions montrent aux élèves. */
+
+/** Périodes, rangées [app][atelier] => [ {id, classe_id, classe, debut, fin} ]. */
+function periodes_ateliers(?string $app = null): array
+{
+    $st = db()->prepare('SELECT p.*, c.nom AS classe FROM atelier_periodes p LEFT JOIN classes c ON c.id = p.classe_id'
+        . ($app !== null ? ' WHERE p.app = ?' : '') . " ORDER BY p.app, p.atelier, p.debut = '', p.debut, p.id");
+    $st->execute($app !== null ? [$app] : []);
+    $res = [];
+    foreach ($st->fetchAll() as $r) {
+        $r['classe_id'] = $r['classe_id'] === null ? null : (int) $r['classe_id'];
+        $res[$r['app']][$r['atelier']][] = $r;
+    }
+    return $res;
+}
+
+/**
+ * État d'un atelier pour une classe (null = périodes « toutes les classes » seulement) à une date (aujourd'hui par défaut).
+ * → ['etat' => ouvert|bientot|ferme, 'ouvre_le' => AAAA-MM-JJ|null, 'jusqu_au' => AAAA-MM-JJ|null, 'limite' => bool]
+ *   limite : des périodes s'appliquent (sinon ouvert sans limite).
+ */
+function disponibilite_atelier(array $periodes, ?int $classe_id, ?string $date = null): array
+{
+    $date ??= aujourd_hui();
+    $p = array_values(array_filter($periodes, fn($x) => $x['classe_id'] === null || $x['classe_id'] === $classe_id));
+    if (!$p) {
+        return ['etat' => 'ouvert', 'ouvre_le' => null, 'jusqu_au' => null, 'limite' => false];
+    }
+    $ouvert = false;
+    $jusqu = null;     // dernière fin des périodes en cours ('' = sans fin)
+    $prochain = null;
+    foreach ($p as $x) {
+        $d = (string) $x['debut'];
+        $f = (string) $x['fin'];
+        if (($d === '' || $d <= $date) && ($f === '' || $f >= $date)) {
+            $ouvert = true;
+            $jusqu = $jusqu === '' || $f === '' ? '' : max((string) $jusqu, $f);
+        } elseif ($d !== '' && $d > $date) {
+            $prochain = $prochain === null ? $d : min($prochain, $d);
+        }
+    }
+    if ($ouvert) {
+        return ['etat' => 'ouvert', 'ouvre_le' => null, 'jusqu_au' => $jusqu ?: null, 'limite' => true];
+    }
+    return ['etat' => $prochain !== null ? 'bientot' : 'ferme', 'ouvre_le' => $prochain, 'jusqu_au' => null, 'limite' => true];
+}
+
+/** États des ateliers qui ont des périodes, pour une classe : [app][atelier] => disponibilite_atelier(). */
+function disponibilites_classe(?int $classe_id): array
+{
+    $res = [];
+    foreach (periodes_ateliers() as $app => $liste) {
+        foreach ($liste as $atelier => $periodes) {
+            $res[$app][$atelier] = disponibilite_atelier($periodes, $classe_id);
+        }
+    }
+    return $res;
+}
+
+/** Atelier du catalogue auquel appartient une activité (« atelier/P1 », ou l'atelier lui-même), ou null. */
+function atelier_de_activite(string $app, string $activite): ?string
+{
+    static $carte = null;
+    if ($carte === null) {
+        $carte = [];
+        foreach (db()->query('SELECT app, atelier, activites FROM catalogue_ateliers') as $r) {
+            $carte[$r['app']][$r['atelier']] = $r['atelier'];
+            foreach (json_decode((string) $r['activites'], true) ?: [] as $x) {
+                if (isset($x['id']) && is_string($x['id'])) {
+                    $carte[$r['app']][$x['id']] ??= $r['atelier'];
+                }
+            }
+        }
+    }
+    if ($activite === '') {
+        return null;
+    }
+    if (isset($carte[$app][$activite])) {
+        return $carte[$app][$activite];
+    }
+    $avant = explode('/', $activite)[0];
+    return isset($carte[$app][$avant]) ? $carte[$app][$avant] : null;
+}
+
+/** État de l'atelier d'une activité pour une classe (ouvert sans limite si l'activité n'est rattachée à aucun atelier). */
+function disponibilite_activite(array $dispos, string $app, string $activite): array
+{
+    $at = atelier_de_activite($app, $activite);
+    return ($at !== null ? ($dispos[$app][$at] ?? null) : null) ?? ['etat' => 'ouvert', 'ouvre_le' => null, 'jusqu_au' => null, 'limite' => false];
+}
+
+/** Texte court d'une période pour l'enseignant : « du 5 janv. au 20 févr. · 4A ». */
+function texte_periode(array $p): string
+{
+    $f = fn(string $d) => $d === '' ? '' : (new DateTimeImmutable($d))->format('d/m/Y');
+    $t = $p['debut'] !== '' && $p['fin'] !== '' ? 'du ' . $f($p['debut']) . ' au ' . $f($p['fin'])
+        : ($p['debut'] !== '' ? 'à partir du ' . $f($p['debut']) : ($p['fin'] !== '' ? 'jusqu’au ' . $f($p['fin']) : 'toujours'));
+    return $t . ' · ' . ($p['classe_id'] === null ? 'toutes les classes' : (string) ($p['classe'] ?? '?'));
+}
+

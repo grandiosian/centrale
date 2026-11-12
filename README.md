@@ -280,6 +280,10 @@ Les ateliers sont créés **dans les applications** et publiés avec elles : ils
 - Filtres par application, niveau, texte ou code de compétence ; « Ouvrir » lance l'atelier sans connexion.
 - Un fichier exporté d'une application (atelier `.json`, `ateliers.json`, `.technostudio.json`) peut aussi être importé à la main : il reste marqué « pas encore dans l'application » tant qu'elle ne le publie pas.
 - Les autres applications lisent ce catalogue : `GET /api/catalogue.php?app=&niveau=&competence=`.
+- Colonne **Disponibilité** : « + Période » ouvre un atelier **du … au …** (dates incluses, une borne peut rester vide), pour toutes les classes ou pour une seule. Sans période, l'atelier est ouvert en permanence ; avec plusieurs, il est ouvert pendant chacune.
+  - Avant sa période, ses activités apparaissent sur le portail en « Bientôt » avec la date d'ouverture. Après, elles disparaissent, sauf pour l'élève qui les a commencées : il les voit marquées « Fermé ».
+  - Les étapes de parcours et les propositions de cet atelier suivent les mêmes périodes. `api/catalogue.php` publie les périodes communes à toutes les classes (champ `disponibilite`).
+  - Les applications restent ouvrables sans la Centrale : ces périodes règlent ce que la Centrale montre aux élèves.
 
 Règles communes : [`public/passerelle/DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md`](public/passerelle/DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md) et [`public/passerelle/COMPETENCES.md`](public/passerelle/COMPETENCES.md), lisibles en ligne sur `/passerelle/?doc=donnees` et `/passerelle/?doc=competences`.
 

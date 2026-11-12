@@ -20,6 +20,7 @@ foreach (db()->query('SELECT * FROM ateliers WHERE actif = 1')->fetchAll() as $a
     $ateliers[$a['app']] = $a;
 }
 
+$dispos = disponibilites_classe((int) $eleve['classe_id']);
 $res = [];
 foreach (propositions_eleve((int) $eleve['id']) as $app => $liste) {
     if (!isset($ateliers[$app])) {
@@ -29,6 +30,10 @@ foreach (propositions_eleve((int) $eleve['id']) as $app => $liste) {
     foreach ($liste as $id => $p) {
         $c = $catalogue[$app][$id] ?? null;
         $etat = etat_etape($id, $prog[$app] ?? [], $catalogue[$app] ?? []);
+        // Atelier hors de ses périodes de disponibilité : la proposition attend (ou disparaît), sauf si l'élève a commencé
+        if (disponibilite_activite($dispos, $app, (string) $id)['etat'] !== 'ouvert' && $etat['statut'] === 'a_faire') {
+            continue;
+        }
         $res[] = ['app' => $app, 'atelier' => $a['nom'], 'icone' => $a['icone'], 'url' => meilleure_adresse($a),
                   'activite' => $id, 'titre' => $c ? ($c['titre'] ?: $id) : $id, 'groupe' => $c['groupe'] ?? '',
                   'pour_le' => $p['pour_le'], 'consigne' => $p['consigne'],

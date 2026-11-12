@@ -5,7 +5,9 @@
  *
  * → { ok, parcours: [ { id, nom, description, mode, deblocage, equipe, coequipiers, sans_equipe, fichiers, taux, etapes: [
  *        { ordre, titre, app, activite, url, consigne, entrees, sorties, deposees,
- *          statut: a_faire|commence|termine, taux, texte, ouverte } ] } ] }
+ *          statut: a_faire|commence|termine, taux, texte, ouverte, ouvre_le, fermee } ] } ] }
+ * Une étape dont l'atelier est hors de ses périodes de disponibilité reste fermée (ouverte = false) tant que l'élève
+ * ne l'a pas commencée : ouvre_le (AAAA-MM-JJ) si une période doit venir, fermee = true si toutes sont passées.
  */
 declare(strict_types=1);
 
@@ -22,6 +24,7 @@ $catalogue = catalogue_activites();
 $ateliers = db()->query('SELECT * FROM ateliers')->fetchAll();
 $adresse = fn(string $url): string => lien_vers_meilleure_adresse($url, $ateliers);
 
+$dispos = disponibilites_classe((int) $eleve['classe_id']);
 $res = [];
 foreach (parcours_pour_classe($eleve['classe']) as $p) {
     // Avancement du dossier de projet : celui de l'élève, ou de son équipe (parcours en équipe)
@@ -32,6 +35,8 @@ foreach (parcours_pour_classe($eleve['classe']) as $p) {
     foreach ($p['etapes'] as $i => $et) {
         $e = $etats[$i];
         $somme += $e['taux'];
+        $d = disponibilite_activite($dispos, (string) $et['app'], (string) $et['activite']);
+        $hors_periode = $d['etat'] !== 'ouvert' && $e['statut'] === 'a_faire';
         $etapes[] = [
             'ordre'    => $i,
             'titre'    => $et['titre'],
@@ -45,7 +50,9 @@ foreach (parcours_pour_classe($eleve['classe']) as $p) {
             'statut'   => $e['statut'],
             'taux'     => round($e['taux'], 3),
             'texte'    => $e['texte'],
-            'ouverte'  => $e['ouverte'],
+            'ouverte'  => $e['ouverte'] && !$hors_periode,
+            'ouvre_le' => $hors_periode ? $d['ouvre_le'] : null,
+            'fermee'   => $hors_periode && $d['etat'] === 'ferme',
         ];
     }
     $membres = $proprio['type'] === 'equipe' ? identifiants_eleves(array_diff($proprio['membres'], [$eleve['id']])) : [];

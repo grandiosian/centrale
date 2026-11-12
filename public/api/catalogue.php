@@ -8,6 +8,9 @@
  * → { ok, format: "catalogue.ateliers", version: 1, ateliers: [ { app, nom_app, id, titre, niveau, theme, resume, duree,
  *        competences: [], activites: [ { id, titre, total, competences } ], ouvrir, adresse, fichier, version } ] }
  * « adresse » ouvre l'atelier dans son application (#activite=…), sans passer par la Centrale.
+ * « disponibilite » (facultatif) : périodes réglées pour toutes les classes dans l'espace enseignant,
+ *   { etat: ouvert|bientot|ferme, ouvre_le, jusqu_au, periodes: [ { debut, fin } ] } (AAAA-MM-JJ, vide = sans borne).
+ *   Absent : pas de période commune (l'atelier est ouvert, ou réglé classe par classe).
  */
 declare(strict_types=1);
 
@@ -18,6 +21,7 @@ $app = normaliser_app((string) ($_GET['app'] ?? ''));
 $niveau = niveau_atelier((string) ($_GET['niveau'] ?? ''));
 $comp = strtoupper(preg_replace('/[^A-Za-z0-9.]/', '', (string) ($_GET['competence'] ?? '')) ?? '');
 
+$periodes = periodes_ateliers();
 $res = [];
 foreach (catalogue_ateliers($app === '*' ? null : $app, false) as $r) {
     if ($niveau !== '' && $r['niveau'] !== '' && $r['niveau'] !== $niveau) {
@@ -30,6 +34,12 @@ foreach (catalogue_ateliers($app === '*' ? null : $app, false) as $r) {
               'niveau' => $r['niveau'], 'theme' => $r['theme'], 'resume' => $r['resume'], 'duree' => $r['duree'],
               'competences' => $r['codes'], 'activites' => $r['activites'], 'ouvrir' => $r['ouvrir'],
               'adresse' => adresse_ouvrir_atelier($r), 'fichier' => $r['fichier'], 'version' => $r['version']];
+    $communes = array_values(array_filter($periodes[$r['app']][$r['atelier']] ?? [], fn($x) => $x['classe_id'] === null));
+    if ($communes) {
+        $res[count($res) - 1]['disponibilite'] = disponibilite_atelier($communes, null)
+            + ['periodes' => array_map(fn($x) => ['debut' => $x['debut'], 'fin' => $x['fin']], $communes)];
+        unset($res[count($res) - 1]['disponibilite']['limite']);
+    }
 }
 header('Cache-Control: public, max-age=300');
 envoyer_json(200, ['ok' => true, 'format' => FORMAT_CATALOGUE, 'version' => 1, 'ateliers' => $res]);

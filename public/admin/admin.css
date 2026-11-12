@@ -1338,3 +1338,15 @@ main.connexion .messages, main.connexion .message { width: min(380px, 100%); mar
 
 /* Boutons-liens du tableau de bord (TechnoStudio · enseignant / élève) : même allure que les autres */
 a.dash-widget { text-decoration: none; color: inherit; }
+
+/* Périodes de disponibilité des ateliers (Ateliers des applications) */
+.cellule-dispo { min-width: 170px; font-size: .88rem; }
+.pastille-dispo { display: inline-block; padding: 0 8px; border-radius: 6px; font-weight: 700; font-size: .78rem; color: #fff; background: #2e7d32; }
+.pastille-dispo.bientot { background: #b26a00; }
+.pastille-dispo.ferme { background: #8a8f98; }
+.liste-periodes { margin: 4px 0; padding-left: 16px; }
+.liste-periodes li form { display: inline; }
+.liste-periodes li button.lien { padding: 0 4px; min-height: 0; }
+.ajout-periode summary { cursor: pointer; color: var(--accent, #2F57A1); font-size: .85rem; }
+.form-periode { display: grid; gap: 6px; margin-top: 6px; }
+.form-periode label { display: grid; gap: 2px; font-size: .8rem; }

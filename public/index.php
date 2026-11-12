@@ -168,6 +168,7 @@ button[disabled] { opacity: .45; cursor: default; }
 .act.commence .puce { border-color: var(--encours); }
 .act .etat { font-size: .8rem; color: var(--doux); }
 .act.commence .etat { color: var(--encours); }
+.act.hors-periode { opacity: .65; }
 .afaire { padding: 4px 16px; margin-bottom: 14px; }
 .afaire ol { list-style: none; margin: 0; padding: 0; }
 .afaire li { display: grid; grid-template-columns: 46px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--bord); }
@@ -468,12 +469,17 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     let groupe = null;
     a.activites.forEach((x) => {
       if (x.groupe && x.groupe !== groupe) { groupe = x.groupe; liste.append(el('li', { class: 'groupe' }, groupe)); }
-      const b = el('button', { class: 'petit secondaire' }, x.statut === 'termine' ? 'Revoir' : x.statut === 'commence' ? 'Continuer' : 'Ouvrir');
-      b.onclick = () => ouvrir(a.url, x.id);
-      liste.append(el('li', { class: 'act ' + x.statut },
-        el('span', { class: 'puce' }, x.statut === 'termine' ? '✓' : ''),
-        el('div', {}, el('div', {}, x.titre), el('div', { class: 'etat' },
-          x.statut === 'termine' ? 'Terminé' : x.statut === 'commence' ? 'En cours' + (x.texte ? ' · ' + x.texte : '') : 'À faire')),
+      // Périodes de disponibilité de l'atelier : pas encore ouvert (date) ou fermé
+      const ferme = x.disponible === false;
+      const b = el('button', { class: 'petit secondaire' }, ferme ? (x.ouvre_le ? 'Bientôt' : 'Fermé')
+        : x.statut === 'termine' ? 'Revoir' : x.statut === 'commence' ? 'Continuer' : 'Ouvrir');
+      if (ferme) b.disabled = true; else b.onclick = () => ouvrir(a.url, x.id);
+      const etat = ferme ? (x.ouvre_le ? 'S’ouvre le ' + dateCourte(x.ouvre_le) : 'Fermé par ton professeur')
+        : (x.statut === 'termine' ? 'Terminé' : x.statut === 'commence' ? 'En cours' + (x.texte ? ' · ' + x.texte : '') : 'À faire')
+          + (x.jusqu_au ? ' · ouvert jusqu’au ' + dateCourte(x.jusqu_au) : '');
+      liste.append(el('li', { class: 'act ' + x.statut + (ferme ? ' hors-periode' : '') },
+        el('span', { class: 'puce' }, ferme ? '🔒' : x.statut === 'termine' ? '✓' : ''),
+        el('div', {}, el('div', {}, x.titre), el('div', { class: 'etat' }, etat)),
         b));
     });
     const voir = el('button', { class: 'lien' }, liste.hidden ? `Voir les activités (${a.total})` : 'Masquer les activités');
@@ -531,7 +537,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
       p.etapes.forEach((e, i) => {
         const verrou = !e.ouverte;
         const info = verrou
-          ? (p.deblocage === 'validation' ? 'Ton professeur ouvrira cette étape après avoir validé la précédente' : 'S’ouvre quand l’étape précédente est terminée')
+          ? e.ouvre_le ? 'S’ouvre le ' + dateCourte(e.ouvre_le) : e.fermee ? 'Fermé par ton professeur' : (p.deblocage === 'validation' ? 'Ton professeur ouvrira cette étape après avoir validé la précédente' : 'S’ouvre quand l’étape précédente est terminée')
           : e.statut === 'termine' ? 'Terminé ✓' : e.statut === 'commence' ? 'En cours' + (e.texte ? ' · ' + e.texte : '') : 'À faire';
         const b = el('button', { class: e.statut === 'termine' ? 'secondaire' : '' },
           verrou ? 'Pas encore' : e.statut === 'termine' ? 'Revoir' : e.statut === 'commence' ? 'Continuer' : 'Commencer');

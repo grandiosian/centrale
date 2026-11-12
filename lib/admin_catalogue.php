@@ -57,9 +57,41 @@ function action_catalogue(string $action): bool
             flash("« $app » : $type importé (" . texte_bilan($bilan) . '). Pour qu’il reste disponible sans serveur, ajoutez-le aux ateliers publiés par l’application.');
             rediriger($retour . '&app=' . rawurlencode($app));
 
+        case 'ajouter_periode_atelier':
+            $app = normaliser_app((string) ($_POST['app'] ?? ''));
+            $atelier = (string) ($_POST['atelier'] ?? '');
+            $debut = trim((string) ($_POST['debut'] ?? ''));
+            $fin = trim((string) ($_POST['fin'] ?? ''));
+            $cid = (int) ($_POST['classe_id'] ?? 0);
+            $ok_date = fn(string $d) => $d === '' || (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
+            $ici = $retour . '&app=' . rawurlencode($app) . '#dispo-' . rawurlencode($atelier);
+            $existe = db()->prepare('SELECT 1 FROM catalogue_ateliers WHERE app = ? AND atelier = ?');
+            $existe->execute([$app, $atelier]);
+            if (!$existe->fetchColumn()) {
+                flash('Atelier introuvable dans le catalogue.', 'err');
+            } elseif (!$ok_date($debut) || !$ok_date($fin) || ($debut === '' && $fin === '')) {
+                flash('Indiquez une date de début, une date de fin, ou les deux.', 'err');
+            } elseif ($debut !== '' && $fin !== '' && $fin < $debut) {
+                flash('La date de fin est avant la date de début.', 'err');
+            } else {
+                db()->prepare('INSERT INTO atelier_periodes (app, atelier, classe_id, debut, fin, cree_le) VALUES (?, ?, ?, ?, ?, ?)')
+                    ->execute([$app, $atelier, $cid ?: null, $debut, $fin, time()]);
+                flash('Période ajoutée : les élèves concernés ne voient l’atelier que pendant ses périodes.');
+            }
+            rediriger($ici);
+
+        case 'supprimer_periode_atelier':
+            $st = db()->prepare('SELECT app, atelier FROM atelier_periodes WHERE id = ?');
+            $st->execute([(int) ($_POST['periode_id'] ?? 0)]);
+            $r = $st->fetch();
+            db()->prepare('DELETE FROM atelier_periodes WHERE id = ?')->execute([(int) ($_POST['periode_id'] ?? 0)]);
+            flash('Période retirée.');
+            rediriger($retour . ($r ? '&app=' . rawurlencode($r['app']) . '#dispo-' . rawurlencode($r['atelier']) : ''));
+
         case 'supprimer_atelier_catalogue':
             $app = normaliser_app((string) ($_POST['app'] ?? ''));
             db()->prepare('DELETE FROM catalogue_ateliers WHERE app = ? AND atelier = ?')->execute([$app, (string) ($_POST['atelier'] ?? '')]);
+            db()->prepare('DELETE FROM atelier_periodes WHERE app = ? AND atelier = ?')->execute([$app, (string) ($_POST['atelier'] ?? '')]);
             flash('Atelier enlevé du catalogue (le travail et la progression des élèves sont conservés).');
             rediriger($retour . '&app=' . rawurlencode($app));
     }
@@ -114,6 +146,8 @@ function page_catalogue_ateliers(): void
     foreach (db()->query('SELECT app, source, adresse, ts FROM imports_ateliers ORDER BY id') as $i) {
         $derniers[$i['app']] = $i;
     }
+    $periodes = periodes_ateliers();
+    $classes = db()->query('SELECT id, nom FROM classes ORDER BY nom')->fetchAll(PDO::FETCH_KEY_PAIR);
     $niveaux = array_values(array_unique(array_filter(array_column($tous, 'niveau'))));
     usort($niveaux, fn($a, $b) => strcmp($b, $a));
 
@@ -184,7 +218,7 @@ function page_catalogue_ateliers(): void
                 <label class="case"><input type="checkbox" id="cat-retires"> Montrer les ateliers retirés</label>
             </div>
             <div class="defile"><table class="table-catalogue">
-                <thead><tr><th>Atelier</th><th>Application</th><th>Niveau</th><th>Compétences</th><th>Activités</th><th>Source</th><th></th></tr></thead>
+                <thead><tr><th>Atelier</th><th>Application</th><th>Niveau</th><th>Compétences</th><th>Activités</th><th>Disponibilité</th><th>Source</th><th></th></tr></thead>
                 <tbody>
                 <?php foreach ($tous as $r): $ouvrir = adresse_ouvrir_atelier($r); $nb = count($r['activites']); ?>
                     <tr data-app="<?= h($r['app']) ?>" data-niveau="<?= h($r['niveau']) ?>" <?= $r['etat'] !== 'actif' ? 'data-retire="1" class="inactif" hidden' : '' ?>
@@ -200,6 +234,28 @@ function page_catalogue_ateliers(): void
                                 <?php foreach ($r['activites'] as $x): ?><li><?= h($x['titre']) ?> <code class="discret"><?= h($x['id']) ?></code></li><?php endforeach; ?>
                             </ul></details>
                             <?php else: ?><?= $nb ?: '<span class="discret" title="Les activités viennent de l’application">—</span>' ?><?php endif; ?></td>
+                        <td class="cellule-dispo" id="dispo-<?= h($r['atelier']) ?>"><?php $pl = $periodes[$r['app']][$r['atelier']] ?? [];
+                            $etat = $pl ? disponibilite_atelier(array_filter($pl, fn($x) => $x['classe_id'] === null), null) : null; ?>
+                            <?php if (!$pl): ?><span class="discret" title="Aucune période : l’atelier est visible en permanence">toujours</span>
+                            <?php else: ?>
+                                <?php if ($etat['limite']): ?><span class="pastille-dispo <?= h($etat['etat']) ?>" title="Aujourd’hui, pour toutes les classes (une période propre à une classe s’y ajoute pour cette classe)"><?= ['ouvert' => 'Ouvert', 'bientot' => 'Bientôt', 'ferme' => 'Fermé'][$etat['etat']] ?></span>
+                                <?php else: ?><span class="discret">selon la classe</span><?php endif; ?>
+                                <ul class="liste-periodes"><?php foreach ($pl as $x): ?>
+                                    <li><?= h(texte_periode($x)) ?> <?= bouton('supprimer_periode_atelier', '✕', ['periode_id' => (int) $x['id']], 'lien', '', 'Retirer cette période') ?></li>
+                                <?php endforeach; ?></ul>
+                            <?php endif; ?>
+                            <details class="ajout-periode"><summary>+ Période</summary>
+                                <form method="post" class="form-periode">
+                                    <?= csrf() ?>
+                                    <input type="hidden" name="action" value="ajouter_periode_atelier">
+                                    <input type="hidden" name="app" value="<?= h($r['app']) ?>">
+                                    <input type="hidden" name="atelier" value="<?= h($r['atelier']) ?>">
+                                    <label>Classe<select name="classe_id"><option value="0">Toutes les classes</option><?php foreach ($classes as $cid => $cnom): ?><option value="<?= (int) $cid ?>"><?= h($cnom) ?></option><?php endforeach; ?></select></label>
+                                    <label>Du<input type="date" name="debut"></label>
+                                    <label>Au<input type="date" name="fin"></label>
+                                    <button class="petit">Ajouter</button>
+                                </form>
+                            </details></td>
                         <td class="discret"><?= h(SOURCES_CATALOGUE[$r['source']] ?? $r['source']) ?><?= $r['version'] !== '' ? '<br>v' . h($r['version']) : '' ?>
                             <?php if ($r['source'] === 'fichier'): ?><br><span class="alerte" title="Il ne restera disponible sans serveur qu’une fois publié avec l’application">pas encore dans l’application</span><?php endif; ?></td>
                         <td class="actions">
