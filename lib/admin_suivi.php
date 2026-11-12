@@ -949,6 +949,10 @@ function page_ateliers(): void
                         <td><?= $a['actif'] ? 'Visible' : 'Masqué' ?></td>
                         <td class="actions">
                             <?= $avec_test ? bouton_tester('app:' . $a['app'], 'Ouvrir cet atelier connecté comme l’élève test choisi au-dessus') : '' ?>
+                            <?php if ($a['app'] === 'technostudio'): ?>
+                                <a class="btn petit" href="../miroir/technostudio/?mode=enseignant" target="_blank" rel="noopener" title="Ouvre TechnoStudio en mode enseignant : toute l’interface, sans verrou (vous êtes connecté ici)">Mode enseignant</a>
+                                <a class="btn petit secondaire" href="../miroir/technostudio/?mode=eleve" target="_blank" rel="noopener" title="Ouvre TechnoStudio comme le voient les élèves : parcours guidé, questions débloquées une à une">Mode élève</a>
+                            <?php endif; ?>
                             <a class="btn petit secondaire" href="./?p=suivi&vue=app:<?= rawurlencode($a['app']) ?>">Suivi</a>
                             <a class="btn petit secondaire" href="./?p=ateliers&modifier=<?= (int) $a['id'] ?>">Modifier</a>
                             <?= bouton('supprimer_atelier', 'Retirer', ['atelier_id' => $a['id']], 'danger', 'Retirer cet atelier du portail ?') ?>
