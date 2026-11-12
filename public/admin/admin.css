@@ -1335,3 +1335,6 @@ main.connexion .messages, main.connexion .message { width: min(380px, 100%); mar
 .versions-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
 .versions-form input[type=text] { width: auto; min-width: 220px; margin: 0; }
 .versions-form select { width: auto; margin: 0; max-width: 340px; }
+
+/* Boutons-liens du tableau de bord (TechnoStudio · enseignant / élève) : même allure que les autres */
+a.dash-widget { text-decoration: none; color: inherit; }

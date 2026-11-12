@@ -174,6 +174,8 @@ function dash_icone(string $nom): string
         'cours'    => '<path d="M3 20.5V9l9-5.5 9 5.5v11.5"/><path d="M9 20.5v-6h6v6"/>',
         'connexions' => '<circle cx="9" cy="8" r="3.6"/><path d="M2.5 20c.8-3.6 3.4-5.6 6.5-5.6s5.7 2 6.5 5.6"/><path d="M16 4.6a3.6 3.6 0 0 1 0 6.8"/>',
         'prochain' => '<path d="M4 12h14M13 6l6 6-6 6"/>',
+        'ts_prof'  => '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M9 10l2 2 4-4"/>',
+        'ts_eleve' => '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><circle cx="12" cy="9" r="2"/><path d="M8.5 14c.6-1.6 2-2.4 3.5-2.4s2.9.8 3.5 2.4"/>',
         'oeil'     => '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
         'theme'    => '<circle cx="8.5" cy="8.5" r="3.2"/><path d="M8.5 2v1.6M2 8.5h1.6M3.7 3.7l1.1 1.1M13.3 3.7l-1.1 1.1"/><path d="M8 19.5h9.5a3.2 3.2 0 0 0 0-6.4 4.6 4.6 0 0 0-8.7 1.4A2.7 2.7 0 0 0 8 19.5z"/>',
         'soleil'   => '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
@@ -509,6 +511,9 @@ function page_tableau_de_bord(): void
                             <input type="hidden" name="action" value="apercu_eleve">
                             <button class="dash-widget" title="Ouvre le portail élève avec le compte test de la classe TEST, sans taper de code"><?= dash_icone('oeil') ?><span>Démo élève</span></button>
                         </form>
+                        <?php /* TechnoStudio copié sur ce serveur : il voit la session enseignant (même site) */ ?>
+                        <a class="dash-widget" href="../miroir/technostudio/?mode=enseignant" target="_blank" rel="noopener" title="Ouvre TechnoStudio en mode enseignant : toute l’interface, sans verrou (vous êtes connecté ici)"><?= dash_icone('ts_prof') ?><span>TechnoStudio · enseignant</span></a>
+                        <a class="dash-widget" href="../miroir/technostudio/?mode=eleve" target="_blank" rel="noopener" title="Ouvre TechnoStudio comme le voient les élèves : parcours guidé, questions débloquées une à une"><?= dash_icone('ts_eleve') ?><span>TechnoStudio · élève</span></a>
                     </div>
                 </nav>
                 <div class="dash-panneau" id="dash-panneau" hidden>
