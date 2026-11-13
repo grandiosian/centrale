@@ -368,6 +368,39 @@ function page_tableau_de_bord(): void
                 $cours_classes[(int) $classe['id']] = ['nom' => $classe['nom'], 'id' => (int) $classe['id'], 'html' => pastille_classe($classe)];
             }
         }
+        // Les cours aujourd'hui : grille horaire de chaque établissement qui a cours, et plan de classe de chaque séance
+        $cours_jour = [];
+        $grilles_jour = [];
+        foreach (seances_du_jour($aujourdhui) as $s) {
+            $k = count($cours_jour);
+            $plan = donnees_plan_seance($s) ?? donnees_plan_seance($s, false);   // sans élèves placés : la salle vide
+            if ($plan) {
+                $plan['atelier'] = $s['intitule'] ?: 'Cours';
+            }
+            $classe = classe_par_id((int) $s['classe_id']);
+            $cours_jour[$k] = ['classe' => $s['classe'], 'debut' => $s['debut'], 'fin' => $s['fin'], 'salle' => $s['salle'],
+                'intitule' => $s['intitule'], 'annule' => $s['statut'] === 'annule', 'plan' => $plan,
+                'places' => $plan ? count((array) $plan['placement']) : 0,
+                'ouvrir' => $s['salle_id'] ? './?p=placement&classe=' . (int) $s['classe_id'] . '&salle=' . (int) $s['salle_id']
+                    . ($s['groupe_id'] ? '&groupe=' . (int) $s['groupe_id'] : '') : './?p=classe&id=' . (int) $s['classe_id'],
+                'pastille' => $classe ? pastille_classe($classe, groupe_seance($s)) : h($s['classe'])];
+            $eid = (int) $s['etablissement_id'];
+            $grilles_jour[$eid] ??= ['nom' => $s['etablissement'], 'creneaux' => creneaux_de($eid), 'seances' => []];
+            $grilles_jour[$eid]['seances'][] = ['k' => $k, 'creneau_id' => (int) $s['creneau_id'], 'duree' => (int) $s['duree']];
+        }
+        // grille resserrée : du premier au dernier créneau occupé (les créneaux libres entre deux cours restent visibles)
+        foreach ($grilles_jour as $eid => $g) {
+            $rangs = [];
+            foreach ($g['creneaux'] as $i => $c) {
+                foreach ($g['seances'] as $x) {
+                    if ($x['creneau_id'] === (int) $c['id']) {
+                        $rangs[] = $i;
+                        $rangs[] = $i + max(1, $x['duree']) - 1;
+                    }
+                }
+            }
+            $grilles_jour[$eid]['creneaux'] = $rangs ? array_slice($g['creneaux'], min($rangs), max($rangs) - min($rangs) + 1) : [];
+        }
         ?>
         <div class="dashboard" id="dashboard">
             <div class="dash-vue" id="dash-vue">
@@ -414,6 +447,48 @@ function page_tableau_de_bord(): void
                                     <ul class="choix-versions-liste" id="choix-versions-liste" role="listbox"></ul>
                                 </div>
                             </div>
+                        <?php endif; ?>
+                        <?php if ($etabs): ?>
+                            <div class="cours-jour" id="cours-jour">
+                                <button type="button" class="dash-widget cj-tete" id="cj-tete" aria-expanded="true" aria-controls="cj-corps">
+                                    <?= dash_icone('calendrier') ?><span>Les cours aujourd’hui</span>
+                                    <?php $n_cj = count(array_filter($cours_jour, fn($c) => !$c['annule'])); ?>
+                                    <?php if ($n_cj): ?><b class="compte-pastille"><?= $n_cj ?></b><?php endif; ?>
+                                </button>
+                                <div class="cj-corps" id="cj-corps">
+                                    <?php if (!$grilles_jour): ?>
+                                        <p class="cj-rien">Pas de cours aujourd’hui.</p>
+                                    <?php endif; ?>
+                                    <?php foreach ($grilles_jour as $g): ?>
+                                        <?php if (count($grilles_jour) > 1): ?><p class="cj-etab"><?= h($g['nom']) ?></p><?php endif; ?>
+                                        <ol class="cj-grille">
+                                            <?php $couvert = 0; foreach ($g['creneaux'] as $i => $c):
+                                                $ici = array_values(array_filter($g['seances'], fn($x) => $x['creneau_id'] === (int) $c['id']));
+                                                $etat = $c['fin'] <= $heure ? 'passe' : ($c['debut'] <= $heure ? 'maintenant' : '');
+                                                foreach ($ici as $x) { $couvert = max($couvert, $i + max(1, $x['duree']) - 1); } ?>
+                                                <li class="cj-ligne <?= $etat ?>">
+                                                    <span class="cj-heure"><?= h($c['debut']) ?><small><?= h($c['libelle']) ?></small></span>
+                                                    <span class="cj-cases">
+                                                    <?php if ($ici): foreach ($ici as $x): $cj = $cours_jour[$x['k']]; ?>
+                                                        <button type="button" class="cj-cours<?= $cj['annule'] ? ' annule' : '' ?>" data-cours="<?= (int) $x['k'] ?>" aria-pressed="false"
+                                                                title="<?= h($cj['classe'] . ' · ' . $cj['debut'] . '–' . $cj['fin'] . ($cj['salle'] !== '' ? ' · salle ' . $cj['salle'] : '') . ($cj['annule'] ? ' · annulé' : '') . ' : afficher le plan de classe') ?>">
+                                                            <?= $cj['pastille'] ?>
+                                                            <span class="cj-infos"><?= h($cj['salle'] !== '' ? $cj['salle'] : 'sans salle') ?><?= $cj['intitule'] !== '' ? ' · ' . h($cj['intitule']) : '' ?></span>
+                                                            <span class="cj-fin"><?= $cj['annule'] ? 'annulé' : '→ ' . h($cj['fin']) ?></span>
+                                                        </button>
+                                                    <?php endforeach; elseif ($i <= $couvert && $i > 0): ?>
+                                                        <span class="cj-suite" aria-hidden="true"></span>
+                                                    <?php else: ?>
+                                                        <span class="cj-libre">—</span>
+                                                    <?php endif; ?>
+                                                    </span>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ol>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                            <script type="application/json" id="json-cours-jour"><?= json_encode($cours_jour, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
                         <?php endif; ?>
                     </div>
                     <div class="dz dz-haut-droite">
@@ -681,7 +756,7 @@ function page_tableau_de_bord(): void
             });
         })();
         </script>
-        <?php if ($en_cours_maintenant || ($simulation && $simulation['plan']) || $plan_suivant || $plans_classes): ?>
+        <?php if ($en_cours_maintenant || ($simulation && $simulation['plan']) || $plan_suivant || $plans_classes || $cours_jour): ?>
         <script src="plan.js?v=<?= @filemtime(__DIR__ . '/../public/admin/plan.js') ?: 1 ?>"></script>
         <script>
         document.querySelectorAll('.plan-data').forEach(function (s) {
@@ -1095,6 +1170,51 @@ function page_tableau_de_bord(): void
                 });
                 document.addEventListener('click', function (ev) {
                     if (!ev.target.closest('#choix-classe')) { choixListe.hidden = true; choixBouton.setAttribute('aria-expanded', 'false'); }
+                });
+            }
+
+            /* Les cours aujourd'hui : un clic sur une séance affiche son plan de classe dans la vue (la salle vide s'il n'y a pas
+               d'élèves placés) ; un second clic revient au plan par défaut. La grille se replie (réglage gardé sur cet ordinateur). */
+            var cjTete = document.getElementById('cj-tete'), cjCorps = document.getElementById('cj-corps');
+            if (cjTete) {
+                var CLE_CJ = 'centrale-cours-jour-replie', coursJour = JSON.parse(document.getElementById('json-cours-jour').textContent),
+                    cjBlocs = {}, cjChoisi = null, cjTitre = vide.querySelector('.dash-vide-titre'), cjTitreDefaut = cjTitre.textContent;
+                function cjReplier(replie) {
+                    cjCorps.hidden = replie;
+                    cjTete.setAttribute('aria-expanded', String(!replie));
+                    try { localStorage.setItem(CLE_CJ, replie ? '1' : ''); } catch (e) { /* stockage bloqué */ }
+                }
+                try { if (localStorage.getItem(CLE_CJ) === '1') cjReplier(true); } catch (e) { /* rien */ }
+                cjTete.addEventListener('click', function () { cjReplier(!cjCorps.hidden); });
+                function cjBloc(k) {
+                    if (cjBlocs[k]) return cjBlocs[k];
+                    var c = coursJour[k], bloc = document.createElement('div'), tete = document.createElement('div'), lien = document.createElement('a');
+                    bloc.className = 'ec-plan';
+                    tete.className = 'ec-sous-titre';
+                    tete.textContent = c.classe + ' · ' + c.debut + '–' + c.fin + ' · salle ' + c.salle + (c.places ? '' : ' (aucun élève placé) ');
+                    lien.className = 'btn petit secondaire';
+                    lien.href = c.ouvrir;
+                    lien.textContent = c.places ? 'Ouvrir' : 'Placer les élèves';
+                    tete.append(' ', lien);
+                    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('class', 'plan-svg apercu-plan');
+                    bloc.append(tete, svg);
+                    document.getElementById('dash-stock').appendChild(bloc);
+                    if (window.PlanSalle) PlanSalle.apercu(svg, c.plan);
+                    return (cjBlocs[k] = bloc);
+                }
+                document.getElementById('cours-jour').addEventListener('click', function (ev) {
+                    var b = ev.target.closest('.cj-cours');
+                    if (!b) return;
+                    document.querySelectorAll('.cj-cours[aria-pressed="true"]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+                    cjTitre.textContent = cjTitreDefaut;
+                    if (cjChoisi === b.dataset.cours) { cjChoisi = null; montrerPlan(planParDefaut()); return; }
+                    cjChoisi = b.dataset.cours;
+                    b.setAttribute('aria-pressed', 'true');
+                    var c = coursJour[cjChoisi];
+                    if (c.plan) { montrerPlan(cjBloc(cjChoisi)); return; }
+                    montrerPlan(null);
+                    cjTitre.textContent = c.classe + ' (' + c.debut + '–' + c.fin + ') : pas de salle dans l’emploi du temps, donc pas de plan de classe.';
                 });
             }
 

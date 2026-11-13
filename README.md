@@ -528,6 +528,7 @@ Adresse : **https://technoversailles.alwaysdata.net/admin/**. Elle n'apparaît p
 - **Accueil** (première page de l'espace enseignant) :
   - Calendrier de la semaine, avec tous les établissements réunis. Chaque cours prend la couleur de son établissement ; les cours annulés sont barrés et les vacances hachurées. Une ligne marque l'heure actuelle, et ◀ ▶ change de semaine.
   - Les 8 prochains cours.
+  - **Les cours aujourd'hui**, sous « Voir une classe » : la grille horaire du jour (du premier au dernier cours, par établissement), avec pour chaque cours la classe, la salle et l'heure de fin. Le créneau en cours est surligné, les cours passés sont estompés et les cours annulés barrés. Un clic affiche le plan de classe de ce cours dans la vue (la salle vide si personne n'est placé) ; un second clic revient au cours en cours. Le widget se replie (réglage gardé sur cet ordinateur).
   - Le récapitulatif des connexions : élèves connectés depuis 1 h, aujourd'hui et sur 7 jours, sessions ouvertes, histogramme des 7 derniers jours, connexions par classe et par atelier, 10 dernières connexions.
 - **Code couleur des classes** : une pastille avec le nom court de la classe en bleu marine.
   - Couleur de la pastille selon le niveau : jaune pour les 4ᵉ, vert pour les 5ᵉ, rouge pour les 3ᵉ (bleu clair pour les 6ᵉ).

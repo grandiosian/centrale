@@ -1356,3 +1356,33 @@ a.dash-widget { text-decoration: none; color: inherit; }
 .mesures-q { margin-top: 6px; font-size: .86rem; }
 .mesures-q td, .mesures-q th { padding: 3px 8px; }
 .mesures-q tr.difficile td { background: color-mix(in srgb, #e6a23c 18%, transparent); }
+
+/* Les cours aujourd'hui (accueil) : grille horaire du jour, sous « Voir une classe » ; un clic montre le plan de classe */
+.cours-jour { width: 300px; display: flex; flex-direction: column; gap: 6px; }
+.cours-jour .cj-tete { width: 100%; justify-content: flex-start; }
+.cours-jour .cj-tete .compte-pastille { margin-left: auto; }
+.cj-corps { max-height: min(40vh, 340px); overflow-y: auto; padding: 6px; background: var(--carte-fond); border: 1px solid var(--carte-bord);
+    border-radius: 12px; box-shadow: var(--carte-ombre); }
+.cj-corps[hidden] { display: none; }
+.cj-rien { margin: 6px; color: var(--doux); font-size: .88rem; }
+.cj-etab { margin: 6px 4px 2px; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--doux); }
+.cj-grille { list-style: none; margin: 0; padding: 0; }
+.cj-ligne { display: grid; grid-template-columns: 52px 1fr; gap: 6px; align-items: stretch; min-height: 30px; }
+.cj-ligne + .cj-ligne { border-top: 1px dashed var(--bord); }
+.cj-heure { font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; padding: 5px 0 0 2px; color: var(--texte); }
+.cj-heure small { display: block; font-size: .68rem; font-weight: 500; color: var(--doux); }
+.cj-ligne.passe .cj-heure, .cj-ligne.passe .cj-cours { opacity: .55; }
+.cj-ligne.maintenant { background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 8px; }
+.cj-ligne.maintenant .cj-heure { color: var(--accent); }
+.cj-cases { display: flex; flex-direction: column; gap: 3px; padding: 3px 0; min-width: 0; }
+.cj-cours { display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 6px; font: inherit; font-size: .84rem; text-align: left;
+    color: var(--texte); background: var(--code-fond); border: 1px solid transparent; border-radius: 8px; cursor: pointer; }
+.cj-cours:hover { border-color: var(--accent); }
+.cj-cours[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cj-cours.annule .cj-infos { text-decoration: line-through; }
+.cj-cours.annule .cj-fin { color: #c0392b; }
+.cj-infos { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cj-fin { flex: none; font-size: .74rem; color: var(--doux); font-variant-numeric: tabular-nums; }
+.cj-suite { display: block; width: 4px; height: 100%; min-height: 22px; margin-left: 10px; border-radius: 2px; background: var(--accent); opacity: .45; }
+.cj-libre { color: var(--doux); font-size: .8rem; padding-top: 5px; }
+@media (max-width: 720px) { .cours-jour { width: 100%; max-width: 360px; } }
