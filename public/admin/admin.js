@@ -12,6 +12,7 @@
   var CLE_ATTENTE = 'centrale-noms-attente'; // noms tapés juste avant une génération de codes
   var CLE_STATUTS = 'centrale-statuts';     // { "4F": { "07": { exclu: "2026-10-15", changement: "2026-10-20" } } } — la sortie reste dans centrale-sorties
   var CLE_CARTONS = 'centrale-cartons';     // { "4F": { "07": [ { type: "observation" | "recompense", texte, date } ] } } — gardés ici, comme les noms
+  var CLE_PRESENCES = 'centrale-presences'; // { "4F": { "07": { "2026-11-13 08:45": "absent" | "retard" } } } — l'appel, séance par séance
   var CLE_BESOINS = 'centrale-besoins';     // { "5A": { "07": ["PAP", "PAI"], … } } — PPS, PAP, PAI, PPRE
   var TYPES_BESOINS = ['PPS', 'PAP', 'PAI', 'PPRE'];
   var CLE_CODES = 'centrale-codes';         // { "5A": { "07": "5A-abcdefg-hjkm-npqrs" } } — copie locale pour réimprimer
@@ -220,7 +221,7 @@
     if (!bloc) return;
     var liste = [];
     try { liste = JSON.parse(bloc.textContent) || []; } catch (e) { return; }
-    [CLE_NOMS, CLE_BESOINS, CLE_CODES, CLE_SORTIES, CLE_STATUTS, CLE_CARTONS].forEach(function (cle) {
+    [CLE_NOMS, CLE_BESOINS, CLE_CODES, CLE_SORTIES, CLE_STATUTS, CLE_CARTONS, CLE_PRESENCES].forEach(function (cle) {
       var carte = lireCle(cle), change = false;
       liste.forEach(function (r) {
         if (!carte[r.ancien] || r.ancien === r.nouveau) return;
@@ -264,6 +265,32 @@
     var liste = cartonsLocaux(classe, numero);
     liste.splice(index, 1);
     ecrireCartons(classe, numero, liste);
+  }
+
+  /* Appel : absences et retards par séance (« 2026-11-13 08:45 », ou la date seule hors cours), gardés sur cet ordinateur */
+  var ETATS_PRESENCE = { absent: 'Absent', retard: 'En retard' };
+  function presencesLocales(classe, numero) { return Object.assign({}, (lireCle(CLE_PRESENCES)[classe] || {})[numero] || {}); }
+  function presence(classe, numero, seance) { return presencesLocales(classe, numero)[seance] || ''; }
+  function definirPresence(classe, numero, seance, etat) {
+    var carte = lireCle(CLE_PRESENCES);
+    carte[classe] = carte[classe] || {};
+    var e = carte[classe][numero] || {};
+    if (ETATS_PRESENCE[etat]) e[seance] = etat; else delete e[seance];
+    if (Object.keys(e).length) carte[classe][numero] = e; else delete carte[classe][numero];
+    if (!Object.keys(carte[classe]).length) delete carte[classe];
+    ecrireCle(CLE_PRESENCES, carte);
+  }
+  /** Absences et retards d'un élève, du plus récent au plus ancien : [{ seance, date, heure, etat }]. */
+  function absencesLocales(classe, numero) {
+    var p = presencesLocales(classe, numero);
+    return Object.keys(p).sort().reverse().map(function (k) {
+      return { seance: k, date: k.slice(0, 10), heure: k.slice(11), etat: p[k] };
+    });
+  }
+  /** Date du jour en heure locale (AAAA-MM-JJ). */
+  function dateLocale() {
+    var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
   }
 
   /* ---------- Affichage ---------- */
@@ -417,6 +444,11 @@
     autreMotif: AUTRE_MOTIF,
     ajouterCarton: function (c, n, t, x) { ajouterCarton(c, n, t, x); afficherNoms(); },
     supprimerCarton: function (c, n, i) { supprimerCarton(c, n, i); afficherNoms(); },
+    presence: presence,
+    etatsPresence: ETATS_PRESENCE,
+    definirPresence: function (c, n, s, e) { definirPresence(c, n, s, e); afficherNoms(); },
+    absences: absencesLocales,
+    dateLocale: dateLocale,
     raison: raisonSansPhoto,
     styleVisage: styleVisage,
     lireCSV: function (texte) { return lireCSV(texte); },
@@ -624,7 +656,7 @@
   document.querySelectorAll('.oublier-liste').forEach(function (b) {
     b.addEventListener('click', function () {
       if (!confirmerEnLigne(b, "Effacer les noms, PAP… , codes et photos de ce navigateur ? Gardez bien votre fichier CSV (et celui des photos) : ce sont les seules copies.", b.parentNode)) return;
-      try { [CLE_NOMS, CLE_BESOINS, CLE_CODES, CLE_SORTIES, CLE_STATUTS, CLE_CARTONS, CLE_FEUILLES, 'centrale-trombi', 'centrale-photos'].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) { /* rien */ }
+      try { [CLE_NOMS, CLE_BESOINS, CLE_CODES, CLE_SORTIES, CLE_STATUTS, CLE_CARTONS, CLE_PRESENCES, CLE_FEUILLES, 'centrale-trombi', 'centrale-photos'].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) { /* rien */ }
       try { indexedDB.deleteDatabase('centrale-trombi'); } catch (e) { /* rien */ }
       afficherNoms();
     });
@@ -1015,6 +1047,7 @@
       var sorties = lireSorties(); delete sorties[classeR]; ecrireCle(CLE_SORTIES, sorties);
       var cartons = lireCle(CLE_CARTONS); delete cartons[classeR]; ecrireCle(CLE_CARTONS, cartons);
       var statuts = lireCle(CLE_STATUTS); delete statuts[classeR]; ecrireCle(CLE_STATUTS, statuts);
+      var presences = lireCle(CLE_PRESENCES); delete presences[classeR]; ecrireCle(CLE_PRESENCES, presences);
       try { sessionStorage.setItem('centrale-reinit', JSON.stringify({ classe: classeR, noms: listeR })); } catch (e) { /* stockage bloqué */ }
     });
   }
@@ -1170,11 +1203,15 @@
       return n + Object.keys(d.cartons[c] || {}).reduce(function (m, k) { return m + (d.cartons[c][k] || []).length; }, 0);
     }, 0);
     var codes = Object.keys(d.codes || {}).reduce(function (n, c) { return n + Object.keys(d.codes[c] || {}).length; }, 0);
+    var appel = Object.keys(d.presences || {}).reduce(function (n, c) {
+      return n + Object.keys(d.presences[c] || {}).reduce(function (m, k) { return m + Object.keys(d.presences[c][k] || {}).length; }, 0);
+    }, 0);
     var lignes = [
       classes.length + ' classe(s) désanonymisée(s) : ' + elevesAvecNom + ' élève(s) avec leur nom'
         + (classes.length ? ' (' + classes.slice(0, 8).join(', ') + (classes.length > 8 ? '…' : '') + ')' : ''),
       nbImages + ' trombinoscope(s) de photos',
       cartons + ' carton(s) : observations et récompenses',
+      appel + ' absence(s) ou retard(s) notés à l’appel',
       codes + ' code(s) de connexion',
     ];
     return lignes;
@@ -1202,7 +1239,7 @@
       var donnees = {
         format: 'centrale-deanonim', version: 2, exporte_le: aujourdhui(),
         noms: lire(), besoins: lireBesoins(), codes: lireCle(CLE_CODES), sorties: lireSorties(), statuts: lireCle(CLE_STATUTS), cartons: lireCle(CLE_CARTONS),
-        feuilles: feuilles, images: images,
+        presences: lireCle(CLE_PRESENCES), feuilles: feuilles, images: images,
       };
       telechargerFichier('centrale_' + aujourdhui() + '.desanonim', JSON.stringify(donnees, null, 1), 'application/json');
       confirmerSucces('Sauvegarde créée : centrale_' + aujourdhui() + '.desanonim', bilanSauvegarde(donnees, Object.keys(images).length).concat(['Rangez ce fichier dans votre Nuage.']));
@@ -1241,6 +1278,7 @@
       var sorties = lireSorties(); Object.assign(sorties, d.sorties || {}); ecrireCle(CLE_SORTIES, sorties);
       var cartons = lireCle(CLE_CARTONS); Object.assign(cartons, d.cartons || {}); ecrireCle(CLE_CARTONS, cartons);
       var statuts = lireCle(CLE_STATUTS); Object.assign(statuts, d.statuts || {}); ecrireCle(CLE_STATUTS, statuts);
+      var presences = lireCle(CLE_PRESENCES); Object.assign(presences, d.presences || {}); ecrireCle(CLE_PRESENCES, presences);
       var feuilles = lireFeuilles(); Object.assign(feuilles, d.feuilles || {}); ecrireFeuilles(feuilles);
       return Promise.all(x.images.map(function (im) {
         return ecrireImage(im.nom, im.blob).then(function () {

@@ -399,14 +399,19 @@ window.PlanSalle3D = (function () {
   }
 
   var ECHELLE_CARTON = 0.0085;   // unités 3D par pixel des petits cartons
-  /** Petits cartons, un par observation (jaune) ou récompense (vert). */
+  /** Petits cartons, un par observation (jaune) ou récompense (vert) ; d'abord la pastille d'appel (absent, en retard). */
   function carteCartons(types) {
     var cv = document.createElement('canvas'), g = cv.getContext('2d');
     var montres = types.slice(0, 5), reste = types.length - montres.length;
     cv.width = montres.length * 30 + 12 + (reste ? 40 : 0); cv.height = 40;
     montres.forEach(function (t, i) {
       var x = 6 + i * 30;
-      if (t === 'recompense') {   // médaille verte : ruban rouge en dessous
+      if (t === 'absent' || t === 'retard') {   // appel : pastille rouge « A » (absent) ou orange « R » (en retard)
+        g.beginPath(); g.arc(x + 12, 20, 15, 0, Math.PI * 2);
+        g.fillStyle = t === 'absent' ? '#c0392b' : '#e67e22'; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
+        g.fillStyle = '#ffffff'; g.font = '800 18px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(t === 'absent' ? 'A' : 'R', x + 12, 21);
+      } else if (t === 'recompense') {   // médaille verte : ruban rouge en dessous
         g.fillStyle = '#c0392b';
         g.fillRect(x + 4, 22, 7, 15); g.fillRect(x + 13, 22, 7, 15);
         g.beginPath(); g.arc(x + 12, 15, 11, 0, Math.PI * 2);

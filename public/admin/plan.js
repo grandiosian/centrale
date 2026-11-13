@@ -1043,6 +1043,7 @@ window.PlanSalle = (function () {
     if (besoins.length && cn.pastilles) rang('Besoins', cn.pastilles(besoins));
     corps.appendChild(detail);
 
+    if (cn && cn.presence) corps.appendChild(sectionPresence(d, e.numero, actualiser));
     if (cn && cn.cartons) corps.appendChild(sectionCartons(d.classe, e.numero, actualiser));
 
     // code de connexion : seulement la copie gardée sur cet ordinateur, masquée jusqu'au clic
@@ -1062,6 +1063,36 @@ window.PlanSalle = (function () {
       bloc.append('Code de connexion : ', valeur, ' ', bouton);
       montrer(false);
     }
+  }
+
+  /** Présence à la séance (présent, absent, en retard), puis le relevé des absences et retards de l'élève. */
+  function sectionPresence(d, numero, actualiser) {
+    var cn = window.CentraleNoms, s = seanceDe(d), bloc = creer('div', 'fiche-presence');
+    bloc.appendChild(creer('p', 'fiche-trois-cartons-titre', 'Présence · ' + s.libelle));
+    var actuel = cn.presence(d.classe, numero, s.cle), choix = creer('div', 'presence-choix');
+    [['', 'Présent'], ['absent', 'Absent'], ['retard', 'En retard']].forEach(function (x) {
+      var b = creer('button', 'presence-' + (x[0] || 'present'), x[1]);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(actuel === x[0]));
+      b.addEventListener('click', function () { cn.definirPresence(d.classe, numero, s.cle, x[0]); actualiser(); });
+      choix.appendChild(b);
+    });
+    bloc.appendChild(choix);
+    var liste = cn.absences(d.classe, numero);
+    var nbA = liste.filter(function (x) { return x.etat === 'absent'; }).length, nbR = liste.length - nbA;
+    bloc.appendChild(creer('p', 'discret presence-bilan', liste.length
+      ? nbA + ' absence' + (nbA > 1 ? 's' : '') + ' · ' + nbR + ' retard' + (nbR > 1 ? 's' : '') + ' notés sur cet ordinateur'
+      : 'Aucune absence ni retard noté.'));
+    if (liste.length) {
+      var ul = creer('ul', 'presence-liste');
+      liste.slice(0, 8).forEach(function (x) {
+        var jour = x.date.split('-').reverse().join('/');
+        ul.appendChild(creer('li', 'presence-' + x.etat, cn.etatsPresence[x.etat] + ' · ' + jour + (x.heure ? ' (cours de ' + x.heure + ')' : '')));
+      });
+      if (liste.length > 8) ul.appendChild(creer('li', 'discret', '+ ' + (liste.length - 8) + ' autre(s)'));
+      bloc.appendChild(ul);
+    }
+    return bloc;
   }
 
   /** Cartons de l'élève : cartons préremplis en rang, carton personnalisé, puis la liste des cartons donnés. */
@@ -1202,6 +1233,28 @@ window.PlanSalle = (function () {
     return Object.assign({}, d.etiquette, { atelier: d.atelier || 'aucun cours', eleves: actifs, observations: observations });
   }
 
+  /* ---------- Appel : absences et retards de la séance affichée (gardés dans le navigateur, voir admin.js) ---------- */
+
+  /** Séance d'un plan : celle du cours (« 2026-11-13 08:45 ») ou, à défaut, la journée. */
+  function seanceDe(d) {
+    if (d.seance && d.seance.cle) return d.seance;
+    var cn = window.CentraleNoms;
+    return { cle: cn && cn.dateLocale ? cn.dateLocale() : new Date().toISOString().slice(0, 10), libelle: 'aujourd’hui' };
+  }
+  function enAppel() { return document.documentElement.classList.contains('mode-appel'); }
+  var SUIVANT_APPEL = { '': 'absent', absent: 'retard', retard: '' };
+  /** Compteur du bouton « Faire l'appel » (accueil) pour le plan affiché dans la vue. */
+  function compterAppel(d) {
+    var cn = window.CentraleNoms, compte = document.getElementById('appel-compte');
+    if (!compte || !cn || !cn.presence) return;
+    var s = seanceDe(d), a = 0, r = 0;
+    (d.eleves || []).forEach(function (e) {
+      var p = cn.presence(d.classe, e.numero, s.cle);
+      if (p === 'absent') a++; else if (p === 'retard') r++;
+    });
+    compte.textContent = d.classe + ' · ' + s.libelle + ' : ' + (a || r ? a + ' absent' + (a > 1 ? 's' : '') + ', ' + r + ' retard' + (r > 1 ? 's' : '') : 'tous présents');
+  }
+
   /** Aperçu en lecture seule d'un plan placé (accueil) : dessine la salle + les élèves posés. */
   function apercu(svg, d) {
     if (!svg || !d || !d.plan) return;
@@ -1239,12 +1292,27 @@ window.PlanSalle = (function () {
         infos: {
           nomPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? nom(e) : ''; },
           visagePlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? photo(d.classe, e.numero) : null; },
-      cartonsPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e && window.CentraleNoms && window.CentraleNoms.cartons ? window.CentraleNoms.cartons(d.classe, e.numero).map(function (c) { return c.type; }) : []; },
-          surClic: function (idPlace) { ficheEleve(svg, d, carte, idPlace); },
+          cartonsPlace: function (o) {
+            var id = carte[o.id], e = id && eleve(id), cn = window.CentraleNoms;
+            if (!e || !cn || !cn.cartons) return [];
+            var p = cn.presence ? cn.presence(d.classe, e.numero, seanceDe(d).cle) : '';
+            return (p ? [p] : []).concat(cn.cartons(d.classe, e.numero).map(function (c) { return c.type; }));
+          },
+          surClic: function (idPlace) {
+            var cn = window.CentraleNoms, e = carte[idPlace] && eleve(carte[idPlace]);
+            if (enAppel() && e && cn && cn.definirPresence) {   // appel : présent → absent → en retard → présent
+              cn.definirPresence(d.classe, e.numero, seanceDe(d).cle, SUIVANT_APPEL[cn.presence(d.classe, e.numero, seanceDe(d).cle)] || '');
+              return;
+            }
+            ficheEleve(svg, d, carte, idPlace);
+          },
         },
       });
     }
+    var rendreDessin = rendre;
+    rendre = function () { rendreDessin(); if (svg.closest('#dash-plan')) compterAppel(d); };
     rendre();
+    document.addEventListener('centrale-appel', function () { if (svg.closest('#dash-plan')) compterAppel(d); });
     document.addEventListener('centrale-noms', rendre);   // redessine quand les noms locaux sont chargés
     document.addEventListener('centrale-vue', rendre);    // et quand la présentation change
   }

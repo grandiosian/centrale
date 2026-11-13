@@ -160,6 +160,9 @@ function donnees_plan_seance(array $s, bool $exiger_placement = true): ?array
         'salle_id'  => $salle_id,
         'classe_id' => $classe_id,
         'groupe_id' => $groupe_id,
+        // séance de l'appel (absences, retards) : le cours, s'il est connu ; sinon la journée (choisi dans le navigateur)
+        'seance'    => isset($s['date'], $s['debut']) ? ['cle' => $s['date'] . ' ' . $s['debut'],
+            'libelle' => 'cours de ' . $s['debut'] . ($s['date'] !== aujourd_hui() ? ' le ' . date('d/m', (int) strtotime($s['date'])) : '')] : null,
     ];
 }
 
@@ -489,6 +492,12 @@ function page_tableau_de_bord(): void
                                 </div>
                             </div>
                             <script type="application/json" id="json-cours-jour"><?= json_encode($cours_jour, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+                        <?php endif; ?>
+                        <?php if ($plans_classes || $cours_jour || $en_cours_maintenant): ?>
+                            <button type="button" class="dash-widget appel-bouton" id="appel-bouton" aria-pressed="false"
+                                    title="Faire l’appel sur le plan affiché : chaque clic sur un élève le marque absent, puis en retard, puis présent. Gardé sur cet ordinateur seulement.">
+                                <?= dash_icone('valider') ?><span><strong id="appel-titre">Faire l’appel</strong><small id="appel-compte"></small></span>
+                            </button>
                         <?php endif; ?>
                     </div>
                     <div class="dz dz-haut-droite">
@@ -1215,6 +1224,19 @@ function page_tableau_de_bord(): void
                     if (c.plan) { montrerPlan(cjBloc(cjChoisi)); return; }
                     montrerPlan(null);
                     cjTitre.textContent = c.classe + ' (' + c.debut + '–' + c.fin + ') : pas de salle dans l’emploi du temps, donc pas de plan de classe.';
+                });
+            }
+
+            /* Faire l'appel : en mode appel, un clic sur un élève du plan affiché le marque absent → en retard → présent
+               (plan.js) ; sinon il ouvre sa fiche. Les absences restent dans ce navigateur, comme les noms et les cartons. */
+            var appelBouton = document.getElementById('appel-bouton');
+            if (appelBouton) {
+                appelBouton.addEventListener('click', function () {
+                    var on = !document.documentElement.classList.contains('mode-appel');
+                    document.documentElement.classList.toggle('mode-appel', on);
+                    appelBouton.setAttribute('aria-pressed', String(on));
+                    document.getElementById('appel-titre').textContent = on ? 'Appel en cours · cliquez les élèves' : 'Faire l’appel';
+                    document.dispatchEvent(new Event('centrale-appel'));
                 });
             }
 
