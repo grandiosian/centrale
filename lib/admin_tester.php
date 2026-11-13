@@ -139,7 +139,11 @@ function action_tester(string $action): bool
                     $n++;
                 }
             }
-            db()->prepare('DELETE FROM etablissements WHERE nom = ? COLLATE NOCASE')->execute([ETABLISSEMENT_SIMULE]);   // grille, salle, cours
+            foreach (db()->query('SELECT id, nom FROM etablissements')->fetchAll() as $e) {   // avec sa grille, sa salle et ses cours
+                if (est_etablissement_simule($e['nom'])) {
+                    db()->prepare('DELETE FROM etablissements WHERE id = ?')->execute([$e['id']]);
+                }
+            }
             flash($n ? "Classes simulées supprimées ($n), avec l’établissement " . ETABLISSEMENT_SIMULE . '.' : 'Aucune classe simulée.');
             rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#simulees');
     }
@@ -149,6 +153,7 @@ function action_tester(string $action): bool
 /** Carte « Classes simulées » : des élèves fictifs aux profils variés, pour voir le suivi comme en situation réelle. */
 function carte_simulees(string $retour): void
 {
+    completer_classes_simulees();
     $classes = array_values(array_filter(db()->query('SELECT c.id, c.nom, (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id) AS n
                                                       FROM classes c ORDER BY c.nom DESC')->fetchAll(), fn($c) => est_classe_simulee($c['nom'])));
     $app = programme_simule(5)[0]['app'] ?? '';

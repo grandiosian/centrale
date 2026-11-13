@@ -41,13 +41,19 @@ const PROFILS_SIMULES = [
 ];
 
 /** Établissement des classes simulées : grille horaire, salle SIM1 meublée, un cours par groupe chaque jour. */
-const ETABLISSEMENT_SIMULE = 'SIMTEST';
+const ETABLISSEMENT_SIMULE = 'Collège SIM';
+const ANCIENS_NOMS_ETABLISSEMENT_SIMULE = ['SIMTEST'];   // renommé en « Collège SIM » à la première occasion
 /** Cours de chaque classe simulée : groupe => créneau (tous les jours, du lundi au samedi). */
 const COURS_SIMULES = ['5SIM' => ['GR1' => 'M2', 'GR2' => 'M3'], '4SIM' => ['GR1' => 'S1', 'GR2' => 'S2']];
 
 function est_etablissement_simule(string $nom): bool
 {
-    return strcasecmp(trim($nom), ETABLISSEMENT_SIMULE) === 0;
+    foreach (array_merge([ETABLISSEMENT_SIMULE], ANCIENS_NOMS_ETABLISSEMENT_SIMULE) as $n) {
+        if (mb_strtolower(trim($nom)) === mb_strtolower($n)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /** Plan de la salle SIM1 : 6 îlots de 4 places, tableau, bureau, porte, fenêtres, quelques ordinateurs. */
@@ -80,13 +86,20 @@ function plan_salle_simulee(): array
             'objets' => $objets];
 }
 
-/** Crée (une fois) l'établissement SIMTEST : [id, salle_id, créneaux libellé => id]. */
+/** Crée (une fois) le Collège SIM (ou renomme l'ancien SIMTEST) : [id, salle_id, créneaux libellé => id]. */
 function etablissement_simule(): array
 {
     $pdo = db();
-    $st = $pdo->prepare('SELECT id FROM etablissements WHERE nom = ? COLLATE NOCASE');
-    $st->execute([ETABLISSEMENT_SIMULE]);
-    $eid = (int) $st->fetchColumn();
+    $eid = 0;
+    foreach ($pdo->query('SELECT id, nom FROM etablissements')->fetchAll() as $e) {
+        if (est_etablissement_simule($e['nom'])) {
+            $eid = (int) $e['id'];
+            if ($e['nom'] !== ETABLISSEMENT_SIMULE) {
+                $pdo->prepare("UPDATE etablissements SET nom = ?, code = 'SIM' WHERE id = ?")->execute([ETABLISSEMENT_SIMULE, $eid]);
+            }
+            break;
+        }
+    }
     if (!$eid) {
         $pdo->prepare("INSERT INTO etablissements (nom, zone, ab_actif, samedi, couleur, code, cree_le) VALUES (?, '', 0, 1, '#8e44ad', 'SIM', ?)")
             ->execute([ETABLISSEMENT_SIMULE, time()]);
@@ -110,6 +123,95 @@ function etablissement_simule(): array
         $creneaux[$c['libelle']] = (int) $c['id'];
     }
     return [$eid, $salle, $creneaux];
+}
+
+/**
+ * Range une classe simulée dans le Collège SIM : groupes GR1 / GR2 (élèves répartis s'il le faut), un cours de
+ * Technologie par groupe chaque jour en salle SIM1, et les élèves placés (par groupe et classe entière).
+ * Refait à l'identique à chaque appel (les cours et placements de la classe sont remplacés). Sans transaction.
+ */
+function installer_classe_simulee(int $classe_id, string $nom): void
+{
+    $pdo = db();
+    [$etab_id, $salle_id, $creneaux] = etablissement_simule();
+    $pdo->prepare('UPDATE classes SET etablissement_id = ? WHERE id = ?')->execute([$etab_id, $classe_id]);
+    // groupes GR1, GR2
+    $groupes = [];
+    foreach (['GR1', 'GR2'] as $i => $g) {
+        $st = $pdo->prepare('SELECT id FROM groupes WHERE classe_id = ? AND nom = ?');
+        $st->execute([$classe_id, $g]);
+        $gid = (int) $st->fetchColumn();
+        if (!$gid) {
+            $pdo->prepare('INSERT INTO groupes (classe_id, nom, ordre) VALUES (?, ?, ?)')->execute([$classe_id, $g, $i + 1]);
+            $gid = (int) $pdo->lastInsertId();
+        }
+        $groupes[$i] = $gid;
+    }
+    $st = $pdo->prepare("SELECT id, groupe_id FROM eleves WHERE classe_id = ?
+        ORDER BY CASE WHEN etiquette GLOB '[0-9]*' THEN CAST(etiquette AS INTEGER) ELSE 9999 END, etiquette");
+    $st->execute([$classe_id]);
+    $par_groupe = [[], []];
+    foreach ($st->fetchAll() as $i => $e) {
+        $g = array_search((int) $e['groupe_id'], $groupes, true);
+        if ($g === false) {   // élève sans groupe : un sur deux en GR1, l'autre en GR2
+            $g = $i % 2;
+            $pdo->prepare('UPDATE eleves SET groupe_id = ? WHERE id = ?')->execute([$groupes[$g], $e['id']]);
+        }
+        $par_groupe[$g][] = (int) $e['id'];
+    }
+    // plans de classe
+    $pdo->prepare('DELETE FROM placements WHERE classe_id = ?')->execute([$classe_id]);
+    $plan = plan_de(['plan' => json_encode(plan_salle_simulee())]);
+    $places = array_values(array_filter($plan['objets'], fn($o) => $o['type'] === 'place'));
+    usort($places, fn($a, $b) => [$a['y'], $a['x']] <=> [$b['y'], $b['x']]);
+    $placer = $pdo->prepare('INSERT INTO placements (classe_id, groupe_id, salle_id, place, eleve_id) VALUES (?, ?, ?, ?, ?)');
+    foreach ([0, 1] as $g) {
+        foreach (array_slice($par_groupe[$g], 0, intdiv(count($places), 2)) as $i => $eid) {
+            $placer->execute([$classe_id, $groupes[$g], $salle_id, $places[$i * 2 + $g]['id'], $eid]);   // une place sur deux
+        }
+    }
+    foreach (array_slice(array_merge(...$par_groupe), 0, count($places)) as $i => $eid) {
+        $placer->execute([$classe_id, 0, $salle_id, $places[$i]['id'], $eid]);
+    }
+    // emploi du temps
+    $pdo->prepare('DELETE FROM cours WHERE classe_id = ?')->execute([$classe_id]);
+    foreach (COURS_SIMULES[mb_strtoupper(trim($nom))] ?? ['GR1' => 'M2', 'GR2' => 'M3'] as $g => $creneau) {
+        for ($jour = 1; $jour <= 6; $jour++) {
+            $pdo->prepare("INSERT INTO cours (classe_id, jour, creneau_id, duree, semaine, salle_id, intitule, groupe_id) VALUES (?, ?, ?, 1, '', ?, 'Technologie', ?)")
+                ->execute([$classe_id, $jour, $creneaux[$creneau], $salle_id, $groupes[$g === 'GR1' ? 0 : 1]]);
+        }
+    }
+}
+
+/**
+ * Classes simulées créées avant le Collège SIM (ou dont le plan a été effacé) : on les y range.
+ * Appelé à l'ouverture de l'accueil et de l'onglet Ateliers ; ne fait rien quand tout est en place.
+ */
+function completer_classes_simulees(): void
+{
+    $pdo = db();
+    $classes = array_filter($pdo->query('SELECT id, nom, etablissement_id FROM classes')->fetchAll(), fn($c) => est_classe_simulee($c['nom']));
+    if (!$classes) {
+        return;
+    }
+    try {
+        foreach ($classes as $c) {
+            $etab = $c['etablissement_id'] ? etablissement_par_id((int) $c['etablissement_id']) : null;
+            $st = $pdo->prepare('SELECT (SELECT COUNT(*) FROM placements WHERE classe_id = ?) * (SELECT COUNT(*) FROM cours WHERE classe_id = ?)');
+            $st->execute([$c['id'], $c['id']]);
+            $installe = $etab && est_etablissement_simule((string) $etab['nom']) && $etab['nom'] === ETABLISSEMENT_SIMULE && (int) $st->fetchColumn() > 0;
+            if (!$installe) {
+                $pdo->beginTransaction();
+                installer_classe_simulee((int) $c['id'], (string) $c['nom']);
+                $pdo->commit();
+            }
+        }
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Classes simulées : ' . $e->getMessage());
+    }
 }
 
 function est_classe_simulee(string $nom): bool
@@ -269,7 +371,7 @@ function simuler_classe(string $nom, int $niveau): array
         if ($ancien = $st->fetchColumn()) {
             supprimer_classe_simulee((int) $ancien);
         }
-        [$etab_id, $salle_id, $creneaux_sim] = etablissement_simule();
+        [$etab_id] = etablissement_simule();
         $pdo->prepare('INSERT INTO classes (nom, cree_le, etablissement_id) VALUES (?, ?, ?)')->execute([$nom, time(), $etab_id]);
         $classe_id = (int) $pdo->lastInsertId();
         oublier_renommage($nom);
@@ -460,25 +562,7 @@ function simuler_classe(string $nom, int $niveau): array
             }
         }
 
-        // Emploi du temps (un cours par groupe chaque jour, salle SIM1) et plans de classe : par groupe et classe entière
-        $plan = plan_de(['plan' => json_encode(plan_salle_simulee())]);
-        $places = array_values(array_filter($plan['objets'], fn($o) => $o['type'] === 'place'));
-        usort($places, fn($a, $b) => [$a['y'], $a['x']] <=> [$b['y'], $b['x']]);
-        $placer = $pdo->prepare('INSERT INTO placements (classe_id, groupe_id, salle_id, place, eleve_id) VALUES (?, ?, ?, ?, ?)');
-        foreach ([0, 1] as $g) {
-            foreach ($par_groupe[$g] as $i => $eid_g) {
-                $placer->execute([$classe_id, $groupes[$g], $salle_id, $places[($i * 2) % count($places)]['id'], $eid_g]);
-            }
-        }
-        foreach (array_merge(...$par_groupe) as $i => $eid_c) {
-            $placer->execute([$classe_id, 0, $salle_id, $places[$i % count($places)]['id'], $eid_c]);
-        }
-        foreach (COURS_SIMULES[strtoupper($nom)] ?? [] as $g => $creneau) {
-            for ($jour = 1; $jour <= 6; $jour++) {
-                $pdo->prepare("INSERT INTO cours (classe_id, jour, creneau_id, duree, semaine, salle_id, intitule, groupe_id) VALUES (?, ?, ?, 1, '', ?, 'Technologie', ?)")
-                    ->execute([$classe_id, $jour, $creneaux_sim[$creneau], $salle_id, $groupes[$g === 'GR1' ? 0 : 1]]);
-            }
-        }
+        installer_classe_simulee($classe_id, $nom);   // établissement, salle, cours, plans de classe
         $pdo->commit();
     } catch (Throwable $e) {
         $pdo->rollBack();

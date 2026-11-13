@@ -225,6 +225,7 @@ function themes_apercu(): array
 
 function page_tableau_de_bord(): void
 {
+    completer_classes_simulees();   // classes simulées sans Collège SIM ni plan : on les y range
     $pdo = db();
     $aujourdhui = aujourd_hui();
     $lundi = lundi_de(date_valide((string) ($_GET['semaine'] ?? '')) ? (string) $_GET['semaine'] : $aujourdhui);
