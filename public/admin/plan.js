@@ -399,7 +399,8 @@ window.PlanSalle = (function () {
         var lw = largeurVue(o), lh = hauteurVue(o);
         return tr.rect(o.x + fx * lw, o.y + fy * lh, fw * lw, fh * lh);
       },
-    }, { surClic: infos.surClic || null, quand: function () { document.dispatchEvent(new Event('centrale-vue')); } });
+    }, { surClic: infos.surClic || null, surGlisser: infos.surGlisser || null, peutGlisser: infos.peutGlisser || null, libelle: infos.libelle || null,
+         quand: function () { document.dispatchEvent(new Event('centrale-vue')); } });
     return {};
   }
 
@@ -864,21 +865,42 @@ window.PlanSalle = (function () {
 
     function nom(e) {
       var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : '';
-      return n || ('n° ' + e.numero);
+      return n || e.simule || ('n° ' + e.numero);
     }
     function eleve(id) { return d.eleves.find(function (e) { return e.id === id; }); }
     function placeDe(id) { return Object.keys(carte).find(function (p) { return carte[p] === id; }); }
 
+    /** Pose l'élève sur la place ; si elle est prise, son occupant part à l'ancienne place de l'élève (échange),
+        ou redevient non placé si l'élève venait de la liste. */
     function poser(place, id) {
-      var ancienne = placeDe(id);
+      var ancienne = placeDe(id), occupant = carte[place];
       if (ancienne) delete carte[ancienne];
       carte[place] = id;
+      if (occupant && occupant !== id) {
+        if (ancienne) carte[ancienne] = occupant;
+      }
+      modifie();
     }
+    /** Le plan affiché diffère du plan enregistré : on le signale (et « Charger une variante » demande confirmation). */
+    var initial = JSON.stringify(Object.keys(carte).sort().map(function (k) { return [k, carte[k]]; }));
+    function modifie() {
+      var maintenant = JSON.stringify(Object.keys(carte).sort().map(function (k) { return [k, carte[k]]; }));
+      document.body.classList.toggle('plan-modifie', maintenant !== initial);
+    }
+    var ignorerClic = false;   // un glisser-déposer ne compte pas comme un clic
 
     /** Clic sur une place (plan ou vue 3D) : pose l'élève sélectionné, ou reprend celui de la place. */
     function clicPlace(id) {
+      if (ignorerClic) { ignorerClic = false; return; }
       if (choisi) { poser(id, choisi); choisi = null; }
-      else if (carte[id]) { choisi = carte[id]; delete carte[id]; }
+      else if (carte[id]) { choisi = carte[id]; delete carte[id]; modifie(); }
+      rendre();
+    }
+    /** Glisser un élève d'une place à une autre (vue à plat ou 3D) : les deux élèves échangent leurs places. */
+    function glisser(de, vers) {
+      if (!carte[de] || de === vers) return;
+      poser(vers, carte[de]);
+      choisi = null;
       rendre();
     }
 
@@ -888,7 +910,49 @@ window.PlanSalle = (function () {
       visagePlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? photo(d.classe, e.numero) : null; },
       cartonsPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e && window.CentraleNoms && window.CentraleNoms.cartons ? window.CentraleNoms.cartons(d.classe, e.numero).map(function (c) { return c.type; }) : []; },
       surClic: function (idPlace) { clicPlace(idPlace); },
+      surGlisser: glisser,
+      peutGlisser: function (idPlace) { return !!carte[idPlace]; },
+      libelle: function (idPlace) { var e = eleve(carte[idPlace]); return e ? nom(e) : ''; },
     };
+
+    /** Vue à plat : glisser une place occupée vers une autre place (échange) ou vers la liste (l'élève n'est plus placé). */
+    function glisserSvg(g, idPlace, ev) {
+      if (ev.button !== 0) return;
+      var x0 = ev.clientX, y0 = ev.clientY, vignette = null, cible = null;
+      function bouge(e2) {
+        if (!vignette && Math.abs(e2.clientX - x0) + Math.abs(e2.clientY - y0) > 5) {
+          vignette = document.createElement('div');
+          vignette.className = 'glisse-eleve';
+          var el0 = eleve(carte[idPlace]);
+          vignette.textContent = el0 ? nom(el0) : '';
+          document.body.appendChild(vignette);
+          g.classList.add('glisse-source');
+        }
+        if (!vignette) return;
+        vignette.style.left = e2.clientX + 'px';
+        vignette.style.top = e2.clientY + 'px';
+        var sous = document.elementFromPoint(e2.clientX, e2.clientY), p = sous && sous.closest ? sous.closest('[data-place]') : null;
+        if (cible && cible !== p) cible.classList.remove('survol');
+        cible = p;
+        if (cible) cible.classList.add('survol');
+        liste.classList.toggle('depot', !!(sous && sous.closest && sous.closest('#liste-eleves')));
+      }
+      function lache(e2) {
+        document.removeEventListener('pointermove', bouge);
+        document.removeEventListener('pointerup', lache);
+        if (!vignette) return;   // simple clic : géré par « click »
+        vignette.remove();
+        g.classList.remove('glisse-source');
+        liste.classList.remove('depot');
+        ignorerClic = true;
+        setTimeout(function () { ignorerClic = false; }, 0);
+        var sous = document.elementFromPoint(e2.clientX, e2.clientY);
+        if (sous && sous.closest && sous.closest('#liste-eleves')) { delete carte[idPlace]; modifie(); rendre(); return; }
+        if (cible) glisser(idPlace, cible.getAttribute('data-place'));
+      }
+      document.addEventListener('pointermove', bouge);
+      document.addEventListener('pointerup', lache);
+    }
 
     function rendre() {
       orientationPage(affichage(plan));
@@ -897,9 +961,11 @@ window.PlanSalle = (function () {
         surObjet: function (o, g, w, h, ctx) {
           if (!estPlace(o)) return;
           g.classList.add('place-cliquable');
+          g.setAttribute('data-place', o.id);
           var id = carte[o.id];
           if (id) {
             g.classList.add('occupee');
+            g.addEventListener('pointerdown', function (ev) { glisserSvg(g, o.id, ev); });
             var e = eleve(id);
             var visage = e ? photo(d.classe, e.numero) : null;
             if (visage) photoPlace(g, w, h, visage);
@@ -918,7 +984,7 @@ window.PlanSalle = (function () {
           g.addEventListener('drop', function (ev) {
             ev.preventDefault();
             var idE = +ev.dataTransfer.getData('text/plain');
-            if (idE) { poser(o.id, idE); choisi = null; rendre(); }
+            if (idE) { poser(o.id, idE); choisi = null; rendre(); }   // depuis la liste : échange si la place est prise
           });
         },
         infos: infosPlaces,
@@ -961,7 +1027,7 @@ window.PlanSalle = (function () {
 
     var boutonVider = document.getElementById('p-vider');
     boutonVider.onclick = function () {
-      if (confirmerEnLigne(boutonVider, 'Confirmer : tout vider ?')) { carte = {}; choisi = null; rendre(); }
+      if (confirmerEnLigne(boutonVider, 'Confirmer : tout vider ?')) { carte = {}; choisi = null; modifie(); rendre(); }
     };
     document.getElementById('p-aleatoire').onclick = function () {
       var places = plan.objets.filter(estPlace).map(function (o) { return o.id; });
@@ -969,6 +1035,7 @@ window.PlanSalle = (function () {
       for (var i = places.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = places[i]; places[i] = places[j]; places[j] = t; }
       carte = {};
       eleves.forEach(function (id, i) { if (places[i]) carte[places[i]] = id; });
+      modifie();
       if (eleves.length > places.length) {
         document.getElementById('compte-places').dataset.alerte = 'Il manque ' + (eleves.length - places.length) + ' place(s) dans la salle.';
       }
@@ -978,10 +1045,16 @@ window.PlanSalle = (function () {
     document.getElementById('form-placement').addEventListener('submit', function () {
       document.getElementById('champ-placement').value = JSON.stringify(carte);
     });
-    // « Enregistrer comme version » : garde le plan tel qu'il est affiché
-    var formVersion = document.getElementById('form-version');
-    if (formVersion) formVersion.addEventListener('submit', function () {
-      document.getElementById('champ-version').value = JSON.stringify(carte);
+    // « Enregistrer comme version » / « Dupliquer en variante » : gardent le plan tel qu'il est affiché
+    ['form-version', 'form-dupliquer'].forEach(function (idf) {
+      var f = document.getElementById(idf);
+      if (f) f.addEventListener('submit', function () { f.querySelector('[name="placement"]').value = JSON.stringify(carte); });
+    });
+    // Changer de variante : demande confirmation si le plan affiché n'est pas enregistré
+    document.querySelectorAll('.form-variante').forEach(function (f) {
+      f.addEventListener('submit', function (ev) {
+        if (document.body.classList.contains('plan-modifie') && !confirm('Le plan affiché n’est pas enregistré. Ouvrir quand même cette variante ?')) ev.preventDefault();
+      });
     });
     // admin.js (chargé ensuite) fournit les noms : on redessine quand la page est prête, quand la liste locale change, quand la présentation change
     document.addEventListener('DOMContentLoaded', rendre);

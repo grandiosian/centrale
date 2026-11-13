@@ -1066,7 +1066,32 @@ window.PlanSalle3D = (function () {
     return null;
   }
 
-  /** Dessine la salle en 3D dans le conteneur. Glisser : tourner ; molette : zoom ; double-clic : vue d'ensemble. */
+  /** Place sous le pointeur, même vide : étiquette touchée, sinon la place la plus proche du point visé au sol. */
+  function placeSous(st, ev) {
+    var id = pointeur(st, ev);
+    if (id) return id;
+    var plan = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.45), p = new THREE.Vector3();
+    if (!st.ray.ray.intersectPlane(plan, p)) return null;
+    var meilleur = null, dmin = 0.9;
+    (st.plan && st.plan.objets || []).forEach(function (it) {
+      if (it.obj.type !== 'place') return;
+      var r = it.rect, d = Math.hypot(p.x - (r.x + r.w / 2), p.z - (r.y + r.h / 2));
+      if (d < dmin) { dmin = d; meilleur = it.obj.id; }
+    });
+    return meilleur;
+  }
+
+  /** Élève glissé (page Plan de classe) : vignette qui suit le pointeur. */
+  function vignetteGlisse(texte) {
+    var v = document.createElement('div');
+    v.className = 'glisse-eleve';
+    v.textContent = texte;
+    document.body.appendChild(v);
+    return v;
+  }
+
+  /** Dessine la salle en 3D dans le conteneur. Glisser : tourner ; molette : zoom ; double-clic : vue d'ensemble.
+   *  Avec opts.surGlisser (page Plan de classe) : glisser un élève le dépose sur une autre place (échange). */
   function rendre(conteneur, plan, opts) {
     var st = conteneur._trois;
     if (!st) {
@@ -1090,12 +1115,30 @@ window.PlanSalle3D = (function () {
         azimut: 0, elev: 34, zoom: 1, angleBase: null, glisse: null, deplacement: 0,
       };
       canvas.addEventListener('pointerdown', function (ev) {
-        st.glisse = { x: ev.clientX, y: ev.clientY, az: st.azimut, el: st.elev };
         st.deplacement = 0;
         canvas.setPointerCapture(ev.pointerId);
         canvas.focus({ preventScroll: true });
+        var id = st.opts && st.opts.surGlisser ? pointeur(st, ev) : null;
+        if (id && st.opts.peutGlisser && st.opts.peutGlisser(id)) {   // on attrape un élève, la vue ne tourne pas
+          st.eleve = { de: id, x: ev.clientX, y: ev.clientY, vignette: null };
+          return;
+        }
+        st.glisse = { x: ev.clientX, y: ev.clientY, az: st.azimut, el: st.elev };
       });
       canvas.addEventListener('pointermove', function (ev) {
+        if (st.eleve) {
+          var m = Math.abs(ev.clientX - st.eleve.x) + Math.abs(ev.clientY - st.eleve.y);
+          st.deplacement = Math.max(st.deplacement, m);
+          if (m > 5 && !st.eleve.vignette) st.eleve.vignette = vignetteGlisse(st.opts.libelle ? st.opts.libelle(st.eleve.de) : '');
+          if (st.eleve.vignette) {
+            st.eleve.vignette.style.left = ev.clientX + 'px';
+            st.eleve.vignette.style.top = ev.clientY + 'px';
+            var cible = placeSous(st, ev);
+            if (cible !== st.survol) { st.survol = cible; mettreEnValeur(st); st.renderer.render(st.scene, st.camera); }
+            canvas.style.cursor = 'grabbing';
+          }
+          return;
+        }
         if (st.glisse) {
           var dx = ev.clientX - st.glisse.x, dy = ev.clientY - st.glisse.y;
           st.deplacement = Math.max(st.deplacement, Math.abs(dx) + Math.abs(dy));
@@ -1111,7 +1154,17 @@ window.PlanSalle3D = (function () {
         mettreEnValeur(st);
         st.renderer.render(st.scene, st.camera);
       });
-      canvas.addEventListener('pointerup', function () { st.glisse = null; });
+      canvas.addEventListener('pointerup', function (ev) {
+        st.glisse = null;
+        if (!st.eleve) return;
+        var e = st.eleve;
+        st.eleve = null;
+        if (e.vignette) {
+          e.vignette.remove();
+          var cible = placeSous(st, ev);
+          if (cible && cible !== e.de) st.opts.surGlisser(e.de, cible);
+        }
+      });
       canvas.addEventListener('pointerleave', function () {
         st.survol = null;
         mettreEnValeur(st);
@@ -1129,7 +1182,7 @@ window.PlanSalle3D = (function () {
       canvas.addEventListener('click', function (ev) {
         clearTimeout(st.tClic);
         if (st.deplacement > 5) return;   // un glissement n'est pas un clic
-        var id = pointeur(st, ev);
+        var id = st.opts && st.opts.surGlisser ? placeSous(st, ev) : pointeur(st, ev);   // plan de classe : les places vides aussi
         // le clic attend la fin d'un éventuel double-clic, qui recentre la vue au lieu d'ouvrir la fiche
         if (id && st.opts && st.opts.surClic) st.tClic = setTimeout(function () { st.opts.surClic(id); }, 250);
       });

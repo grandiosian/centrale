@@ -205,9 +205,21 @@ function action_organisation(string $action): bool
                     $deja[$eleve] = true;
                 }
             }
+            // variante ouverte (case cochée) : elle reçoit le même plan
+            $vid = !empty($p['maj_variante']) ? (int) ($p['variante_id'] ?? 0) : 0;
+            $nom_variante = null;
+            if ($vid) {
+                $st = $pdo->prepare('SELECT nom FROM plans_versions WHERE id = ? AND classe_id = ? AND salle_id = ? AND groupe_id = ?');
+                $st->execute([$vid, $cid, $sid, $gid]);
+                $nom_variante = $st->fetchColumn() ?: null;
+                if ($nom_variante !== null) {
+                    $propre = carte_placement_valide($pdo, $cid, $gid, $sid, $carte);
+                    $pdo->prepare('UPDATE plans_versions SET carte = ?, cree_le = ? WHERE id = ?')->execute([json_encode((object) $propre), date('Y-m-d H:i'), $vid]);
+                }
+            }
             $pdo->commit();
-            flash('Plan de classe enregistré (' . count($deja) . ' élèves placés).');
-            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
+            flash('Plan de classe enregistré (' . count($deja) . ' élèves placés)' . ($nom_variante !== null ? ', variante « ' . $nom_variante . ' » mise à jour' : '') . '.');
+            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : '') . ($nom_variante !== null ? '&variante=' . $vid : ''));
 
         case 'enregistrer_version':
             $cid = (int) ($p['classe_id'] ?? 0);
@@ -243,6 +255,53 @@ function action_organisation(string $action): bool
             flash('Version « ' . $nom . ' » enregistrée (' . count($propre) . ' élèves placés).');
             rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
 
+        case 'dupliquer_version':
+            // Duplique le plan affiché en une nouvelle variante, qui devient le plan en cours : on la modifie ensuite à la souris
+            $cid = (int) ($p['classe_id'] ?? 0);
+            $sid = (int) ($p['salle_id'] ?? 0);
+            $gid = (int) ($p['groupe_id'] ?? 0);
+            $g = $gid ? groupe_par_id($gid) : null;
+            $gid = $g && (int) $g['classe_id'] === $cid ? $gid : 0;
+            $retour_plan = './?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : '');
+            $carte = json_decode((string) ($p['placement'] ?? ''), true);
+            if (!is_array($carte)) {
+                flash('Placement illisible.', 'err');
+                rediriger($retour_plan);
+            }
+            if (!salle_compatible($pdo, $cid, $sid)) {
+                flash('Cette salle n’appartient pas à l’établissement de la classe.', 'err');
+                rediriger('./?p=classe&id=' . $cid . '#organisation');
+            }
+            $st = $pdo->prepare('SELECT nom FROM plans_versions WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?');
+            $st->execute([$cid, $gid, $sid]);
+            $noms = array_map('mb_strtolower', $st->fetchAll(PDO::FETCH_COLUMN));
+            $nom = mb_substr(trim((string) ($p['nom_version'] ?? '')), 0, 60);
+            if ($nom === '') {   // « Variante 1 », « Variante 2 »… : le premier numéro libre
+                for ($n = 1; in_array(mb_strtolower('Variante ' . $n), $noms, true); $n++);
+                $nom = 'Variante ' . $n;
+            }
+            $propre = carte_placement_valide($pdo, $cid, $gid, $sid, $carte);
+            $pdo->beginTransaction();
+            $insertion = $pdo->prepare('INSERT INTO plans_versions (classe_id, groupe_id, salle_id, nom, carte, cree_le) VALUES (?, ?, ?, ?, ?, ?)');
+            if (!$noms) {   // première variante : le plan enregistré jusque-là est gardé comme « Plan initial »
+                $st = $pdo->prepare('SELECT eleve_id, place FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?');
+                $st->execute([$cid, $gid, $sid]);
+                $initial = array_map('intval', array_column($st->fetchAll(), 'eleve_id', 'place'));
+                if ($initial) {
+                    $insertion->execute([$cid, $gid, $sid, 'Plan initial', json_encode((object) $initial), date('Y-m-d H:i')]);
+                }
+            }
+            $insertion->execute([$cid, $gid, $sid, $nom, json_encode((object) $propre), date('Y-m-d H:i')]);
+            $nouvelle = (int) $pdo->lastInsertId();
+            $pdo->prepare('DELETE FROM placements WHERE classe_id = ? AND groupe_id = ? AND salle_id = ?')->execute([$cid, $gid, $sid]);
+            $ins = $pdo->prepare('INSERT INTO placements (classe_id, groupe_id, salle_id, place, eleve_id) VALUES (?, ?, ?, ?, ?)');
+            foreach ($propre as $place => $eleve) {
+                $ins->execute([$cid, $gid, $sid, (string) $place, $eleve]);
+            }
+            $pdo->commit();
+            flash('Variante « ' . $nom . ' » créée : déplacez les élèves en les glissant, puis « Enregistrer ».');
+            rediriger($retour_plan . '&variante=' . $nouvelle);
+
         case 'charger_version':
             $cid = (int) ($p['classe_id'] ?? 0);
             $sid = (int) ($p['salle_id'] ?? 0);
@@ -267,8 +326,8 @@ function action_organisation(string $action): bool
                 $ins->execute([$cid, $gid, $sid, (string) $place, $eleve]);
             }
             $pdo->commit();
-            flash('Version « ' . $version['nom'] . ' » chargée (' . count($propre) . ' élèves placés).');
-            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
+            flash('Variante « ' . $version['nom'] . ' » ouverte (' . count($propre) . ' élèves placés).');
+            rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : '') . '&variante=' . (int) $p['version_id']);
 
         case 'supprimer_version':
             $cid = (int) ($p['classe_id'] ?? 0);
@@ -276,7 +335,7 @@ function action_organisation(string $action): bool
             $gid = (int) ($p['groupe_id'] ?? 0);
             $pdo->prepare('DELETE FROM plans_versions WHERE id = ? AND classe_id = ? AND salle_id = ? AND groupe_id = ?')
                 ->execute([(int) ($p['version_id'] ?? 0), $cid, $sid, $gid]);
-            flash('Version supprimée.');
+            flash('Variante supprimée.');
             rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : ''));
 
         case 'classe_etablissement':
@@ -1141,7 +1200,9 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
     $donnees = [
         'plan' => plan_de($salle),
         'classe' => $classe['nom'],
-        'eleves' => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif']], $eleves),
+        'eleves' => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif'],
+            // classe simulée : le profil tient lieu de nom
+            'simule' => ($pr = profil_simule((string) $classe['nom'], $e['etiquette'])) !== null ? str_replace(' · simulé', '', $pr) : null], $eleves),
         'placement' => (object) $placement,
     ];
     // versions du plan de cette classe, cette salle et ce groupe (la plus récente d'abord)
@@ -1158,9 +1219,14 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
             break;
         }
     }
+    // variante ouverte : celle qu'on vient d'ouvrir ou de créer (?variante=), sinon celle qui est identique au plan
+    $variante_id = (int) ($_GET['variante'] ?? 0);
+    if (!in_array($variante_id, array_map(fn($v) => (int) $v['id'], $versions), true)) {
+        $variante_id = (int) $version_appliquee;
+    }
     $nom_applique = null;
     foreach ($versions as $v) {
-        if ((int) $v['id'] === $version_appliquee) {
+        if ((int) $v['id'] === $variante_id) {
             $nom_applique = $v['nom'];
         }
     }
@@ -1205,50 +1271,48 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
         <?php messages(); ?>
         <?php liste_locale(); ?>
         <div id="barre-vue"></div>
-        <section class="versions-plan carte" aria-label="Versions du plan">
-            <p class="aide">Versions : gardez plusieurs plans (début d’année, Toussaint, atelier…) et revenez à l’un d’eux.
-                « Enregistrer comme version » garde le plan affiché (le premier enregistrement garde aussi le plan initial) ; « Charger » remplace le plan en cours (enregistrez d’abord vos changements).</p>
-            <div class="versions-ligne">
-                <form method="post" class="versions-form" id="form-version">
-                    <?= csrf() ?>
-                    <input type="hidden" name="action" value="enregistrer_version">
-                    <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
-                    <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
-                    <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
-                    <input type="hidden" name="placement" id="champ-version">
-                    <input type="text" name="nom_version" maxlength="60" required placeholder="Nom (ex. Toussaint, AT-xyz)" aria-label="Nom de la version">
-                    <button type="submit" class="petit">Enregistrer comme version</button>
-                </form>
-                <?php if ($versions): ?>
-                    <p class="versions-applique aide">Plan appliqué : <?= $nom_applique !== null ? '<strong>' . h($nom_applique) . '</strong>' : ($actuel ? 'plan modifié, aucune version identique' : 'aucun élève placé') ?></p>
-                    <form method="post" class="versions-form" onsubmit="return confirm('Remplacer le plan en cours par cette version ?');">
+        <section class="versions-plan carte" aria-label="Variantes du plan">
+            <div class="variantes-ligne">
+                <span class="variantes-titre">Variantes</span>
+                <?php if (!$versions): ?>
+                    <span class="aide">une seule version du plan pour l’instant</span>
+                <?php endif; ?>
+                <?php foreach (array_reverse($versions) as $v): $actif = (int) $v['id'] === $variante_id; ?>
+                    <form method="post" class="form-variante">
                         <?= csrf() ?>
                         <input type="hidden" name="action" value="charger_version">
                         <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
                         <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
                         <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
-                        <select name="version_id" aria-label="Version à charger">
-                            <?php foreach ($versions as $v): ?>
-                                <option value="<?= (int) $v['id'] ?>"><?= (int) $v['id'] === $version_appliquee ? '✓ ' : '' ?><?= h($v['nom']) ?> · <?= h($v['cree_le']) ?> (<?= count(json_decode((string) $v['carte'], true) ?: []) ?> élèves)</option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="submit" class="petit secondaire">Charger</button>
+                        <input type="hidden" name="version_id" value="<?= (int) $v['id'] ?>">
+                        <button class="variante<?= $actif ? ' active' : '' ?>" <?= $actif ? 'aria-current="true" disabled' : '' ?>
+                                title="<?= h($v['nom'] . ' · ' . $v['cree_le'] . ' · ' . count(json_decode((string) $v['carte'], true) ?: []) . ' élèves placés' . ($actif ? ' (ouverte)' : ' : ouvrir cette variante')) ?>"><?= h($v['nom']) ?></button>
                     </form>
-                    <form method="post" class="versions-form" onsubmit="return confirm('Supprimer cette version du plan ?');">
+                <?php endforeach; ?>
+                <form method="post" class="versions-form" id="form-dupliquer">
+                    <?= csrf() ?>
+                    <input type="hidden" name="action" value="dupliquer_version">
+                    <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
+                    <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
+                    <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
+                    <input type="hidden" name="placement">
+                    <input type="text" name="nom_version" maxlength="60" placeholder="Nom (facultatif)" aria-label="Nom de la nouvelle variante">
+                    <button type="submit" class="petit">⧉ Dupliquer en variante</button>
+                </form>
+                <?php if ($variante_id): ?>
+                    <form method="post" class="versions-form" onsubmit="return confirm('Supprimer la variante « <?= h(addslashes((string) $nom_applique)) ?> » ? (Le plan affiché reste en place.)');">
                         <?= csrf() ?>
                         <input type="hidden" name="action" value="supprimer_version">
                         <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
                         <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
                         <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
-                        <select name="version_id" aria-label="Version à supprimer">
-                            <?php foreach ($versions as $v): ?>
-                                <option value="<?= (int) $v['id'] ?>"><?= h($v['nom']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="submit" class="petit secondaire">Supprimer</button>
+                        <input type="hidden" name="version_id" value="<?= $variante_id ?>">
+                        <button type="submit" class="petit secondaire" title="Supprimer la variante ouverte">Supprimer « <?= h((string) $nom_applique) ?> »</button>
                     </form>
                 <?php endif; ?>
             </div>
+            <p class="aide">« Dupliquer en variante » copie le plan affiché sous un nouveau nom et l’ouvre : glissez ensuite les élèves d’une place
+                à l’autre pour les échanger, puis « Enregistrer ». Un clic sur une variante l’ouvre (elle devient le plan de la classe).</p>
         </section>
         <form method="post" id="form-placement">
             <?= csrf() ?>
@@ -1257,9 +1321,11 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
             <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
             <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
             <input type="hidden" name="placement" id="champ-placement">
+            <input type="hidden" name="variante_id" value="<?= $variante_id ?>">
             <div class="editeur">
                 <aside class="palette carte">
-                    <p class="aide">Cliquez sur un élève puis sur une place (ou glissez-le). Cliquez sur une place occupée pour la libérer.</p>
+                    <p class="aide">Glissez un élève (de la liste ou du plan) sur une place : si elle est prise, les deux élèves échangent leurs places.
+                        Glissez un élève du plan vers la liste pour le retirer. On peut aussi cliquer sur un élève puis sur une place.</p>
                     <ul class="liste-eleves" id="liste-eleves"></ul>
                     <div class="ligne-actions">
                         <button type="button" class="petit secondaire" id="p-aleatoire">Placement aléatoire</button>
@@ -1270,6 +1336,10 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
                     <svg id="plan" class="plan-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                     <div class="ligne-actions" style="margin-top:12px">
                         <button>Enregistrer le plan de classe</button>
+                        <?php if ($variante_id): ?>
+                            <label class="case maj-variante"><input type="checkbox" name="maj_variante" value="1" checked> et la variante « <?= h((string) $nom_applique) ?> »</label>
+                        <?php endif; ?>
+                        <span class="plan-non-enregistre">● modifications non enregistrées</span>
                         <button type="button" class="secondaire" onclick="window.print()">Imprimer</button>
                         <span class="discret" id="compte-places"></span>
                     </div>

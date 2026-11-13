@@ -1471,3 +1471,24 @@ a.dash-widget { text-decoration: none; color: inherit; }
   .dz-haut-centre .reperes-panneau { position: static; width: auto; }   /* la légende se déplie dans le menu, sous le bouton */
   .dz-haut-centre .choix-liste { position: static; margin-top: 6px; }      /* idem pour « Voir une classe » */
 }
+
+/* Plan de classe : variantes (pastilles), glisser-déposer des élèves, modifications non enregistrées */
+.variantes-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.variantes-titre { font-weight: 700; margin-right: 4px; }
+.form-variante { margin: 0; }
+.variante { font: inherit; font-size: .85rem; font-weight: 600; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+    color: var(--texte); background: var(--surface); border: 1.5px solid var(--bord); }
+.variante:hover:not([disabled]) { border-color: var(--accent); color: var(--accent); }
+.variante.active { background: var(--accent); border-color: var(--accent); color: #fff; cursor: default; opacity: 1; }
+#form-dupliquer { margin-left: auto; }
+#form-dupliquer input[type="text"] { width: 150px; }
+.maj-variante { font-size: .88rem; }
+.plan-non-enregistre { display: none; font-size: .85rem; font-weight: 600; color: #c0392b; }
+body.plan-modifie .plan-non-enregistre { display: inline; }
+.glisse-eleve { position: fixed; z-index: 1000; pointer-events: none; transform: translate(-50%, -130%); padding: 4px 10px; border-radius: 999px;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: .85rem; box-shadow: 0 6px 16px rgba(0, 0, 0, .3); white-space: nowrap; }
+.plan-svg .glisse-source { opacity: .35; }
+.plan-svg [data-place].occupee { cursor: grab; }
+.plan-svg [data-place].survol .forme { stroke: var(--accent); stroke-width: 3; }
+#liste-eleves.depot { outline: 2px dashed var(--accent); outline-offset: 4px; }
+@media print { .variantes-ligne, .plan-non-enregistre, .maj-variante { display: none !important; } }
