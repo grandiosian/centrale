@@ -1434,3 +1434,40 @@ a.dash-widget { text-decoration: none; color: inherit; }
 .fiche-source-titre { margin: 0; font-size: .95rem; }
 .fiche-source-aide { margin: 2px 0 6px; font-size: .76rem; }
 .fiche-source .fiche-presence, .fiche-source .fiche-trois-cartons { border-top: 1px dashed var(--bord); }
+
+/* Fiche élève : en-tête fixe, menu d'onglets, contenu qui défile (vue 3D de l'accueil et page Plan de classe) */
+.dash-plan .fiche-trois { z-index: 20; }   /* au-dessus des boutons de l'accueil */
+.fiche-trois-carte { max-height: 100%; display: flex; flex-direction: column; }
+.fiche-trois-carte .fiche-trois-corps, .dialogue-fiche-eleve .fiche-trois-corps { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.dialogue-fiche-eleve[open] { display: flex; flex-direction: column; max-height: 88vh; overflow: hidden; }
+.dialogue-fiche-eleve .fiche-trois-corps { max-height: 88vh; box-sizing: border-box; }
+.fiche-trois-haut { flex: none; }
+.fiche-trois-haut .fiche-trois-photo { width: 84px; height: 84px; }
+.fiche-trois-haut .fiche-trois-prenom { font-size: 1.5rem; }
+.fiche-menu { flex: none; display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0 0; padding: 0 0 8px; border-bottom: 1px solid var(--bord); }
+.fiche-onglet { font: inherit; font-size: .8rem; font-weight: 600; padding: 4px 11px; border-radius: 999px; cursor: pointer;
+    color: var(--texte); background: transparent; border: 1.5px solid var(--bord); }
+.fiche-onglet.onglet-classe { border-color: #d9a400; }
+.fiche-onglet.onglet-plateforme { border-color: var(--accent); }
+.fiche-onglet[aria-current="true"] { background: var(--texte); border-color: var(--texte); color: var(--surface); }
+.fiche-onglet.onglet-classe[aria-current="true"] { background: #d9a400; border-color: #d9a400; color: #241a00; }
+.fiche-onglet.onglet-plateforme[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.fiche-defile { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 4px 8px 0; overscroll-behavior: contain; }
+.fiche-partie { margin-top: 10px; }
+.fiche-partie:first-child { margin-top: 4px; }
+.fiche-partie > .fiche-trois-details { margin-top: 6px; padding-top: 0; border-top: 0; }
+.fiche-puces { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.fiche-partie .fiche-trois-cartons, .fiche-partie .fiche-presence { margin-top: 6px; padding-top: 6px; }
+.fiche-partie .fiche-trois-cartons > .fiche-trois-cartons-titre:first-child { display: none; }   /* le titre est celui de la partie */
+.fiche-partie .carton-pre { width: 112px; min-height: 44px; padding: 6px 8px; font-size: .76rem; }
+.fiche-partie .cartons-cases { gap: 8px; }
+
+/* Accueil, tablette et grand écran : la colonne de gauche (alerte, à valider, classes, cours du jour, appel, repères)
+   devient un menu qui défile, arrêté au-dessus de Calendrier / Monitoring : plus rien ne se chevauche. */
+@media (min-width: 721px) {
+  .dz-haut-centre { bottom: 124px; flex-wrap: nowrap; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+      margin: -6px; padding: 6px 10px 10px 6px; scrollbar-width: thin; scrollbar-gutter: stable; }
+  .dz-haut-centre > * { flex: none; }
+  .dz-haut-centre .reperes-panneau { position: static; width: auto; }   /* la légende se déplie dans le menu, sous le bouton */
+  .dz-haut-centre .choix-liste { position: static; margin-top: 6px; }      /* idem pour « Voir une classe » */
+}

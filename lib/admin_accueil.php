@@ -1282,6 +1282,7 @@ function page_tableau_de_bord(): void
                 repTete.addEventListener('click', function () {   // la légende se déplie à côté du bouton
                     repPanneau.hidden = !repPanneau.hidden;
                     repTete.setAttribute('aria-expanded', String(!repPanneau.hidden));
+                    if (!repPanneau.hidden) repPanneau.scrollIntoView({ block: 'nearest', behavior: 'smooth' });   // menu qui défile : on montre la légende
                 });
                 // chaque source se montre ou se cache sur le plan (réglage gardé sur cet ordinateur)
                 [['classe-afficher', 'sans-classe', 'centrale-classe-cache'], ['reperes-afficher', 'sans-reperes', 'centrale-reperes-caches']].forEach(function (x) {

@@ -1010,7 +1010,7 @@ window.PlanSalle = (function () {
   function remplirFiche(corps, d, e, placeLabel, actualiser) {
     var cn = window.CentraleNoms;
     var numero = String(e.numero), nomComplet = cn ? cn.nomLocal(d.classe, e.numero) : '';
-    var identite = separerNom(nomComplet || ('n° ' + numero));
+    var identite = separerNom(nomComplet || e.simule || ('n° ' + numero));
     var visage = photo(d.classe, e.numero);
     var statuts = cn && cn.statuts ? cn.statuts(d.classe, e.numero) : {};
     var besoins = cn && cn.besoins ? cn.besoins(d.classe, e.numero) : [];
@@ -1028,7 +1028,39 @@ window.PlanSalle = (function () {
     haut.append(pho, titres);
     corps.appendChild(haut);
 
-    // détail : place, état, besoins
+    // Corps de la fiche : un menu d'onglets (Résumé · Appel · Cartons · Plateforme) au-dessus d'une zone qui défile.
+    // Un clic sur un onglet fait défiler jusqu'à sa partie ; l'onglet de la partie visible s'allume.
+    var menu = creer('nav', 'fiche-menu'), defile = creer('div', 'fiche-defile');
+    menu.setAttribute('aria-label', 'Parties de la fiche');
+    corps.classList.add('fiche-a-menu');
+    corps.append(menu, defile);
+    var parties = [];
+    function partie(id, titre, source, aide) {
+      var sec = creer('section', 'fiche-partie' + (source ? ' fiche-source fiche-' + source : ''));
+      sec.dataset.partie = id;
+      sec.appendChild(creer('h4', 'fiche-source-titre', titre));
+      if (aide) sec.appendChild(creer('p', 'discret fiche-source-aide', aide));
+      var onglet = creer('button', 'fiche-onglet' + (source ? ' onglet-' + source : ''), titre.replace(/ ·.*$/, ''));
+      onglet.type = 'button';
+      onglet.addEventListener('click', function () { defile.scrollTo({ top: sec.offsetTop - defile.offsetTop - 4, behavior: 'smooth' }); });
+      menu.appendChild(onglet);
+      defile.appendChild(sec);
+      parties.push({ sec: sec, onglet: onglet });
+      return sec;
+    }
+    function lignesReperes(bloc, liste, defs) {
+      liste.forEach(function (r) {
+        var def = defs[r.code] || { glyphe: '•', couleur: '#888', libelle: r.code }, ligne = creer('p', 'fiche-repere');
+        ligne.append(icone(def), creer('strong', '', def.libelle), creer('span', 'discret', ' · ' + r.texte));
+        bloc.appendChild(ligne);
+      });
+    }
+    var rep = reperesEleve(d, e), obs = observationsClasse(d, e);
+    var pres = cn && cn.presence ? cn.presence(d.classe, e.numero, seanceDe(d).cle) : '';
+    var cartons = cn && cn.cartons ? cn.cartons(d.classe, e.numero) : [];
+
+    // 1. Résumé : place, état, besoins, et les icônes des deux sources côte à côte
+    var resume = partie('resume', 'Résumé', '', '');
     var detail = creer('dl', 'fiche-trois-details');
     function rang(libelle, valeur) {
       detail.append(creer('dt', '', libelle), valeur instanceof Node ? valeur : creer('dd', '', valeur));
@@ -1041,30 +1073,40 @@ window.PlanSalle = (function () {
     if (statuts.changement) etats.push('Changement de classe depuis le ' + statuts.changement);
     rang('État', (etats.length ? etats.join(' · ') : 'Présent') + (e.actif ? '' : ' · compte désactivé'));
     if (besoins.length && cn.pastilles) rang('Besoins', cn.pastilles(besoins));
-    corps.appendChild(detail);
-
-    function lignesReperes(bloc, liste, defs) {
-      liste.forEach(function (r) {
-        var def = defs[r.code] || { glyphe: '•', couleur: '#888', libelle: r.code }, ligne = creer('p', 'fiche-repere');
-        ligne.append(icone(def), creer('strong', '', def.libelle), creer('span', 'discret', ' · ' + r.texte));
-        bloc.appendChild(ligne);
-      });
+    function puces(codes, defs, vide) {
+      var dd = creer('dd', 'fiche-puces');
+      codes.forEach(function (c) { var def = defs[c]; if (def) { var i = icone(def); i.title = def.libelle; dd.appendChild(i); } });
+      if (!dd.childNodes.length) dd.appendChild(creer('span', 'discret', vide));
+      return dd;
     }
-    // 1. Observé en classe : noté par l'enseignant sur cet ordinateur
-    var enClasse = creer('section', 'fiche-source fiche-classe');
-    enClasse.appendChild(creer('h4', 'fiche-source-titre', 'Observé en classe'));
-    enClasse.appendChild(creer('p', 'discret fiche-source-aide', 'Ce que vous avez noté (appel, cartons), gardé sur cet ordinateur.'));
-    lignesReperes(enClasse, observationsClasse(d, e), CLASSE);
-    if (cn && cn.presence) enClasse.appendChild(sectionPresence(d, e.numero, actualiser));
-    if (cn && cn.cartons) enClasse.appendChild(sectionCartons(d.classe, e.numero, actualiser));
-    corps.appendChild(enClasse);
-    // 2. Sur la plateforme : calculé par la Centrale d'après l'activité dans les ateliers
-    var plateforme = creer('section', 'fiche-source fiche-plateforme'), rep = reperesEleve(d, e);
-    plateforme.appendChild(creer('h4', 'fiche-source-titre', 'Sur la plateforme'));
-    plateforme.appendChild(creer('p', 'discret fiche-source-aide', 'Calculé par la Centrale d’après son activité dans les ateliers, comparée à celle de sa classe.'));
+    rang('En classe', puces((pres ? [pres] : []).concat(obs.map(function (r) { return r.code; }), cartons.map(function (c) { return c.type; })), CLASSE, 'rien de noté'));
+    rang('Plateforme', puces(rep.map(function (r) { return r.code; }), REPERES, 'rien de particulier'));
+    resume.appendChild(detail);
+
+    // 2. Observé en classe : l'appel (séance, relevé), puis les cartons — noté par l'enseignant sur cet ordinateur
+    var appel = partie('appel', 'Appel · observé en classe', 'classe', 'Noté par vous, gardé sur cet ordinateur.');
+    lignesReperes(appel, obs, CLASSE);
+    if (cn && cn.presence) appel.appendChild(sectionPresence(d, e.numero, actualiser));
+    var blocCartons = partie('cartons', 'Cartons · observé en classe', 'classe', 'Observations et récompenses, gardées sur cet ordinateur.');
+    if (cn && cn.cartons) blocCartons.appendChild(sectionCartons(d.classe, e.numero, actualiser));
+
+    // 3. Sur la plateforme : calculé par la Centrale d'après l'activité dans les ateliers
+    var plateforme = partie('plateforme', 'Plateforme · activité dans les ateliers', 'plateforme', 'Calculé par la Centrale, en comparant l’élève à sa classe.');
     if (rep.length) lignesReperes(plateforme, rep, REPERES);
     else plateforme.appendChild(creer('p', 'discret', 'Rien de particulier.'));
-    corps.appendChild(plateforme);
+
+    // onglet de la partie visible ; même élève rouvert après un clic (appel, carton) : on garde l'endroit
+    function allumer() {
+      var haut = defile.scrollTop + 24, courant = parties[0];
+      parties.forEach(function (p) { if (p.sec.offsetTop - defile.offsetTop <= haut) courant = p; });
+      if (defile.scrollTop > 0 && defile.scrollTop + defile.clientHeight >= defile.scrollHeight - 16) courant = parties[parties.length - 1];
+      parties.forEach(function (p) { p.onglet.setAttribute('aria-current', String(p === courant)); });
+    }
+    var cle = d.classe + '|' + numero;
+    defile.addEventListener('scroll', function () { corps._defile = { cle: cle, top: defile.scrollTop }; allumer(); }, { passive: true });
+    if (corps._defile && corps._defile.cle === cle) defile.scrollTop = corps._defile.top;
+    allumer();
+    setTimeout(function () { if (corps._defile && corps._defile.cle === cle) defile.scrollTop = corps._defile.top; allumer(); }, 0);   // une fois la fiche affichée
 
     // code de connexion : seulement la copie gardée sur cet ordinateur, masquée jusqu'au clic
     var bloc = creer('div', 'fiche-trois-code');
