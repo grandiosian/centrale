@@ -144,6 +144,7 @@ C'est la seule sauvegarde hors du poste qui doit toujours marcher, avec ou sans 
 - Toujours par le module **`centrale-client.js`** de la Centrale, jamais par des appels directs à l'API (seule exception : `api/catalogue.php`, en lecture).
 - Charger le module sans bloquer la page : s'il ne se charge pas, l'application continue comme avant.
 - `Centrale.progression(id, { titre, faites, total, statut, constats })` : la Centrale garde le meilleur résultat ; les constats suivent [Compétences](./?doc=competences).
+- Facultatif, `mesures` dans le même envoi (temps actif, essais, délai de première réponse : [spécification, § mesures](./)) : des durées et des compteurs, sans rien de nominatif. La Centrale les montre dans le suivi.
 - `Centrale.sauver(cle, valeur)` : copie du travail, 2 Mo par clé ; un conflit (409, travail plus récent ailleurs) se règle en relisant et en fusionnant.
 - Hors ligne, le module garde les envois en file d'attente et les renvoie au retour du réseau.
 

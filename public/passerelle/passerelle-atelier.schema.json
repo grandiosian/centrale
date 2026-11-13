@@ -85,11 +85,12 @@
             "score": { "type": "string" },
             "score_max": { "type": "string" },
             "details": { "type": "string" },
-            "constats": { "type": "string", "description": "Quand et comment l'application envoie des constats de compétences (COMPETENCES.md)." }
+            "constats": { "type": "string", "description": "Quand et comment l'application envoie des constats de compétences (COMPETENCES.md)." },
+            "mesures": { "type": "string", "description": "Mesures du travail de l'élève (temps actif, essais, délai de réponse) : voir SPECIFICATION.md, § mesures." }
           },
           "additionalProperties": false
         },
-        "champs_non_utilises": { "type": "array", "items": { "enum": ["titre", "faites", "total", "statut", "score", "score_max", "details", "constats"] } },
+        "champs_non_utilises": { "type": "array", "items": { "enum": ["titre", "faites", "total", "statut", "score", "score_max", "details", "constats", "mesures"] } },
         "format": { "$ref": "#/$defs/schemaOuRef" }
       }
     },

@@ -347,6 +347,10 @@ Onglet **Suivi** : une classe, et au choix un parcours ou un atelier.
 - Les noms s'affichent depuis votre ordinateur.
 - **Exporter (CSV)** produit le tableau avec les noms, à ouvrir dans un tableur.
 - La page **Travail** d'un élève détaille son avancement : dates, résultats, réponses envoyées dans `details`.
+- **Mesures pendant l'atelier** : quand l'application les envoie (champ `mesures`, TechnoStudio depuis la version 3.10), elles sont rangées avec la progression.
+  - **Sous le tableau**, une ligne par activité : élèves mesurés, temps actif médian et maximal, essais par question, part réussie du premier coup, délai médian avant la première réponse, corrections affichées.
+  - **« Questions, de la plus difficile à la plus facile »** classe les questions par nombre moyen d'essais. Une question est surlignée à partir de 3 essais en moyenne ou de moins de 40 % de réussite du premier coup.
+  - **Sur la page de l'élève**, la colonne « Temps actif · essais » résume les mesures, et le lien « questions » détaille chaque question.
 
 ---
 

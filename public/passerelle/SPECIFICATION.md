@@ -87,6 +87,27 @@ Rappel du comportement de la Centrale :
 - `termine` reste acquis ;
 - `details` fait 20 Ko au plus.
 
+#### Champ facultatif `mesures` (monitoring)
+
+Une application peut joindre à chaque envoi de progression des mesures sur le travail de l'élève. La Centrale les range à part et les montre dans le suivi (élève, et bilan de la classe par activité).
+
+```jsonc
+"mesures": {
+  "temps_actif": 540,          // secondes de travail effectif sur l'activité (page visible, élève actif)
+  "essais": 14,                // réponses vérifiées ou rendues, jamais remises à zéro
+  "questions": 6,              // questions essayées au moins une fois
+  "premier_coup": 3,           // réussies du premier coup
+  "revelees": 1,               // corrections affichées
+  "delai_median": 42,          // secondes entre la question vue et la première réponse (médiane), ou null
+  "detail": [ { "q": "1.2 Relier…", "essais": 3, "ok1": false, "okA": 3, "delai": 65, "revele": false } ]
+}
+```
+
+- Tous les champs sont facultatifs. Les nombres sont des entiers positifs ; `detail` compte 200 questions au plus.
+- Contrairement à `faites` et `score`, les mesures **remplacent** les précédentes : l'application envoie des cumuls.
+- Ce sont des durées et des compteurs, rattachés au code pseudonyme de l'élève comme le reste de la progression : rien de nominatif.
+- Une application qui les envoie décrit `mesures` dans `progression.champs`.
+
 ### 2.4 `donnees`
 
 Une entrée par clé de `Centrale.sauver` / `charger`. Chaque entrée contient :

@@ -1350,3 +1350,9 @@ a.dash-widget { text-decoration: none; color: inherit; }
 .ajout-periode summary { cursor: pointer; color: var(--accent, #2F57A1); font-size: .85rem; }
 .form-periode { display: grid; gap: 6px; margin-top: 6px; }
 .form-periode label { display: grid; gap: 2px; font-size: .8rem; }
+
+/* Mesures pendant l'atelier (suivi) */
+.mesures-classe { margin-top: 28px; }
+.mesures-q { margin-top: 6px; font-size: .86rem; }
+.mesures-q td, .mesures-q th { padding: 3px 8px; }
+.mesures-q tr.difficile td { background: color-mix(in srgb, #e6a23c 18%, transparent); }

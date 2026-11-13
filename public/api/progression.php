@@ -9,6 +9,8 @@
  *      faites et score ne baissent jamais si l'élève recommence.
  * GET  ?app=netsim     → { ok, progression: [ { activite, titre, statut, faites, total, score, score_max, debut, maj, fin } ] }
  * POST … constats: [ { competence: "SFC15.5.1", reussi, indices?, essais?, preuve? } ]  → évaluations (source = l'application)
+ * POST … mesures: { temps_actif, essais, questions, premier_coup, revelees, delai_median, detail: [ { q, essais, ok1, okA, delai, revele } ] }
+ *      Monitoring (facultatif) : cumuls de l'application, qui REMPLACENT les précédents (SPECIFICATION.md, § mesures).
  * GET  (sans app)      → { ok, progression: { app: [ … ] } }
  */
 declare(strict_types=1);
@@ -83,6 +85,34 @@ if (array_key_exists('details', $e) && $e['details'] !== null) {
     }
 }
 
+// Mesures (monitoring) : entiers positifs bornés, détail par question limité
+$mesures = null;
+if (is_array($e['mesures'] ?? null)) {
+    $m = $e['mesures'];
+    $n = fn($k, $max = 1000000) => isset($m[$k]) && is_numeric($m[$k]) ? max(0, min($max, (int) $m[$k])) : null;
+    $detail = [];
+    foreach (array_slice(is_array($m['detail'] ?? null) ? $m['detail'] : [], 0, 200) as $q) {
+        if (!is_array($q)) {
+            continue;
+        }
+        $x = ['q' => mb_substr(trim((string) ($q['q'] ?? '')), 0, 120), 'essais' => max(0, min(10000, (int) ($q['essais'] ?? 0)))];
+        foreach (['okA' => 10000, 'delai' => 86400] as $k => $max) {
+            if (isset($q[$k]) && is_numeric($q[$k])) {
+                $x[$k] = max(0, min($max, (int) $q[$k]));
+            }
+        }
+        foreach (['ok1', 'revele'] as $k) {
+            if (isset($q[$k])) {
+                $x[$k] = (bool) $q[$k];
+            }
+        }
+        $detail[] = $x;
+    }
+    $mesures = ['temps_actif' => $n('temps_actif'), 'essais' => $n('essais'), 'questions' => $n('questions', 10000),
+                'premier_coup' => $n('premier_coup', 10000), 'revelees' => $n('revelees', 10000), 'delai_median' => $n('delai_median', 86400),
+                'detail' => $detail ? json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null];
+}
+
 $st = $pdo->prepare('SELECT * FROM progression WHERE eleve_id = ? AND app = ? AND activite = ?');
 $st->execute([$eleve['id'], $app, $activite]);
 $ancien = $st->fetch() ?: null;
@@ -111,6 +141,15 @@ $pdo->prepare('INSERT INTO progression (eleve_id, app, activite, titre, statut, 
                details = excluded.details, maj = excluded.maj, fin = excluded.fin')
     ->execute([$eleve['id'], $app, $activite, $final['titre'], $final['statut'], $final['faites'], $final['total'],
         $final['score'], $final['score_max'], $final['details'], $final['debut'], $maintenant, $final['fin']]);
+
+if ($mesures !== null && array_filter($mesures, fn($x) => $x !== null)) {
+    // Un champ absent ou invalide garde sa valeur précédente
+    $pdo->prepare('UPDATE progression SET temps_actif = COALESCE(?, temps_actif), essais = COALESCE(?, essais), questions = COALESCE(?, questions),
+                   premier_coup = COALESCE(?, premier_coup), revelees = COALESCE(?, revelees), delai_median = COALESCE(?, delai_median),
+                   mesures = COALESCE(?, mesures) WHERE eleve_id = ? AND app = ? AND activite = ?')
+        ->execute([$mesures['temps_actif'], $mesures['essais'], $mesures['questions'], $mesures['premier_coup'], $mesures['revelees'],
+            $mesures['delai_median'], $mesures['detail'], $eleve['id'], $app, $activite]);
+}
 
 // Constats de compétences joints par l'application : [{ competence, reussi, indices, essais, preuve } | { competence, niveau }]
 $constats = is_array($e['constats'] ?? null) ? enregistrer_constats($eleve['id'], $app, $activite, $e['constats']) : 0;

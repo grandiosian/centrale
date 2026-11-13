@@ -387,6 +387,11 @@ function creer_tables(PDO $pdo): void
     )");
     creer_tables_competences($pdo);   // évaluations des compétences, compétences des étapes de parcours
     creer_tables_catalogue($pdo);     // ateliers importés depuis les applications
+    // Mesures envoyées avec la progression (monitoring) : cumuls de l'application, remplacés à chaque envoi
+    foreach (['temps_actif', 'essais', 'questions', 'premier_coup', 'revelees', 'delai_median'] as $c) {
+        ajouter_colonne($pdo, 'progression', $c, 'INTEGER');
+    }
+    ajouter_colonne($pdo, 'progression', 'mesures', 'TEXT');   // JSON : détail par question [{ q, essais, ok1, okA, delai, revele }]
     $pdo->exec("CREATE TABLE IF NOT EXISTS parcours_validations (
         parcours_id  INTEGER NOT NULL REFERENCES parcours(id) ON DELETE CASCADE,
         proprietaire TEXT NOT NULL,

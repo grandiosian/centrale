@@ -394,6 +394,155 @@ function etapes_en_texte(array $etapes): string
 
 /* ---------------------------------------------------------------------- */
 
+/* ---------- Mesures (monitoring) envoyées avec la progression : temps actif, essais, délai de réponse ---------- */
+
+/** « 45 s », « 12 min », « 1 h 05 ». */
+function duree_courte(?int $s): string
+{
+    if ($s === null) {
+        return '—';
+    }
+    if ($s < 60) {
+        return $s . ' s';
+    }
+    $m = intdiv($s + 30, 60);
+    return $m < 60 ? $m . ' min' : intdiv($m, 60) . ' h ' . sprintf('%02d', $m % 60);
+}
+
+function mediane(array $v): ?float
+{
+    $v = array_values(array_filter($v, fn($x) => $x !== null));
+    if (!$v) {
+        return null;
+    }
+    sort($v);
+    $n = count($v);
+    return $n % 2 ? (float) $v[intdiv($n, 2)] : ($v[$n / 2 - 1] + $v[$n / 2]) / 2;
+}
+
+/** Une ligne de progression a-t-elle des mesures ? */
+function a_des_mesures(?array $p): bool
+{
+    return $p !== null && (($p['temps_actif'] ?? null) !== null || ($p['essais'] ?? null) !== null);
+}
+
+/** Texte court des mesures d'une ligne : « 12 min · 14 essais · 3/6 du 1er coup ». */
+function texte_mesures(array $p): string
+{
+    $t = [];
+    if ($p['temps_actif'] !== null) {
+        $t[] = duree_courte((int) $p['temps_actif']);
+    }
+    if ($p['essais'] !== null) {
+        $t[] = (int) $p['essais'] . ' essai' . ((int) $p['essais'] > 1 ? 's' : '');
+    }
+    if ($p['questions']) {
+        $t[] = (int) $p['premier_coup'] . '/' . (int) $p['questions'] . ' du 1er coup';
+    }
+    return implode(' · ', $t);
+}
+
+/** Tableau des questions d'une ligne de progression (détail des mesures). */
+function tableau_questions_mesures(array $detail): string
+{
+    if (!$detail) {
+        return '';
+    }
+    $h = '<table class="mesures-q"><thead><tr><th>Question</th><th>Essais</th><th>1er coup</th><th>Réussie à l’essai</th><th>1re réponse après</th></tr></thead><tbody>';
+    foreach ($detail as $q) {
+        $h .= '<tr><td>' . h((string) ($q['q'] ?? '')) . '</td><td>' . (int) ($q['essais'] ?? 0) . '</td><td>'
+            . (isset($q['ok1']) ? ($q['ok1'] ? '✓' : '✗') : '—') . (!empty($q['revele']) ? ' <span class="discret" title="Correction affichée">corrigé</span>' : '')
+            . '</td><td>' . (isset($q['okA']) ? (int) $q['okA'] : '—') . '</td><td>' . duree_courte(isset($q['delai']) ? (int) $q['delai'] : null) . '</td></tr>';
+    }
+    return $h . '</tbody></table>';
+}
+
+/**
+ * Bilan des mesures de la classe sous le tableau du suivi : une ligne par activité (colonne),
+ * puis, à la demande, les questions les plus difficiles (essais moyens, réussite du premier coup, délai).
+ */
+function section_mesures_classe(array $colonnes, array $eleves, array $prog): void
+{
+    $lignes = [];
+    foreach ($colonnes as $c) {
+        if ($c['activite'] === '') {
+            continue;
+        }
+        $rows = [];
+        foreach ($eleves as $e) {
+            $p = $prog[(int) $e['id']][$c['app']][$c['activite']] ?? null;
+            if ($p && a_des_mesures($p)) {
+                $rows[] = $p;
+            }
+        }
+        if (!$rows) {
+            continue;
+        }
+        $q = [];   // par question : [essais], [ok1], [delai], révélées
+        foreach ($rows as $p) {
+            foreach (json_decode((string) ($p['mesures'] ?? ''), true) ?: [] as $x) {
+                $k = (string) ($x['q'] ?? '');
+                $q[$k] ??= ['essais' => [], 'ok1' => [], 'delai' => [], 'revele' => 0];
+                $q[$k]['essais'][] = (int) ($x['essais'] ?? 0);
+                if (isset($x['ok1'])) {
+                    $q[$k]['ok1'][] = $x['ok1'] ? 1 : 0;
+                }
+                if (isset($x['delai'])) {
+                    $q[$k]['delai'][] = (int) $x['delai'];
+                }
+                $q[$k]['revele'] += !empty($x['revele']) ? 1 : 0;
+            }
+        }
+        foreach ($q as $k => $v) {
+            $q[$k]['moy'] = array_sum($v['essais']) / max(1, count($v['essais']));
+        }
+        uasort($q, fn($a, $b) => $b['moy'] <=> $a['moy']);
+        $essais = array_sum(array_map(fn($p) => (int) $p['essais'], $rows));
+        $questions = array_sum(array_map(fn($p) => (int) $p['questions'], $rows));
+        $premier = array_sum(array_map(fn($p) => (int) $p['premier_coup'], $rows));
+        $lignes[] = ['c' => $c, 'n' => count($rows), 'temps' => mediane(array_map(fn($p) => $p['temps_actif'] === null ? null : (int) $p['temps_actif'], $rows)),
+                     'temps_max' => max(array_map(fn($p) => (int) $p['temps_actif'], $rows)),
+                     'essais_q' => $questions ? $essais / $questions : null, 'premier' => $questions ? $premier / $questions : null,
+                     'delai' => mediane(array_map(fn($p) => $p['delai_median'] === null ? null : (int) $p['delai_median'], $rows)),
+                     'revelees' => array_sum(array_map(fn($p) => (int) $p['revelees'], $rows)), 'q' => $q];
+    }
+    if (!$lignes) {
+        return;
+    }
+    $f1 = fn($x) => $x === null ? '—' : str_replace('.', ',', (string) round($x, 1));
+    ?>
+    <section class="mesures-classe">
+        <h2>Mesures pendant l’atelier</h2>
+        <p class="aide">Envoyées par l’application avec la progression : temps de travail effectif (page visible, élève actif), essais
+            (jamais remis à zéro), réussite du premier coup, délai entre la question affichée et la première réponse. Médianes sur les élèves mesurés.</p>
+        <div class="defile"><table>
+            <thead><tr><th>Activité</th><th>Élèves</th><th>Temps actif (médian)</th><th>Essais par question</th><th>Du 1er coup</th>
+                <th>1re réponse après (médian)</th><th>Corrections affichées</th></tr></thead>
+            <tbody>
+            <?php foreach ($lignes as $l): ?>
+                <tr>
+                    <td><strong><?= h($l['c']['titre']) ?></strong></td>
+                    <td><?= $l['n'] ?>/<?= count($eleves) ?></td>
+                    <td><?= duree_courte($l['temps'] === null ? null : (int) round($l['temps'])) ?> <span class="discret">(max <?= duree_courte($l['temps_max']) ?>)</span></td>
+                    <td><?= $f1($l['essais_q']) ?></td>
+                    <td><?= $l['premier'] === null ? '—' : (int) round($l['premier'] * 100) . ' %' ?></td>
+                    <td><?= duree_courte($l['delai'] === null ? null : (int) round($l['delai'])) ?></td>
+                    <td><?= $l['revelees'] ?: '' ?></td>
+                </tr>
+                <?php if ($l['q']): ?><tr class="mesures-detail"><td colspan="7"><details><summary>Questions, de la plus difficile à la plus facile</summary>
+                            <table class="mesures-q"><thead><tr><th>Question</th><th>Essais (moyenne)</th><th>Du 1er coup</th><th>1re réponse après</th><th>Corrigées</th></tr></thead><tbody>
+                            <?php foreach ($l['q'] as $k => $v): $ok = $v['ok1'] ? array_sum($v['ok1']) / count($v['ok1']) : null; ?>
+                                <tr class="<?= $v['moy'] >= 3 || ($ok !== null && $ok < 0.4) ? 'difficile' : '' ?>"><td><?= h($k) ?></td><td><?= $f1($v['moy']) ?></td>
+                                    <td><?= $ok === null ? '—' : (int) round($ok * 100) . ' %' ?></td><td><?= duree_courte(($m = mediane($v['delai'])) === null ? null : (int) round($m)) ?></td>
+                                    <td><?= $v['revele'] ?: '' ?></td></tr>
+                            <?php endforeach; ?></tbody></table></details></td></tr><?php endif; ?>
+            <?php endforeach; ?>
+            </tbody>
+        </table></div>
+    </section>
+    <?php
+}
+
 function cellule_suivi(array $etat, string $titre): string
 {
     $classes = ['a_faire' => 'st-a-faire', 'commence' => 'st-commence', 'termine' => 'st-termine'];
@@ -599,6 +748,7 @@ function page_suivi(): void
                 </tr>
                 </tfoot>
             </table></div>
+            <?php section_mesures_classe($colonnes, $eleves, $prog); ?>
             <?php if (str_starts_with($vue, 'app:') && isset($catalogue[substr($vue, 4)])): ?>
                 <p class="discret" style="margin-top:16px">Liste des activités envoyée par l'application <code><?= h(substr($vue, 4)) ?></code>.
                     <?= bouton('oublier_catalogue', 'Effacer cette liste', ['app' => substr($vue, 4)], 'secondaire',
@@ -1040,7 +1190,7 @@ function section_avancement_eleve(int $eleve_id): void
     <section>
         <h2>Avancement</h2>
         <div class="defile"><table>
-            <thead><tr><th>Atelier</th><th>Activité</th><th>État</th><th>Résultat</th><th>Commencée</th><th>Terminée</th><th>Détails</th></tr></thead>
+            <thead><tr><th>Atelier</th><th>Activité</th><th>État</th><th>Résultat</th><th>Temps actif · essais</th><th>Commencée</th><th>Terminée</th><th>Détails</th></tr></thead>
             <tbody>
             <?php foreach ($lignes as $p): $etat = etat_etape($p['activite'], [$p['activite'] => $p], []); ?>
                 <tr>
@@ -1048,9 +1198,12 @@ function section_avancement_eleve(int $eleve_id): void
                     <td><?= h($p['titre'] !== '' ? $p['titre'] : $p['activite']) ?></td>
                     <td><?= $p['statut'] === 'termine' ? '<span class="ok">✓ terminée</span>' : 'en cours' ?></td>
                     <td><?= h($etat['texte']) ?></td>
+                    <td><?= a_des_mesures($p) ? h(texte_mesures($p)) . ($p['delai_median'] !== null ? '<br><span class="discret">1re réponse après ' . duree_courte((int) $p['delai_median']) . ' (médiane)</span>' : '') : '<span class="discret">—</span>' ?></td>
                     <td><?= quand((int) $p['debut']) ?></td>
                     <td><?= quand($p['fin'] ? (int) $p['fin'] : null) ?></td>
-                    <td><?php if ($p['details']): ?><details><summary>voir</summary><pre class="code"><?=
+                    <td><?php $dq = json_decode((string) ($p['mesures'] ?? ''), true) ?: []; ?>
+                        <?php if ($dq): ?><details><summary>questions</summary><?= tableau_questions_mesures($dq) ?></details><?php endif; ?>
+                        <?php if ($p['details']): ?><details><summary>réponses</summary><pre class="code"><?=
                         h((string) json_encode(json_decode($p['details']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></pre></details><?php endif; ?></td>
                 </tr>
             <?php endforeach; ?>
