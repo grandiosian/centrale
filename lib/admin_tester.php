@@ -13,10 +13,10 @@ declare(strict_types=1);
 /** Classes de test créées par le bouton « Créer les classes de test » : nom => nombre d'élèves. Le chiffre donne le niveau. */
 const CLASSES_TEST = ['5TEST' => 3, '4TEST' => 3];
 
-/** « TEST », « 5TEST », « 4 TEST », « 3-TEST » : classes réservées aux essais de l'enseignant. */
+/** « TEST », « 5TEST », « 4 TEST », « 3-TEST » (et les classes simulées « 5SIM ») : classes réservées aux essais de l'enseignant. */
 function est_classe_test(string $nom): bool
 {
-    return (bool) preg_match('/^(?:[3-6][\s_-]?)?TEST$/i', trim($nom));
+    return (bool) preg_match('/^(?:[3-6][\s_-]?)?(?:TEST|SIM)$/i', trim($nom));
 }
 
 /** Élèves actifs des classes de test, rangés par classe : [ ['id', 'etiquette', 'classe', 'classe_id', 'identifiant'], … ] */
@@ -113,7 +113,7 @@ function action_tester(string $action): bool
         case 'reinitialiser_test':
             $n = 0;
             foreach ($pdo->query('SELECT id, nom FROM classes')->fetchAll() as $c) {
-                if (est_classe_test($c['nom'])) {
+                if (est_classe_test($c['nom']) && !est_classe_simulee($c['nom'])) {   // les classes simulées ont leurs boutons
                     effacer_travail_classe((int) $c['id']);
                     $n++;
                 }
@@ -121,8 +121,64 @@ function action_tester(string $action): bool
             flash("Travail des élèves test effacé ($n classe" . ($n > 1 ? 's' : '') . ') : ils repartent de zéro dans les ateliers et les parcours.'
                 . ' Dans Établi 3D, le projet gardé dans le navigateur reste là : Fichier → Nouveau pour repartir à vide.');
             rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#tester');
+
+        case 'simuler_classes':
+            $bilan = [];
+            foreach (CLASSES_SIMULEES as $nom => $niveau) {
+                [$n, $lignes, $prog] = simuler_classe($nom, $niveau);
+                $bilan[] = "$nom : $n élèves, $lignes activités commencées sur un programme de $prog";
+            }
+            flash('Classes simulées prêtes (8 semaines de travail, jusqu’à avant-hier). ' . implode(' · ', $bilan) . '.');
+            rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#simulees');
+
+        case 'supprimer_simulees':
+            $n = 0;
+            foreach (db()->query('SELECT id, nom FROM classes')->fetchAll() as $c) {
+                if (est_classe_simulee($c['nom'])) {
+                    supprimer_classe_simulee((int) $c['id']);
+                    $n++;
+                }
+            }
+            flash($n ? "Classes simulées supprimées ($n)." : 'Aucune classe simulée.');
+            rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#simulees');
     }
     return false;
+}
+
+/** Carte « Classes simulées » : des élèves fictifs aux profils variés, pour voir le suivi comme en situation réelle. */
+function carte_simulees(string $retour): void
+{
+    $classes = array_values(array_filter(db()->query('SELECT c.id, c.nom, (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id) AS n
+                                                      FROM classes c ORDER BY c.nom DESC')->fetchAll(), fn($c) => est_classe_simulee($c['nom'])));
+    $app = programme_simule(5)[0]['app'] ?? '';
+    $vue = $app !== '' ? '&vue=app:' . rawurlencode($app) : '';
+    ?>
+    <section class="carte" id="simulees">
+        <h2>Classes simulées</h2>
+        <p>Pour voir le suivi comme avec une vraie classe : <?= h(implode(', ', array_keys(CLASSES_SIMULEES))) ?>,
+            <?= array_sum(array_column(PROFILS_SIMULES, 'n')) ?> élèves fictifs chacune, qui ont travaillé 8 semaines sur les ateliers
+            de leur niveau (une séance par semaine, en GR1 / GR2) :
+            <?php $l = []; foreach (PROFILS_SIMULES as $p) { $l[] = $p['n'] . ' ' . $p['pluriel']; } echo h(implode(', ', $l)); ?>.
+            Avancement, mesures (temps, essais, premier coup, délai de réponse), constats de compétences et connexions sont rangés
+            comme le vrai travail ; le profil s’affiche à la place du nom. Ces classes ne comptent pas dans les connexions du tableau de bord.</p>
+        <?php if ($classes): ?>
+            <p class="ligne-actions">
+                <?php foreach ($classes as $c): ?>
+                    <a class="btn petit secondaire" href="./?p=suivi&classe=<?= (int) $c['id'] ?><?= $vue ?>">Suivi <?= h($c['nom']) ?> (<?= (int) $c['n'] ?>)</a>
+                    <a class="btn petit secondaire" href="./?p=classe&id=<?= (int) $c['id'] ?>">Classe <?= h($c['nom']) ?></a>
+                <?php endforeach; ?>
+            </p>
+        <?php endif; ?>
+        <div class="ligne-actions">
+            <?= bouton('simuler_classes', $classes ? 'Régénérer les classes simulées' : 'Créer les classes simulées', ['retour' => $retour], $classes ? 'secondaire' : '',
+                $classes ? 'Effacer les classes simulées et les recréer (le travail fait en testant à la place de leurs élèves sera perdu) ?' : '') ?>
+            <?php if ($classes): ?>
+                <?= bouton('supprimer_simulees', 'Supprimer les classes simulées', ['retour' => $retour], 'secondaire',
+                    'Supprimer les classes simulées et tout leur travail fictif ?') ?>
+            <?php endif; ?>
+        </div>
+    </section>
+    <?php
 }
 
 /**

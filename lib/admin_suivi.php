@@ -1073,6 +1073,7 @@ function page_ateliers(): void
         <?php endif; ?>
 
         <?php $avec_test = $liste && !$afficher_form ? carte_tester('./?p=ateliers') : false; ?>
+        <?php if ($liste && !$afficher_form) { carte_simulees('./?p=ateliers'); } ?>
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
                 <thead><tr><th></th><th>Atelier</th><th>Passerelle</th><th>Activités</th><th>Ouvertures (7 j)</th><th>Classes</th><th>État</th><th></th></tr></thead>

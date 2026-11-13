@@ -18,6 +18,7 @@ require __DIR__ . '/../../lib/admin_passerelles.php';
 require __DIR__ . '/../../lib/admin_bibliotheque.php';
 require __DIR__ . '/../../lib/admin_import.php';
 require __DIR__ . '/../../lib/admin_tester.php';
+require __DIR__ . '/../../lib/simulation.php';
 require __DIR__ . '/../../lib/admin_competences.php';
 require __DIR__ . '/../../lib/admin_catalogue.php';
 
@@ -119,6 +120,9 @@ function bouton(string $action, string $libelle, array $champs = [], string $cla
 /** Affiche le nom d'un élève : le numéro vient du serveur, le nom est complété par le navigateur. */
 function nom_eleve(string $classe, string $etiquette, string $vide = '—'): string
 {
+    if (($profil = profil_simule($classe, $etiquette)) !== null) {
+        $vide = $profil;   // classe simulée : le profil tient lieu de nom
+    }
     if (!est_pseudonyme($etiquette)) {
         return '<span class="alerte" title="Nom enregistré sur le serveur (ancienne version) : utilisez « Anonymiser la classe »">'
             . h($etiquette) . '</span>';
@@ -241,7 +245,7 @@ if ($action !== null) {
     $retour_eleve = './?p=eleve&id=' . $eleve_id;
 
     // Sans la clé secrète, aucun code ne peut être créé ni vérifié : on l'explique au lieu de planter
-    $actions_codes = ['generer', 'regenerer', 'regenerer_classe', 'reinitialiser_tous_codes', 'apercu_eleve', 'essayer_activite', 'verifier_codes', 'import_classe', 'creer_classes_test'];
+    $actions_codes = ['generer', 'regenerer', 'regenerer_classe', 'reinitialiser_tous_codes', 'apercu_eleve', 'essayer_activite', 'verifier_codes', 'import_classe', 'creer_classes_test', 'simuler_classes'];
     if (in_array($action, $actions_codes, true) && etat_cle() !== 'ok') {
         if (in_array($action, ['reinitialiser_tous_codes', 'verifier_codes', 'import_classe'], true)) {
             header('Content-Type: application/json; charset=utf-8');

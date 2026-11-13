@@ -1226,27 +1226,28 @@ function section_connexions_accueil(): void
     $pdo = db();
     $minuit = (new DateTimeImmutable('today', fuseau()))->getTimestamp();
     $q = fn(string $sql, array $p = []) => (function () use ($pdo, $sql, $p) { $st = $pdo->prepare($sql); $st->execute($p); return $st; })();
-    $heure = (int) $q('SELECT COUNT(DISTINCT eleve_id) FROM connexions WHERE ts >= ?', [time() - 3600])->fetchColumn();
-    $jour = (int) $q('SELECT COUNT(DISTINCT eleve_id) FROM connexions WHERE ts >= ?', [$minuit])->fetchColumn();
-    $sessions = (int) $q('SELECT COUNT(*) FROM sessions WHERE expire > ?', [time()])->fetchColumn();
-    $semaine = (int) $q('SELECT COUNT(DISTINCT eleve_id) FROM connexions WHERE ts >= ?', [$minuit - 6 * 86400])->fetchColumn();
-    $total = (int) $pdo->query('SELECT COUNT(*) FROM eleves WHERE actif = 1')->fetchColumn();
+    $hors = sql_hors_simules('eleve_id');   // les classes simulées ne comptent pas
+    $heure = (int) $q('SELECT COUNT(DISTINCT eleve_id) FROM connexions WHERE ts >= ?' . $hors, [time() - 3600])->fetchColumn();
+    $jour = (int) $q('SELECT COUNT(DISTINCT eleve_id) FROM connexions WHERE ts >= ?' . $hors, [$minuit])->fetchColumn();
+    $sessions = (int) $q('SELECT COUNT(*) FROM sessions WHERE expire > ?' . $hors, [time()])->fetchColumn();
+    $semaine = (int) $q('SELECT COUNT(DISTINCT eleve_id) FROM connexions WHERE ts >= ?' . $hors, [$minuit - 6 * 86400])->fetchColumn();
+    $total = (int) $pdo->query('SELECT COUNT(*) FROM eleves WHERE actif = 1' . sql_hors_simules('id'))->fetchColumn();
     // 7 derniers jours : élèves différents par jour
     $jours = [];
     for ($i = 6; $i >= 0; $i--) {
         $a = $minuit - $i * 86400;
-        $jours[] = ['date' => date('Y-m-d', $a), 'n' => (int) $q('SELECT COUNT(DISTINCT eleve_id) FROM connexions WHERE ts >= ? AND ts < ?', [$a, $a + 86400])->fetchColumn()];
+        $jours[] = ['date' => date('Y-m-d', $a), 'n' => (int) $q('SELECT COUNT(DISTINCT eleve_id) FROM connexions WHERE ts >= ? AND ts < ?' . $hors, [$a, $a + 86400])->fetchColumn()];
     }
     $max = max(1, ...array_column($jours, 'n'));
     $classes = $q('SELECT c.id, c.nom, c.etablissement_id, COUNT(DISTINCT x.eleve_id) AS n,
                        (SELECT COUNT(*) FROM eleves e2 WHERE e2.classe_id = c.id AND e2.actif = 1) AS total
                    FROM connexions x JOIN eleves e ON e.id = x.eleve_id JOIN classes c ON c.id = e.classe_id
-                   WHERE x.ts >= ? GROUP BY c.id ORDER BY n DESC, c.nom', [$minuit - 6 * 86400])->fetchAll();
+                   WHERE x.ts >= ?' . sql_hors_simules('x.eleve_id') . ' GROUP BY c.id ORDER BY n DESC, c.nom', [$minuit - 6 * 86400])->fetchAll();
     $apps = $q('SELECT x.app, COUNT(DISTINCT x.eleve_id) AS n, COUNT(*) AS ouvertures, a.nom, a.icone
-                FROM connexions x LEFT JOIN ateliers a ON a.app = x.app WHERE x.ts >= ? GROUP BY x.app ORDER BY n DESC', [$minuit - 6 * 86400])->fetchAll();
+                FROM connexions x LEFT JOIN ateliers a ON a.app = x.app WHERE x.ts >= ?' . sql_hors_simules('x.eleve_id') . ' GROUP BY x.app ORDER BY n DESC', [$minuit - 6 * 86400])->fetchAll();
     $dernieres = $pdo->query('SELECT x.ts, x.app, x.moyen, x.origine, e.etiquette, e.surnom, c.id AS classe_id, c.nom AS classe
                               FROM connexions x JOIN eleves e ON e.id = x.eleve_id JOIN classes c ON c.id = e.classe_id
-                              ORDER BY x.ts DESC LIMIT 10')->fetchAll();
+                              WHERE 1 = 1' . sql_hors_simules('x.eleve_id') . ' ORDER BY x.ts DESC LIMIT 10')->fetchAll();
     ?>
     <section class="carte" id="connexions">
         <h2>Connexions des élèves</h2>

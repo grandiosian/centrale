@@ -245,7 +245,16 @@ Onglets **Ateliers** et **Parcours**, carte « Tester à la place d'un élève �
   - **Tester ↗** sur une ligne d'atelier : l'atelier s'ouvre directement, connecté ;
   - **Tester ↗** sur une ligne de parcours : son portail, avec le parcours. Si le parcours n'est pas proposé à sa classe, la Centrale le dit.
 - L'élève choisi est gardé d'une page à l'autre. Seuls les élèves des classes de test sont proposés : on ne travaille jamais dans le dossier d'un vrai élève.
-- **Remettre les élèves test à zéro** : efface leur travail, leur avancement, leurs dossiers de projet et les étapes validées, pour rejouer un parcours depuis le début.
+- **Remettre les élèves test à zéro** : efface leur travail, leur avancement, leurs dossiers de projet et les étapes validées, pour rejouer un parcours depuis le début. Les classes simulées ne sont pas touchées.
+
+### Classes simulées : voir le suivi comme avec une vraie classe
+
+Onglet **Ateliers**, carte « Classes simulées » (`lib/simulation.php`) :
+
+- **Créer les classes simulées** : 5SIM et 4SIM, 24 élèves fictifs chacune, en GR1 / GR2, qui ont travaillé 8 semaines (une séance par semaine, la dernière avant-hier) sur les ateliers de leur niveau déclarés par les applications (groupes « 5e · … », « 5ᵉ · … », pris à tour de rôle entre applications).
+- Profils : 3 rapides, 9 réguliers, 4 en difficulté (beaucoup d'essais, corrections affichées), 2 retardataires (arrivent en retard, moins de temps de travail), 2 absentéistes (une séance sur trois environ, trous dans le suivi), 2 observateurs (lisent longtemps, regardent les corrections, laissent des activités inachevées), 1 décrocheur (s'arrête au bout de 4 semaines), 1 jamais connecté. Le profil est dans le surnom (`Retardataire1`) et s'affiche à la place du nom (« Retardataire 1 · simulé »).
+- Tout passe par les vraies tables : progression avec mesures (temps actif, essais, premier coup, délai de réponse, détail par question ; certaines activités et questions sont plus difficiles que d'autres), constats de compétences « envoyés par l'application », connexions portail + atelier, dernière connexion. Suivi, page élève, bilan de compétences et page classe s'affichent comme pour une vraie classe.
+- La génération est reproductible (mêmes élèves à chaque fois) ; **Régénérer** la refait à la date du jour, **Supprimer** efface tout. Les classes simulées comptent comme classes de test (« Tester à la place d'un élève ») mais sont écartées des chiffres de connexion du tableau de bord et des compteurs de la bibliothèque.
 
 ### Ateliers du portail
 

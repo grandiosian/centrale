@@ -33,7 +33,7 @@ function bibliotheque(): array
         $ateliers[$a['app']] = $a;
     }
     $stats = [];
-    foreach ($pdo->query("SELECT app, activite, SUM(statut = 'termine') AS t, COUNT(*) AS n FROM progression GROUP BY app, activite") as $r) {
+    foreach ($pdo->query("SELECT app, activite, SUM(statut = 'termine') AS t, COUNT(*) AS n FROM progression WHERE 1 = 1" . sql_hors_simules('eleve_id') . " GROUP BY app, activite") as $r) {
         $stats[$r['app']][$r['activite']] = [(int) $r['t'], (int) $r['n']];
     }
     $res = [];
