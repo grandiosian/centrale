@@ -309,16 +309,19 @@ window.PlanSalle = (function () {
    * (jusqu'à la place voisine) : resserré un peu, puis coupé avec « … » s'il reste trop long. Le nom complet est au survol.
    */
   function nomSurPlace(g, w, h, texte, max) {
-    blocNom(g, w / 2, h + 11, texte, max);
+    var bloc = blocNom(g, w / 2, h + 11, texte, max);
     el('title', {}, g).textContent = texte;
+    return bloc;
   }
 
   /**
    * Prénom (puis NOM en petit dessous) centré en (cx, y), sur un encadré jaune transparent qui le fait ressortir.
    * max : largeur disponible ; un nom trop long est resserré un peu, puis coupé avec « … ».
    */
-  function blocNom(parent, cx, y, texte, max) {
-    var id = separerNom(texte), bloc = el('g', { class: 'bloc-nom' }, parent), larg = 0;
+  function blocNom(parent, cx, y, texte, max, grand) {
+    // grand : sous la photo agrandie au survol — plus gros et opaque
+    var k = grand ? 1.45 : 1;
+    var id = separerNom(texte), bloc = el('g', { class: 'bloc-nom' + (grand ? ' grand' : '') }, parent), larg = 0;
     function longueur(txt, t, taille) {
       var l = txt.getComputedTextLength ? txt.getComputedTextLength() : 0;
       return l || t.length * taille * 0.56;   // pas encore affiché (calque des bulles) : estimation
@@ -334,10 +337,12 @@ window.PlanSalle = (function () {
       }
       larg = Math.max(larg, l);
     }
-    ligne(y, 'prenom-place', id.prenom, 10);
-    if (id.nom) ligne(y + 9, 'nom-place', id.nom, 8);
-    var cadre = el('rect', { x: cx - larg / 2 - 3, y: y - 9, width: larg + 6, height: id.nom ? 21 : 12, rx: 3, class: 'cadre-nom' }, null);
+    ligne(y, 'prenom-place', id.prenom, 10 * k);
+    if (id.nom) ligne(y + 9 * k, 'nom-place', id.nom, 8 * k);
+    var haut = (id.nom ? 21 : 12) * k, pad = 3 * k;
+    var cadre = el('rect', { x: cx - larg / 2 - pad, y: y - 9 * k, width: larg + 2 * pad, height: haut, rx: 3 * k, class: 'cadre-nom' }, null);
     bloc.insertBefore(cadre, bloc.firstChild);
+    bloc._boite = { x: cx - larg / 2 - pad, y: y - 9 * k, w: larg + 2 * pad, h: haut };   // dans le repère du parent
     return bloc;
   }
 
@@ -386,6 +391,47 @@ window.PlanSalle = (function () {
     var ordre = plan.objets.slice().sort(function (a, b) { return (estPlace(a) ? 1 : 0) - (estPlace(b) ? 1 : 0); });
     // largeur disponible pour le nom sous chaque place : jusqu'à la place voisine sur la même rangée
     var rectsPlaces = plan.objets.filter(estPlace).map(function (o) { return { id: o.id, r: tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o)) }; });
+    // Étiquettes déjà posées (repère de la salle, en pixels) : pour éviter les superpositions
+    var etiquettesPosees = [];
+    function chevauche(a, b) { return a.x < b.x + b.w - 1 && b.x < a.x + a.w - 1 && a.y < b.y + b.h - 1 && b.y < a.y + a.h - 1; }
+    /**
+     * L'étiquette est sous la place ; si elle recouvre une autre place (la photo de l'élève de la rangée de dessous) ou
+     * une étiquette déjà posée, elle passe au-dessus de la photo — sauf si elle y gênerait autant.
+     */
+    function placerNom(bloc, id, r) {
+      var b = bloc._boite;
+      if (!b) return;
+      function recouvrement(z, q) { return Math.max(0, Math.min(z.x + z.w, q.x + q.w) - Math.max(z.x, q.x)) * Math.max(0, Math.min(z.y + z.h, q.y + q.h) - Math.max(z.y, q.y)); }
+      function gene(z) {   // surface recouverte : places des autres élèves et étiquettes déjà posées
+        var t = 0;
+        rectsPlaces.forEach(function (q) { if (q.id !== id) t += recouvrement(z, { x: q.r.x * U, y: q.r.y * U, w: q.r.w * U, h: q.r.h * U }); });
+        etiquettesPosees.forEach(function (e) { t += recouvrement(z, e); });
+        return t;
+      }
+      function candidats(h) {
+        var dessous = { x: r.x * U + b.x, y: r.y * U + b.y, w: b.w, h: h };
+        return [dessous, { x: dessous.x, y: r.y * U - 2 - h, w: b.w, h: h }];   // sous la place, ou au-dessus (bas de l'étiquette 2 px au-dessus)
+      }
+      function poser(z, h) {
+        var dy = z.y - (r.y * U + b.y);
+        if (dy) { bloc.setAttribute('transform', 'translate(0,' + dy + ')'); bloc.classList.add('au-dessus'); }
+        etiquettesPosees.push({ x: z.x, y: z.y, w: z.w, h: h });
+      }
+      function libre(z) { return gene(z) <= z.w * z.h * 0.06; }   // un coin effleuré ne compte pas
+      // 1. prénom et nom : dessous, sinon au-dessus
+      var c = candidats(b.h);
+      if (libre(c[0])) return poser(c[0], b.h);
+      if (libre(c[1])) return poser(c[1], b.h);
+      // 2. trop serré : le prénom seul (le nom complet reste au survol), dessous ou au-dessus
+      var nomLigne = bloc.querySelector('.nom-place'), cadre = bloc.querySelector('.cadre-nom');
+      var h1 = nomLigne ? b.h - 9 : b.h;
+      if (nomLigne) { nomLigne.remove(); cadre.setAttribute('height', h1); }
+      var c1 = candidats(h1);
+      if (libre(c1[0])) return poser(c1[0], h1);
+      if (libre(c1[1])) return poser(c1[1], h1);
+      // 3. sinon : la position qui gêne le moins
+      poser(gene(c1[1]) < gene(c1[0]) ? c1[1] : c1[0], h1);
+    }
     function largeurNom(id, r) {
       var cx = r.x + r.w / 2, cy = r.y + r.h / 2, d = 2.4;
       rectsPlaces.forEach(function (q) {
@@ -402,7 +448,7 @@ window.PlanSalle = (function () {
       groupes[o.id] = g;
       if (options.surObjet) options.surObjet(o, g, r.w * U, r.h * U, {
         lab: lab,
-        nom: function (texte) { nomSurPlace(g, r.w * U, r.h * U, texte, largeurNom(o.id, r)); },
+        nom: function (texte) { placerNom(nomSurPlace(g, r.w * U, r.h * U, texte, largeurNom(o.id, r)), o.id, r); },
         bulle: function (u, v) {
           var out = el('g', { transform: 'translate(' + (r.x * U + u) + ',' + (r.y * U + v) + ')' }, survol);
           return el('g', { class: 'bulle' }, out);
@@ -898,7 +944,7 @@ window.PlanSalle = (function () {
     var W = 64;
     var interieur = el('g', { transform: 'translate(' + (-W / 2) + ',' + (-W / 2) + ')' }, bulle);
     photoPlace(interieur, W, W, visage);
-    if (texte) blocNom(bulle, 0, W / 2 + 13, texte, 150);   // agrandie, la photo garde son nom juste dessous
+    if (texte) blocNom(bulle, 0, W / 2 + 16, texte, 170, true);   // agrandie, la photo garde son nom juste dessous, en grand
     g.addEventListener('mouseenter', function () { bulle.classList.add('montre'); });
     g.addEventListener('mouseleave', function () { bulle.classList.remove('montre'); });
   }

@@ -311,6 +311,10 @@ tr.choisie td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .plan-svg .cadre-nom { fill: rgba(255, 214, 74, .62); stroke: rgba(176, 132, 0, .55); stroke-width: .8; }
 .plan-svg .bloc-nom .nom-eleve { stroke: none; fill: #1d1a10; }
 .plan-svg .bloc-nom .nom-eleve.nom-place { fill: #4a4030; }
+/* sous la photo agrandie (survol) : étiquette plus grosse et opaque */
+.plan-svg .bloc-nom.grand .cadre-nom { fill: #ffd84a; stroke: #b08400; stroke-width: 1.2; }
+.plan-svg .bloc-nom.grand .prenom-place { font: 700 14.5px system-ui, sans-serif; }
+.plan-svg .bloc-nom.grand .nom-place { font: 600 11.5px system-ui, sans-serif; }
 @media print { .plan-svg .cadre-nom { fill: rgba(255, 214, 74, .35); } }
 .plan-svg .numero-place { font-size: 11px; fill: var(--doux); }
 .liste-eleves { list-style: none; margin: 8px 0 12px; padding: 0; max-height: 60vh; overflow: auto; }
