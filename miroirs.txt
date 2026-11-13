@@ -3,7 +3,10 @@
 #   (dossier et commande : pour une application à assembler avant d'être servie, comme Établi 3D)
 #   (dossier « . » : tout le dépôt, quand seule une commande est nécessaire, comme TechnoStudio)
 # Chaque application sera servie à l'adresse  https://VOTRECOMPTE.alwaysdata.net/miroir/<nom>/
+# « enseignant:<nom> » : outil réservé à l'enseignant, copié hors de la racine web (prive/miroir/<nom>/)
+#   et servi seulement à l'enseignant connecté, à l'adresse /admin/appli.php/<nom>/
 # La copie est mise à jour à chaque déploiement de la Centrale et toutes les heures.
 netsim https://github.com/grandiosian/NetSim
 technostudio https://github.com/grandiosian/TechnoStudio . node tools/centrale-json.js && node tools/build.js
 etabli3d https://github.com/grandiosian/etabli3d dist python3 build.py
+enseignant:fichestudio https://github.com/grandiosian/FicheStudio dist npm ci && npm run build

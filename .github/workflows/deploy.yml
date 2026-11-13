@@ -10,7 +10,8 @@
 # Le dossier data/ (base des codes élèves) n'est jamais touché par le déploiement.
 #
 # Copies de secours : les applications listées dans miroirs.txt sont copiées dans
-# public/miroir/<nom>/ (servies à /miroir/<nom>/), après construction si la ligne le demande. Mise à jour à chaque déploiement
+# public/miroir/<nom>/ (servies à /miroir/<nom>/), après construction si la ligne le demande ; celles marquées
+# « enseignant: » vont dans prive/miroir/<nom>/ (hors racine web, servies par /admin/appli.php/<nom>/). Mise à jour à chaque déploiement
 # et toutes les heures. Si une copie échoue, rien n'est envoyé : le serveur garde la version précédente.
 
 name: Déployer sur alwaysdata
@@ -39,8 +40,13 @@ jobs:
           # Pas de PHP dans les copies : ce sont des applications statiques
           printf '<FilesMatch "\\.(php|phtml|phar)$">\n  Require all denied\n</FilesMatch>\n' > public/miroir/.htaccess
           # Une ligne : <nom> <dépôt> [<dossier publié, « . » pour tout le dépôt> [<commande de construction…>]]
+          # « enseignant:<nom> » : copie réservée à l'enseignant, rangée HORS de la racine web (prive/miroir/<nom>/)
+          # et servie seulement par /admin/appli.php/<nom>/ à l'enseignant connecté
+          mkdir -p prive/miroir
           grep -vE '^\s*(#|$)' miroirs.txt | while read -r nom depot dossier commande; do
-            case "$nom" in *[!A-Za-z0-9_-]*) echo "Nom invalide : $nom"; exit 1;; esac
+            cible=public/miroir
+            case "$nom" in enseignant:*) nom="${nom#enseignant:}"; cible=prive/miroir;; esac
+            case "$nom" in ''|*[!A-Za-z0-9_-]*) echo "Nom invalide : $nom"; exit 1;; esac
             case "${dossier:-}" in /*|*..*) echo "Dossier invalide : $dossier"; exit 1;; esac
             echo "→ $nom ($depot)${dossier:+ : dossier $dossier}${commande:+, construit par « $commande »}"
             src="$RUNNER_TEMP/miroir-$nom"
@@ -48,10 +54,10 @@ jobs:
             if [ -n "${commande:-}" ]; then (cd "$src" && bash -c "$commande"); fi
             if [ -n "${dossier:-}" ] && [ "$dossier" != "." ]; then src="$src/$dossier"; fi   # « . » : tout le dépôt (utile avant une commande)
             rm -rf "$src/.git" "$src/.github"
-            mv "$src" "public/miroir/$nom"
-            echo "$(date -u +%FT%TZ) $(git ls-remote "$depot" HEAD | cut -c1-7)" > "public/miroir/$nom/.copie"
+            mv "$src" "$cible/$nom"
+            echo "$(date -u +%FT%TZ) $(git ls-remote "$depot" HEAD | cut -c1-7)" > "$cible/$nom/.copie"
           done
-          ls public/miroir
+          ls public/miroir prive/miroir
 
       - name: Vérifier que les secrets sont configurés
         id: config
