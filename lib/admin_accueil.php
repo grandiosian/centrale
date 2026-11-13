@@ -507,13 +507,21 @@ function page_tableau_de_bord(): void
                             </button>
                             <div class="reperes-widget" id="reperes-widget">
                                 <button type="button" class="dash-widget reperes-tete" id="reperes-tete" aria-expanded="false" aria-controls="reperes-panneau"
-                                        title="Icônes au-dessus des élèves : en avance, en retard, en difficulté, retardataire… (calculées en comparant chaque élève à sa classe)">
+                                        title="Icônes au-dessus des élèves : ce qui est observé en classe (appel, cartons) et ce que montre la plateforme (activité dans les ateliers)">
                                     <?= dash_icone('oeil') ?><span>Repères des élèves</span><span class="reperes-fleche" aria-hidden="true">▾</span>
                                 </button>
                                 <div class="reperes-panneau" id="reperes-panneau" hidden>
-                                    <label class="reperes-afficher"><input type="checkbox" id="reperes-afficher" checked> Afficher les icônes sur le plan</label>
-                                    <ul class="reperes-legende" id="reperes-legende"></ul>
-                                    <p class="discret reperes-aide">Chaque élève est comparé à sa classe. Le détail est dans sa fiche (clic sur l’élève).</p>
+                                    <div class="reperes-source">
+                                        <label class="reperes-afficher"><input type="checkbox" id="classe-afficher" checked> <strong>Observé en classe</strong></label>
+                                        <p class="discret reperes-aide">Ce que vous notez : appel, cartons. Gardé sur cet ordinateur. Ronds et cartons, à gauche du trait.</p>
+                                        <ul class="reperes-legende" id="classe-legende"></ul>
+                                    </div>
+                                    <div class="reperes-source">
+                                        <label class="reperes-afficher"><input type="checkbox" id="reperes-afficher" checked> <strong>Sur la plateforme</strong></label>
+                                        <p class="discret reperes-aide">Calculé d’après l’activité dans les ateliers, en comparant l’élève à sa classe. Carrés, à droite du trait.</p>
+                                        <ul class="reperes-legende" id="reperes-legende"></ul>
+                                    </div>
+                                    <p class="discret reperes-aide">Le détail chiffré est dans la fiche de l’élève (clic sur l’élève).</p>
                                 </div>
                             </div>
                         <?php endif; ?>
@@ -1259,30 +1267,32 @@ function page_tableau_de_bord(): void
             }
 
             /* Repères des élèves : légende des icônes (PlanSalle.REPERES) et bouton pour les montrer ou les cacher sur le plan. */
-            var repTete = document.getElementById('reperes-tete'), repLegende = document.getElementById('reperes-legende');
+            var repTete = document.getElementById('reperes-tete');
             if (repTete && window.PlanSalle && PlanSalle.REPERES) {
-                Object.keys(PlanSalle.REPERES).forEach(function (k) {
-                    var r = PlanSalle.REPERES[k], li = document.createElement('li'), ico = document.createElement('span');
-                    ico.className = 'repere-ico';
-                    ico.style.background = r.couleur;
-                    ico.textContent = r.glyphe;
-                    li.append(ico, ' ' + r.libelle);
-                    repLegende.appendChild(li);
+                // deux légendes : observé en classe (PlanSalle.CLASSE), sur la plateforme (PlanSalle.REPERES)
+                [['classe-legende', PlanSalle.CLASSE], ['reperes-legende', PlanSalle.REPERES]].forEach(function (x) {
+                    var ul = document.getElementById(x[0]);
+                    Object.keys(x[1]).forEach(function (k) {
+                        var li = document.createElement('li');
+                        li.append(PlanSalle.icone(x[1][k]), ' ' + x[1][k].libelle);
+                        ul.appendChild(li);
+                    });
                 });
-                var repPanneau = document.getElementById('reperes-panneau'), repCase = document.getElementById('reperes-afficher');
-                function repAppliquer(cache) {
-                    document.documentElement.classList.toggle('sans-reperes', cache);
-                    repCase.checked = !cache;
-                }
-                try { repAppliquer(localStorage.getItem('centrale-reperes-caches') === '1'); } catch (e) { /* rien */ }
-                repTete.addEventListener('click', function () {   // la légende se déplie sous le bouton
+                var repPanneau = document.getElementById('reperes-panneau');
+                repTete.addEventListener('click', function () {   // la légende se déplie à côté du bouton
                     repPanneau.hidden = !repPanneau.hidden;
                     repTete.setAttribute('aria-expanded', String(!repPanneau.hidden));
                 });
-                repCase.addEventListener('change', function () {
-                    try { localStorage.setItem('centrale-reperes-caches', repCase.checked ? '' : '1'); } catch (e) { /* rien */ }
-                    repAppliquer(!repCase.checked);
-                    document.dispatchEvent(new Event('centrale-noms'));   // les plans se redessinent avec ou sans les icônes
+                // chaque source se montre ou se cache sur le plan (réglage gardé sur cet ordinateur)
+                [['classe-afficher', 'sans-classe', 'centrale-classe-cache'], ['reperes-afficher', 'sans-reperes', 'centrale-reperes-caches']].forEach(function (x) {
+                    var c = document.getElementById(x[0]);
+                    function appliquer(cache) { document.documentElement.classList.toggle(x[1], cache); c.checked = !cache; }
+                    try { appliquer(localStorage.getItem(x[2]) === '1'); } catch (e) { /* rien */ }
+                    c.addEventListener('change', function () {
+                        try { localStorage.setItem(x[2], c.checked ? '' : '1'); } catch (e) { /* rien */ }
+                        appliquer(!c.checked);
+                        document.dispatchEvent(new Event('centrale-noms'));   // les plans se redessinent
+                    });
                 });
             }
 

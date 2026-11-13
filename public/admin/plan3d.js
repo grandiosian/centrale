@@ -399,15 +399,34 @@ window.PlanSalle3D = (function () {
   }
 
   var ECHELLE_CARTON = 0.0135;   // unités 3D par pixel des petits cartons (et des pastilles d'appel et de repères)
-  /** Petits cartons, un par observation (jaune) ou récompense (vert) ; d'abord la pastille d'appel (absent, en retard). */
+  /**
+   * Pastilles au-dessus d'un élève, en deux groupes séparés par un trait blanc (« | ») :
+   *   observé en classe (ronds et cartons : appel de la séance, absences ou retards répétés, observations, récompenses),
+   *   puis sur la plateforme (carrés arrondis : repères calculés par la Centrale).
+   */
   function carteCartons(types) {
     var cv = document.createElement('canvas'), g = cv.getContext('2d');
-    var montres = types.slice(0, 5), reste = types.length - montres.length;
-    cv.width = montres.length * 30 + 12 + (reste ? 40 : 0); cv.height = 40;
-    montres.forEach(function (t, i) {
-      var x = 6 + i * 30;
+    var montres = [], n = 0;
+    types.forEach(function (t) { if (t === '|' ? montres.length && montres[montres.length - 1] !== '|' : n++ < 8) montres.push(t); });
+    if (montres[montres.length - 1] === '|') montres.pop();
+    var reste = types.filter(function (t) { return t !== '|'; }).length - montres.filter(function (t) { return t !== '|'; }).length;
+    var largeur = montres.reduce(function (l, t) { return l + (t === '|' ? 14 : 30); }, 0);
+    cv.width = largeur + 12 + (reste ? 40 : 0); cv.height = 40;
+    var x = 6;
+    montres.forEach(function (t) {
+      if (t === '|') {   // séparation entre ce qui est observé en classe et ce que dit la plateforme
+        g.fillStyle = '#ffffff'; g.fillRect(x + 4, 2, 4, 36);
+        x += 14;
+        return;
+      }
       var rep = t.indexOf('rep-') === 0 && window.PlanSalle && PlanSalle.REPERES ? PlanSalle.REPERES[t.slice(4)] : null;
-      if (rep) {   // repère de l'élève : pastille carrée arrondie, couleur et icône du repère
+      var cl = t.indexOf('cl-') === 0 && window.PlanSalle && PlanSalle.CLASSE ? PlanSalle.CLASSE[t] : null;
+      if (cl) {   // en classe, répété (absences, retards à l'appel) : rond avec un liseré
+        g.beginPath(); g.arc(x + 12, 20, 15, 0, Math.PI * 2);
+        g.fillStyle = cl.couleur; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
+        g.fillStyle = '#ffffff'; g.font = '800 14px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(cl.glyphe, x + 12, 21);
+      } else if (rep) {   // plateforme : pastille carrée arrondie, couleur et icône du repère
         g.fillStyle = rep.couleur;
         g.beginPath();
         if (g.roundRect) g.roundRect(x - 2, 4, 28, 32, 7); else g.rect(x - 2, 4, 28, 32);
@@ -429,9 +448,10 @@ window.PlanSalle3D = (function () {
         g.fillRect(x, 3, 24, 34);
         g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.strokeRect(x, 3, 24, 34);
       }
+      x += 30;
     });
     if (reste) {
-      var x0 = 6 + montres.length * 30;
+      var x0 = x;
       g.fillStyle = '#ffffff'; g.fillRect(x0, 3, 34, 34);
       g.fillStyle = '#1d1f24'; g.font = '700 22px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText('+' + reste, x0 + 17, 21);

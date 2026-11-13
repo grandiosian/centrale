@@ -1043,21 +1043,28 @@ window.PlanSalle = (function () {
     if (besoins.length && cn.pastilles) rang('Besoins', cn.pastilles(besoins));
     corps.appendChild(detail);
 
-    var rep = reperesEleve(d, e);
-    if (rep.length) {
-      var blocRep = creer('div', 'fiche-reperes');
-      blocRep.appendChild(creer('p', 'fiche-trois-cartons-titre', 'Repères'));
-      rep.forEach(function (r) {
-        var def = REPERES[r.code] || { glyphe: '•', couleur: '#888', libelle: r.code };
-        var ligne = creer('p', 'fiche-repere'), ico = creer('span', 'repere-ico', def.glyphe);
-        ico.style.background = def.couleur;
-        ligne.append(ico, creer('strong', '', def.libelle), creer('span', 'discret', ' · ' + r.texte));
-        blocRep.appendChild(ligne);
+    function lignesReperes(bloc, liste, defs) {
+      liste.forEach(function (r) {
+        var def = defs[r.code] || { glyphe: '•', couleur: '#888', libelle: r.code }, ligne = creer('p', 'fiche-repere');
+        ligne.append(icone(def), creer('strong', '', def.libelle), creer('span', 'discret', ' · ' + r.texte));
+        bloc.appendChild(ligne);
       });
-      corps.appendChild(blocRep);
     }
-    if (cn && cn.presence) corps.appendChild(sectionPresence(d, e.numero, actualiser));
-    if (cn && cn.cartons) corps.appendChild(sectionCartons(d.classe, e.numero, actualiser));
+    // 1. Observé en classe : noté par l'enseignant sur cet ordinateur
+    var enClasse = creer('section', 'fiche-source fiche-classe');
+    enClasse.appendChild(creer('h4', 'fiche-source-titre', 'Observé en classe'));
+    enClasse.appendChild(creer('p', 'discret fiche-source-aide', 'Ce que vous avez noté (appel, cartons), gardé sur cet ordinateur.'));
+    lignesReperes(enClasse, observationsClasse(d, e), CLASSE);
+    if (cn && cn.presence) enClasse.appendChild(sectionPresence(d, e.numero, actualiser));
+    if (cn && cn.cartons) enClasse.appendChild(sectionCartons(d.classe, e.numero, actualiser));
+    corps.appendChild(enClasse);
+    // 2. Sur la plateforme : calculé par la Centrale d'après l'activité dans les ateliers
+    var plateforme = creer('section', 'fiche-source fiche-plateforme'), rep = reperesEleve(d, e);
+    plateforme.appendChild(creer('h4', 'fiche-source-titre', 'Sur la plateforme'));
+    plateforme.appendChild(creer('p', 'discret fiche-source-aide', 'Calculé par la Centrale d’après son activité dans les ateliers, comparée à celle de sa classe.'));
+    if (rep.length) lignesReperes(plateforme, rep, REPERES);
+    else plateforme.appendChild(creer('p', 'discret', 'Rien de particulier.'));
+    corps.appendChild(plateforme);
 
     // code de connexion : seulement la copie gardée sur cet ordinateur, masquée jusqu'au clic
     var bloc = creer('div', 'fiche-trois-code');
@@ -1256,29 +1263,51 @@ window.PlanSalle = (function () {
   }
   function enAppel() { return document.documentElement.classList.contains('mode-appel'); }
 
-  /** Repères des élèves (lib/reperes.php, plus l'appel noté sur cet ordinateur) : icône, couleur, libellé. */
-  var REPERES = {
-    avance:       { glyphe: '▲', couleur: '#2e8b57', libelle: 'En avance sur la classe' },
-    retard:       { glyphe: '▼', couleur: '#e67e22', libelle: 'En retard dans le travail' },
-    difficulte:   { glyphe: '!', couleur: '#c0392b', libelle: 'En difficulté (essais, 1er coup)' },
-    corrections:  { glyphe: '?', couleur: '#2f6fb5', libelle: 'Regarde souvent les corrections' },
-    retardataire: { glyphe: '⏱', couleur: '#d35400', libelle: 'Retardataire (arrive après les autres)' },
-    absences:     { glyphe: '∅', couleur: '#8e44ad', libelle: 'Souvent absent (connexions, appel)' },
-    decroche:     { glyphe: 'Z', couleur: '#5d6d7e', libelle: 'Décroché (plus d’activité)' },
-    jamais:       { glyphe: '–', couleur: '#95a5a6', libelle: 'Jamais connecté' },
+  /*
+   * Deux sources qu'on ne mélange jamais :
+   *  - OBSERVÉ EN CLASSE (CLASSE) : ce que l'enseignant a noté sur cet ordinateur — appel de la séance, absences ou
+   *    retards répétés à l'appel, cartons d'observation et récompenses. Ronds et cartons.
+   *  - SUR LA PLATEFORME (REPERES) : ce que la Centrale calcule d'après l'activité dans les ateliers (lib/reperes.php),
+   *    en comparant l'élève à sa classe. Carrés arrondis.
+   * Sur le plan, les deux groupes sont séparés par un trait ; dans la fiche, ce sont deux parties.
+   */
+  var CLASSE = {
+    absent:         { forme: 'rond', glyphe: 'A', couleur: '#c0392b', libelle: 'Absent à ce cours (appel)' },
+    retard:         { forme: 'rond', glyphe: 'R', couleur: '#e67e22', libelle: 'En retard à ce cours (appel)' },
+    'cl-absences':  { forme: 'rond', glyphe: 'A+', couleur: '#8e44ad', libelle: 'Absences répétées (3 ou plus à l’appel)' },
+    'cl-retards':   { forme: 'rond', glyphe: 'R+', couleur: '#a04000', libelle: 'Retards répétés (2 ou plus à l’appel)' },
+    observation:    { forme: 'carton', glyphe: '', couleur: '#f2b705', libelle: 'Observation (carton)' },
+    recompense:     { forme: 'medaille', glyphe: '', couleur: '#2e8b57', libelle: 'Récompense' },
   };
-  /** Repères d'un élève : ceux du serveur, plus ceux de l'appel (3 absences ou 2 retards notés ici). */
-  function reperesEleve(d, e) {
-    var liste = (e.reperes || []).slice(), cn = window.CentraleNoms;
-    if (cn && cn.absences) {
-      var a = cn.absences(d.classe, e.numero), nA = a.filter(function (x) { return x.etat === 'absent'; }).length, nR = a.length - nA;
-      var codes = liste.map(function (r) { return r.code; });
-      if (nA >= 3 && codes.indexOf('absences') < 0) liste.push({ code: 'absences', texte: nA + ' absences notées à l’appel' });
-      if (nR >= 2 && codes.indexOf('retardataire') < 0) liste.push({ code: 'retardataire', texte: nR + ' retards notés à l’appel' });
-    }
-    return liste;
+  var REPERES = {
+    avance:       { forme: 'carre', glyphe: '▲', couleur: '#2e8b57', libelle: 'En avance sur la classe' },
+    retard:       { forme: 'carre', glyphe: '▼', couleur: '#e67e22', libelle: 'En retard dans le travail' },
+    difficulte:   { forme: 'carre', glyphe: '!', couleur: '#c0392b', libelle: 'En difficulté (essais, 1er coup)' },
+    corrections:  { forme: 'carre', glyphe: '?', couleur: '#2f6fb5', libelle: 'Regarde souvent les corrections' },
+    retardataire: { forme: 'carre', glyphe: '⏱', couleur: '#d35400', libelle: 'Se connecte après son groupe' },
+    absences:     { forme: 'carre', glyphe: '∅', couleur: '#8e44ad', libelle: 'Peu de connexions' },
+    decroche:     { forme: 'carre', glyphe: 'Z', couleur: '#5d6d7e', libelle: 'Plus d’activité (décroché)' },
+    jamais:       { forme: 'carre', glyphe: '–', couleur: '#95a5a6', libelle: 'Jamais connecté' },
+  };
+  /** Sur la plateforme : repères calculés par la Centrale (rien de ce qui est noté en classe). */
+  function reperesEleve(d, e) { return (e.reperes || []).slice(); }
+  /** Observé en classe, répété : absences (3 ou plus) et retards (2 ou plus) notés à l'appel sur cet ordinateur. */
+  function observationsClasse(d, e) {
+    var cn = window.CentraleNoms, res = [];
+    if (!cn || !cn.absences) return res;
+    var a = cn.absences(d.classe, e.numero), nA = a.filter(function (x) { return x.etat === 'absent'; }).length, nR = a.length - nA;
+    if (nA >= 3) res.push({ code: 'cl-absences', texte: nA + ' absences notées à l’appel' });
+    if (nR >= 2) res.push({ code: 'cl-retards', texte: nR + ' retards notés à l’appel' });
+    return res;
   }
   function reperesVisibles() { return !document.documentElement.classList.contains('sans-reperes'); }
+  function classeVisible() { return !document.documentElement.classList.contains('sans-classe') || enAppel(); }
+  /** Pastille de légende ou de fiche : même forme et même couleur que sur le plan. */
+  function icone(def) {
+    var ico = creer('span', 'repere-ico forme-' + (def.forme || 'carre'), def.glyphe || '');
+    ico.style.background = def.couleur;
+    return ico;
+  }
   var SUIVANT_APPEL = { '': 'absent', absent: 'retard', retard: '' };
   /** Compteur du bouton « Faire l'appel » (accueil) pour le plan affiché dans la vue. */
   function compterAppel(d) {
@@ -1332,9 +1361,12 @@ window.PlanSalle = (function () {
           cartonsPlace: function (o) {
             var id = carte[o.id], e = id && eleve(id), cn = window.CentraleNoms;
             if (!e || !cn || !cn.cartons) return [];
+            // en classe (appel, répétitions, cartons) | sur la plateforme (repères)
             var p = cn.presence ? cn.presence(d.classe, e.numero, seanceDe(d).cle) : '';
-            var rep = reperesVisibles() ? reperesEleve(d, e).map(function (r) { return 'rep-' + r.code; }) : [];
-            return (p ? [p] : []).concat(rep, cn.cartons(d.classe, e.numero).map(function (c) { return c.type; }));
+            var classe = classeVisible() ? (p ? [p] : []).concat(observationsClasse(d, e).map(function (r) { return r.code; }),
+              cn.cartons(d.classe, e.numero).map(function (c) { return c.type; })) : [];
+            var plateforme = reperesVisibles() ? reperesEleve(d, e).map(function (r) { return 'rep-' + r.code; }) : [];
+            return classe.concat(classe.length && plateforme.length ? ['|'] : [], plateforme);
           },
           surClic: function (idPlace) {
             var cn = window.CentraleNoms, e = carte[idPlace] && eleve(carte[idPlace]);
@@ -1355,5 +1387,6 @@ window.PlanSalle = (function () {
     document.addEventListener('centrale-vue', rendre);    // et quand la présentation change
   }
 
-  return { editeur: editeur, placement: placement, dessiner: dessiner, apercu: apercu, barreVue: barreVue, TYPES: TYPES, REPERES: REPERES };
+  return { editeur: editeur, placement: placement, dessiner: dessiner, apercu: apercu, barreVue: barreVue, TYPES: TYPES,
+           REPERES: REPERES, CLASSE: CLASSE, icone: icone };
 })();

@@ -1,6 +1,6 @@
 <?php
 /**
- * Centrale élèves — repères sur les élèves d'une classe, affichés en icônes sur le plan de classe de l'accueil.
+ * Centrale élèves — repères « SUR LA PLATEFORME » des élèves d'une classe, en icônes sur le plan de classe de l'accueil.
  *
  * Calculés à partir de ce que le serveur sait déjà (progression, mesures, connexions), toujours par comparaison
  * avec le reste de la classe :
@@ -8,12 +8,12 @@
  *   retard       activités terminées : au plus 60 % de la médiane
  *   difficulte   moins de 40 % de réussite du premier coup, ou 3 essais par question ou plus
  *   corrections  affiche souvent les corrections
- *   retardataire se connecte en général plusieurs minutes après les autres élèves de son groupe
- *   absences     connecté beaucoup moins de jours que la classe (8 dernières semaines)
+ *   retardataire se connecte en général 8 min ou plus après les autres élèves de son groupe
+ *   absences     peu de connexions : deux fois moins de jours que la classe (8 dernières semaines)
  *   decroche     plus aucune activité depuis 2 semaines alors que la classe travaille
  *   jamais       jamais connecté
- * Les icônes et couleurs sont dans public/admin/plan.js (PlanSalle.REPERES). L'appel (absences, retards notés par
- * l'enseignant) reste dans le navigateur et s'ajoute côté navigateur.
+ * Les icônes et couleurs sont dans public/admin/plan.js (PlanSalle.REPERES). Ce qui est OBSERVÉ EN CLASSE (appel, cartons)
+ * reste dans le navigateur de l'enseignant et s'affiche à part (PlanSalle.CLASSE) : on ne mélange jamais les deux sources.
  */
 declare(strict_types=1);
 
@@ -119,7 +119,7 @@ function reperes_classe(int $classe_id): array
             $r[] = ['code' => 'corrections', 'texte' => $e['rev'] . ' corrections affichées'];
         }
         if (count($ecarts[$id] ?? []) >= 3 && ($m = mediane_nombres($ecarts[$id])) >= 8) {
-            $r[] = ['code' => 'retardataire', 'texte' => 'Arrive en général ' . round($m) . ' min après les autres (' . count($ecarts[$id]) . ' séances)'];
+            $r[] = ['code' => 'retardataire', 'texte' => 'Se connecte en général ' . round($m) . ' min après son groupe (' . count($ecarts[$id]) . ' séances)'];
         }
         if ($med_jours !== null && $med_jours >= 3 && count($e['jours']) <= $med_jours * .5) {
             $r[] = ['code' => 'absences', 'texte' => 'Connecté ' . count($e['jours']) . ' jour' . (count($e['jours']) > 1 ? 's' : '') . ' en 8 semaines (classe : ' . round($med_jours) . ')'];
