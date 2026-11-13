@@ -1043,6 +1043,19 @@ window.PlanSalle = (function () {
     if (besoins.length && cn.pastilles) rang('Besoins', cn.pastilles(besoins));
     corps.appendChild(detail);
 
+    var rep = reperesEleve(d, e);
+    if (rep.length) {
+      var blocRep = creer('div', 'fiche-reperes');
+      blocRep.appendChild(creer('p', 'fiche-trois-cartons-titre', 'Repères'));
+      rep.forEach(function (r) {
+        var def = REPERES[r.code] || { glyphe: '•', couleur: '#888', libelle: r.code };
+        var ligne = creer('p', 'fiche-repere'), ico = creer('span', 'repere-ico', def.glyphe);
+        ico.style.background = def.couleur;
+        ligne.append(ico, creer('strong', '', def.libelle), creer('span', 'discret', ' · ' + r.texte));
+        blocRep.appendChild(ligne);
+      });
+      corps.appendChild(blocRep);
+    }
     if (cn && cn.presence) corps.appendChild(sectionPresence(d, e.numero, actualiser));
     if (cn && cn.cartons) corps.appendChild(sectionCartons(d.classe, e.numero, actualiser));
 
@@ -1242,6 +1255,30 @@ window.PlanSalle = (function () {
     return { cle: cn && cn.dateLocale ? cn.dateLocale() : new Date().toISOString().slice(0, 10), libelle: 'aujourd’hui' };
   }
   function enAppel() { return document.documentElement.classList.contains('mode-appel'); }
+
+  /** Repères des élèves (lib/reperes.php, plus l'appel noté sur cet ordinateur) : icône, couleur, libellé. */
+  var REPERES = {
+    avance:       { glyphe: '▲', couleur: '#2e8b57', libelle: 'En avance sur la classe' },
+    retard:       { glyphe: '▼', couleur: '#e67e22', libelle: 'En retard dans le travail' },
+    difficulte:   { glyphe: '!', couleur: '#c0392b', libelle: 'En difficulté (essais, 1er coup)' },
+    corrections:  { glyphe: '?', couleur: '#2f6fb5', libelle: 'Regarde souvent les corrections' },
+    retardataire: { glyphe: '⏱', couleur: '#d35400', libelle: 'Retardataire (arrive après les autres)' },
+    absences:     { glyphe: '∅', couleur: '#8e44ad', libelle: 'Souvent absent (connexions, appel)' },
+    decroche:     { glyphe: 'Z', couleur: '#5d6d7e', libelle: 'Décroché (plus d’activité)' },
+    jamais:       { glyphe: '–', couleur: '#95a5a6', libelle: 'Jamais connecté' },
+  };
+  /** Repères d'un élève : ceux du serveur, plus ceux de l'appel (3 absences ou 2 retards notés ici). */
+  function reperesEleve(d, e) {
+    var liste = (e.reperes || []).slice(), cn = window.CentraleNoms;
+    if (cn && cn.absences) {
+      var a = cn.absences(d.classe, e.numero), nA = a.filter(function (x) { return x.etat === 'absent'; }).length, nR = a.length - nA;
+      var codes = liste.map(function (r) { return r.code; });
+      if (nA >= 3 && codes.indexOf('absences') < 0) liste.push({ code: 'absences', texte: nA + ' absences notées à l’appel' });
+      if (nR >= 2 && codes.indexOf('retardataire') < 0) liste.push({ code: 'retardataire', texte: nR + ' retards notés à l’appel' });
+    }
+    return liste;
+  }
+  function reperesVisibles() { return !document.documentElement.classList.contains('sans-reperes'); }
   var SUIVANT_APPEL = { '': 'absent', absent: 'retard', retard: '' };
   /** Compteur du bouton « Faire l'appel » (accueil) pour le plan affiché dans la vue. */
   function compterAppel(d) {
@@ -1260,7 +1297,7 @@ window.PlanSalle = (function () {
     if (!svg || !d || !d.plan) return;
     var carte = d.placement || {}, enAttente = false;
     function eleve(id) { return (d.eleves || []).find(function (e) { return e.id === id; }); }
-    function nom(e) { var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : ''; return n || ('n° ' + e.numero); }
+    function nom(e) { var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : ''; return n || e.simule || ('n° ' + e.numero); }
     function rendre() {
       // l'accueil montre la salle en 3D : tant que three.js n'est pas chargé, on n'affiche pas la vue 2D (elle clignoterait)
       if (!(window.THREE && window.PlanSalle3D)) {
@@ -1296,7 +1333,8 @@ window.PlanSalle = (function () {
             var id = carte[o.id], e = id && eleve(id), cn = window.CentraleNoms;
             if (!e || !cn || !cn.cartons) return [];
             var p = cn.presence ? cn.presence(d.classe, e.numero, seanceDe(d).cle) : '';
-            return (p ? [p] : []).concat(cn.cartons(d.classe, e.numero).map(function (c) { return c.type; }));
+            var rep = reperesVisibles() ? reperesEleve(d, e).map(function (r) { return 'rep-' + r.code; }) : [];
+            return (p ? [p] : []).concat(rep, cn.cartons(d.classe, e.numero).map(function (c) { return c.type; }));
           },
           surClic: function (idPlace) {
             var cn = window.CentraleNoms, e = carte[idPlace] && eleve(carte[idPlace]);
@@ -1317,5 +1355,5 @@ window.PlanSalle = (function () {
     document.addEventListener('centrale-vue', rendre);    // et quand la présentation change
   }
 
-  return { editeur: editeur, placement: placement, dessiner: dessiner, apercu: apercu, barreVue: barreVue, TYPES: TYPES };
+  return { editeur: editeur, placement: placement, dessiner: dessiner, apercu: apercu, barreVue: barreVue, TYPES: TYPES, REPERES: REPERES };
 })();

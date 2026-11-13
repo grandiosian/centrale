@@ -398,7 +398,7 @@ window.PlanSalle3D = (function () {
     return null;
   }
 
-  var ECHELLE_CARTON = 0.0085;   // unités 3D par pixel des petits cartons
+  var ECHELLE_CARTON = 0.0135;   // unités 3D par pixel des petits cartons (et des pastilles d'appel et de repères)
   /** Petits cartons, un par observation (jaune) ou récompense (vert) ; d'abord la pastille d'appel (absent, en retard). */
   function carteCartons(types) {
     var cv = document.createElement('canvas'), g = cv.getContext('2d');
@@ -406,7 +406,15 @@ window.PlanSalle3D = (function () {
     cv.width = montres.length * 30 + 12 + (reste ? 40 : 0); cv.height = 40;
     montres.forEach(function (t, i) {
       var x = 6 + i * 30;
-      if (t === 'absent' || t === 'retard') {   // appel : pastille rouge « A » (absent) ou orange « R » (en retard)
+      var rep = t.indexOf('rep-') === 0 && window.PlanSalle && PlanSalle.REPERES ? PlanSalle.REPERES[t.slice(4)] : null;
+      if (rep) {   // repère de l'élève : pastille carrée arrondie, couleur et icône du repère
+        g.fillStyle = rep.couleur;
+        g.beginPath();
+        if (g.roundRect) g.roundRect(x - 2, 4, 28, 32, 7); else g.rect(x - 2, 4, 28, 32);
+        g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
+        g.fillStyle = '#ffffff'; g.font = '800 19px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(rep.glyphe, x + 12, 21);
+      } else if (t === 'absent' || t === 'retard') {   // appel : pastille rouge « A » (absent) ou orange « R » (en retard)
         g.beginPath(); g.arc(x + 12, 20, 15, 0, Math.PI * 2);
         g.fillStyle = t === 'absent' ? '#c0392b' : '#e67e22'; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
         g.fillStyle = '#ffffff'; g.font = '800 18px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';

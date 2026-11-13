@@ -139,7 +139,8 @@ function action_tester(string $action): bool
                     $n++;
                 }
             }
-            flash($n ? "Classes simulées supprimées ($n)." : 'Aucune classe simulée.');
+            db()->prepare('DELETE FROM etablissements WHERE nom = ? COLLATE NOCASE')->execute([ETABLISSEMENT_SIMULE]);   // grille, salle, cours
+            flash($n ? "Classes simulées supprimées ($n), avec l’établissement " . ETABLISSEMENT_SIMULE . '.' : 'Aucune classe simulée.');
             rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#simulees');
     }
     return false;

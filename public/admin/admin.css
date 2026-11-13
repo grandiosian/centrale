@@ -1361,7 +1361,7 @@ a.dash-widget { text-decoration: none; color: inherit; }
 .cours-jour { width: 300px; display: flex; flex-direction: column; gap: 6px; }
 .cours-jour .cj-tete { width: 100%; justify-content: flex-start; }
 .cours-jour .cj-tete .compte-pastille { margin-left: auto; }
-.cj-corps { max-height: min(40vh, 340px); overflow-y: auto; padding: 6px; background: var(--carte-fond); border: 1px solid var(--carte-bord);
+.cj-corps { max-height: min(32vh, 300px); overflow-y: auto; padding: 6px; background: var(--carte-fond); border: 1px solid var(--carte-bord);
     border-radius: 12px; box-shadow: var(--carte-ombre); }
 .cj-corps[hidden] { display: none; }
 .cj-rien { margin: 6px; color: var(--doux); font-size: .88rem; }
@@ -1403,3 +1403,21 @@ a.dash-widget { text-decoration: none; color: inherit; }
 .presence-liste { margin: 4px 0 0; padding-left: 18px; font-size: .84rem; }
 .presence-liste .presence-absent::marker { color: #c0392b; }
 .presence-liste .presence-retard::marker { color: #e67e22; }
+
+/* Repères des élèves (accueil) : légende des icônes et lignes de la fiche */
+.reperes-widget { position: relative; display: flex; flex-direction: column; gap: 6px; width: 300px; }
+.reperes-widget .reperes-tete { width: 100%; justify-content: flex-start; }
+.reperes-fleche { margin-left: auto; color: var(--doux); transition: transform .15s; }
+.reperes-tete[aria-expanded="true"] .reperes-fleche { transform: rotate(180deg); }
+.reperes-panneau { position: absolute; left: calc(100% + 8px); bottom: 0; z-index: 40; width: 320px; box-sizing: border-box; padding: 8px 10px; background: var(--carte-fond); border: 1px solid var(--carte-bord); border-radius: 12px; box-shadow: var(--carte-ombre); }
+.reperes-panneau[hidden] { display: none; }
+.reperes-panneau label.reperes-afficher { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 6px; margin: 0 0 6px; font-size: .82rem; font-weight: 600; text-align: left; }
+.reperes-afficher input { width: auto; margin: 0; flex: none; }
+.reperes-aide { margin: 6px 0 0; font-size: .72rem; }
+.reperes-legende { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; font-size: .74rem; }
+.reperes-legende li { display: flex; align-items: center; gap: 5px; line-height: 1.2; }
+.repere-ico { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 18px; height: 18px; border-radius: 5px;
+    color: #fff; font-size: .7rem; font-weight: 800; }
+.fiche-reperes { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--bord); }
+.fiche-repere { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0; font-size: .86rem; }
+@media (max-width: 720px) { .reperes-widget { width: 100%; max-width: 360px; } .reperes-panneau { position: static; width: auto; } }

@@ -19,6 +19,7 @@ require __DIR__ . '/../../lib/admin_bibliotheque.php';
 require __DIR__ . '/../../lib/admin_import.php';
 require __DIR__ . '/../../lib/admin_tester.php';
 require __DIR__ . '/../../lib/simulation.php';
+require __DIR__ . '/../../lib/reperes.php';
 require __DIR__ . '/../../lib/admin_competences.php';
 require __DIR__ . '/../../lib/admin_catalogue.php';
 

@@ -13,6 +13,9 @@ function seances_semaine_tous(string $lundi): array
     $vacances = [];
     $samedi = false;
     foreach (db()->query('SELECT * FROM etablissements ORDER BY nom')->fetchAll() as $e) {
+        if (est_etablissement_simule($e['nom'])) {
+            continue;   // classes simulées : seulement dans « Les cours aujourd'hui » et « Voir une classe », pas dans le calendrier ni l'horloge
+        }
         $samedi = $samedi || (bool) $e['samedi'];
         $creneaux = creneaux_de((int) $e['id']);
         $index = [];
@@ -154,7 +157,10 @@ function donnees_plan_seance(array $s, bool $exiger_placement = true): ?array
         'pastille'  => pastille_classe($classe_id),
         'etiquette' => ($c = classe_par_id($classe_id)) ? couleurs_pastille($c, (string) $salle['nom']) : null,
         'classe'    => classe_par_id($classe_id)['nom'] ?? '',
-        'eleves'    => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif']], $eleves),
+        'eleves'    => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif'],
+                                        'reperes' => reperes_classe($classe_id)[(int) $e['id']] ?? [],
+                                        // classe simulée : le profil tient lieu de nom (« Retardataire 1 »)
+                                        'simule' => ($pr = profil_simule((string) (classe_par_id($classe_id)['nom'] ?? ''), $e['etiquette'])) !== null ? str_replace(' · simulé', '', $pr) : null], $eleves),
         'placement' => (object) $placement,
         'salle'     => $salle['nom'],
         'salle_id'  => $salle_id,
@@ -498,6 +504,17 @@ function page_tableau_de_bord(): void
                                     title="Faire l’appel sur le plan affiché : chaque clic sur un élève le marque absent, puis en retard, puis présent. Gardé sur cet ordinateur seulement.">
                                 <?= dash_icone('valider') ?><span><strong id="appel-titre">Faire l’appel</strong><small id="appel-compte"></small></span>
                             </button>
+                            <div class="reperes-widget" id="reperes-widget">
+                                <button type="button" class="dash-widget reperes-tete" id="reperes-tete" aria-expanded="false" aria-controls="reperes-panneau"
+                                        title="Icônes au-dessus des élèves : en avance, en retard, en difficulté, retardataire… (calculées en comparant chaque élève à sa classe)">
+                                    <?= dash_icone('oeil') ?><span>Repères des élèves</span><span class="reperes-fleche" aria-hidden="true">▾</span>
+                                </button>
+                                <div class="reperes-panneau" id="reperes-panneau" hidden>
+                                    <label class="reperes-afficher"><input type="checkbox" id="reperes-afficher" checked> Afficher les icônes sur le plan</label>
+                                    <ul class="reperes-legende" id="reperes-legende"></ul>
+                                    <p class="discret reperes-aide">Chaque élève est comparé à sa classe. Le détail est dans sa fiche (clic sur l’élève).</p>
+                                </div>
+                            </div>
                         <?php endif; ?>
                     </div>
                     <div class="dz dz-haut-droite">
@@ -1237,6 +1254,34 @@ function page_tableau_de_bord(): void
                     appelBouton.setAttribute('aria-pressed', String(on));
                     document.getElementById('appel-titre').textContent = on ? 'Appel en cours · cliquez les élèves' : 'Faire l’appel';
                     document.dispatchEvent(new Event('centrale-appel'));
+                });
+            }
+
+            /* Repères des élèves : légende des icônes (PlanSalle.REPERES) et bouton pour les montrer ou les cacher sur le plan. */
+            var repTete = document.getElementById('reperes-tete'), repLegende = document.getElementById('reperes-legende');
+            if (repTete && window.PlanSalle && PlanSalle.REPERES) {
+                Object.keys(PlanSalle.REPERES).forEach(function (k) {
+                    var r = PlanSalle.REPERES[k], li = document.createElement('li'), ico = document.createElement('span');
+                    ico.className = 'repere-ico';
+                    ico.style.background = r.couleur;
+                    ico.textContent = r.glyphe;
+                    li.append(ico, ' ' + r.libelle);
+                    repLegende.appendChild(li);
+                });
+                var repPanneau = document.getElementById('reperes-panneau'), repCase = document.getElementById('reperes-afficher');
+                function repAppliquer(cache) {
+                    document.documentElement.classList.toggle('sans-reperes', cache);
+                    repCase.checked = !cache;
+                }
+                try { repAppliquer(localStorage.getItem('centrale-reperes-caches') === '1'); } catch (e) { /* rien */ }
+                repTete.addEventListener('click', function () {   // la légende se déplie sous le bouton
+                    repPanneau.hidden = !repPanneau.hidden;
+                    repTete.setAttribute('aria-expanded', String(!repPanneau.hidden));
+                });
+                repCase.addEventListener('change', function () {
+                    try { localStorage.setItem('centrale-reperes-caches', repCase.checked ? '' : '1'); } catch (e) { /* rien */ }
+                    repAppliquer(!repCase.checked);
+                    document.dispatchEvent(new Event('centrale-noms'));   // les plans se redessinent avec ou sans les icônes
                 });
             }
 
