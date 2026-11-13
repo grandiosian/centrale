@@ -420,7 +420,7 @@ window.PlanSalle3D = (function () {
         return;
       }
       var rep = t.indexOf('rep-') === 0 && window.PlanSalle && PlanSalle.REPERES ? PlanSalle.REPERES[t.slice(4)] : null;
-      var cl = t.indexOf('cl-') === 0 && window.PlanSalle && PlanSalle.CLASSE ? PlanSalle.CLASSE[t] : null;
+      var cl = t.indexOf('cl-') === 0 && window.PlanSalle && PlanSalle.CLASSE ? PlanSalle.CLASSE[t] : null;   // dont cl-dehors
       if (cl) {   // en classe, répété (absences, retards à l'appel) : rond avec un liseré
         g.beginPath(); g.arc(x + 12, 20, 15, 0, Math.PI * 2);
         g.fillStyle = cl.couleur; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
@@ -1161,6 +1161,8 @@ window.PlanSalle3D = (function () {
         st.eleve = null;
         if (e.vignette) {
           e.vignette.remove();
+          var sous = document.elementFromPoint(ev.clientX, ev.clientY);
+          if (sous && !canvas.contains(sous) && st.opts.surLacherAilleurs) { st.opts.surLacherAilleurs(e.de, sous); return; }   // hors de la salle
           var cible = placeSous(st, ev);
           if (cible && cible !== e.de) st.opts.surGlisser(e.de, cible);
         }

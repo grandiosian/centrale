@@ -1334,6 +1334,12 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
                 </aside>
                 <div class="zone-plan carte">
                     <svg id="plan" class="plan-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+                    <div class="zone-dehors vide" id="zone-dehors" aria-label="Hors de la classe">
+                        <p class="zone-dehors-titre"><span aria-hidden="true">🚪</span> Hors de la classe</p>
+                        <p class="aide">Glissez ici un élève (du plan ou de la liste) exclu du cours, exclu ou sorti de l’établissement.
+                            Exclu du cours : il garde sa place pour les cours suivants. Le motif reste sur cet ordinateur.</p>
+                        <ul class="dehors-liste"></ul>
+                    </div>
                     <div class="ligne-actions" style="margin-top:12px">
                         <button>Enregistrer le plan de classe</button>
                         <?php if ($variante_id): ?>

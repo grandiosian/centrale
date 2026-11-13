@@ -1505,3 +1505,27 @@ body.plan-modifie .plan-non-enregistre { display: inline; }
 .plan-svg [data-place].survol .forme { stroke: var(--accent); stroke-width: 3; }
 #liste-eleves.depot { outline: 2px dashed var(--accent); outline-offset: 4px; }
 @media print { .variantes-ligne, .plan-non-enregistre, .maj-variante { display: none !important; } }
+
+/* Plan de classe : zone « Hors de la classe » (exclu du cours, exclu ou sorti de l'établissement) */
+.zone-dehors { margin-top: 12px; padding: 10px 12px; border: 2px dashed var(--bord); border-radius: 12px; background: color-mix(in srgb, #5d6d7e 6%, transparent); }
+.zone-dehors.survol { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.zone-dehors-titre { margin: 0; font-weight: 700; }
+.zone-dehors .aide { margin: 2px 0 6px; font-size: .8rem; }
+.zone-dehors.vide .dehors-liste { display: none; }
+.dehors-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.dehors-eleve { display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--bord); font-size: .85rem; }
+.dehors-eleve .vignette { width: 26px; height: 32px; border-radius: 6px; background: var(--code-fond); flex: none; }
+.dehors-eleve .nom { font-weight: 600; }
+.dehors-eleve.motif-exclu_cours { border-color: #e67e22; }
+.dehors-eleve.motif-exclu { border-color: #c0392b; }
+.dehors-eleve.motif-sortie { border-color: #2e8b57; }
+.plan-svg [data-place].dehors { opacity: .45; }
+.dialogue-dehors { border: 1px solid var(--bord); border-radius: 14px; padding: 16px 18px; background: var(--surface); color: var(--texte); max-width: 420px; }
+.dialogue-dehors::backdrop { background: rgba(15, 25, 35, .35); }
+.dialogue-dehors h3 { margin: 0 0 4px; }
+.dehors-choix { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 10px; }
+.dehors-choix button { display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 8px 12px; border-radius: 10px; cursor: pointer;
+    font: inherit; background: var(--surface); color: var(--texte); border: 1.5px solid var(--bord); }
+.dehors-choix button:hover { border-color: var(--accent); }
+.dehors-choix button small { color: var(--doux); font-size: .78rem; }
+@media print { .zone-dehors.vide, .zone-dehors .aide { display: none; } }

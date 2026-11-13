@@ -104,7 +104,8 @@
   var STATUTS = { sortie: 'Sortie', exclu: 'Exclu', changement: 'Changement de classe' };
   function statutsLocaux(classe, numero) {
     var autres = (lireCle(CLE_STATUTS)[classe] || {})[numero] || {};
-    return { sortie: sortieLocale(classe, numero), exclu: autres.exclu || '', changement: autres.changement || '' };
+    // exclu_cours : exclusion ponctuelle d'un cours (date du jour) — l'élève garde sa place, il est « hors de la classe » ce jour-là
+    return { sortie: sortieLocale(classe, numero), exclu: autres.exclu || '', changement: autres.changement || '', exclu_cours: autres.exclu_cours || '' };
   }
   function setStatut(classe, numero, statut, date) {
     if (statut === 'sortie') { setSortie(classe, numero, date); return; }
@@ -428,6 +429,7 @@
     sortie: sortieLocale,
     statuts: statutsLocaux,
     libellesStatuts: STATUTS,
+    definirStatut: function (c, n, statut, date) { setStatut(c, n, statut, date); afficherNoms(); },
     ajouter: function (classe, paires) { ajouter(classe, paires); afficherNoms(); },
     carte: function (classe) { return Object.assign({}, lire()[classe] || {}); },
     besoins: besoinsLocaux,

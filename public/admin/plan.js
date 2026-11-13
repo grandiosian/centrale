@@ -494,6 +494,7 @@ window.PlanSalle = (function () {
         return tr.rect(o.x + fx * lw, o.y + fy * lh, fw * lw, fh * lh);
       },
     }, { surClic: infos.surClic || null, surGlisser: infos.surGlisser || null, peutGlisser: infos.peutGlisser || null, libelle: infos.libelle || null,
+         surLacherAilleurs: infos.surLacherAilleurs || null,
          quand: function () { document.dispatchEvent(new Event('centrale-vue')); } });
     return {};
   }
@@ -1003,12 +1004,93 @@ window.PlanSalle = (function () {
     var infosPlaces = {
       nomPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? nom(e) : ''; },
       visagePlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? photo(d.classe, e.numero) : null; },
-      cartonsPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e && window.CentraleNoms && window.CentraleNoms.cartons ? window.CentraleNoms.cartons(d.classe, e.numero).map(function (c) { return c.type; }) : []; },
+      cartonsPlace: function (o) {
+        var id = carte[o.id], e = id && eleve(id);
+        if (!e || !window.CentraleNoms || !window.CentraleNoms.cartons) return [];
+        return (dehors(d.classe, e.numero) ? ['cl-dehors'] : []).concat(window.CentraleNoms.cartons(d.classe, e.numero).map(function (c) { return c.type; }));
+      },
       surClic: function (idPlace) { clicPlace(idPlace); },
       surGlisser: glisser,
       peutGlisser: function (idPlace) { return !!carte[idPlace]; },
       libelle: function (idPlace) { var e = eleve(carte[idPlace]); return e ? nom(e) : ''; },
+      // lâché hors de la vue 3D : dans « Hors de la classe », ou dans la liste (l'élève n'est plus placé)
+      surLacherAilleurs: function (idPlace, sous) { lacheHorsPlan(idPlace, sous); },
     };
+
+    /* ---------- Hors de la classe : exclu du cours (garde sa place), exclu ou sorti de l'établissement ---------- */
+    var zoneDehors = document.getElementById('zone-dehors');
+    function lacheHorsPlan(idPlace, sous) {
+      if (!sous || !sous.closest) return false;
+      if (sous.closest('#zone-dehors')) { if (carte[idPlace]) sortir(carte[idPlace]); return true; }
+      if (sous.closest('#liste-eleves')) { delete carte[idPlace]; modifie(); rendre(); return true; }
+      return false;
+    }
+    var dialogueDehors = null;
+    /** Demande le motif, puis met l'élève dehors (statut gardé sur cet ordinateur, comme les noms). */
+    function sortir(idEleve) {
+      var e = eleve(idEleve), cn = window.CentraleNoms;
+      if (!e || !cn || !cn.definirStatut) return;
+      if (!dialogueDehors) {
+        dialogueDehors = creer('dialog', 'dialogue-dehors');
+        document.body.appendChild(dialogueDehors);
+      }
+      dialogueDehors.replaceChildren();
+      dialogueDehors.append(creer('h3', '', nom(e) + ' : hors de la classe'), creer('p', 'discret', 'Motif (gardé sur cet ordinateur, avec la date du jour) :'));
+      var choix = creer('div', 'dehors-choix');
+      [['exclu_cours', 'Exclu du cours aujourd’hui', 'garde sa place pour les prochains cours'],
+       ['exclu', 'Exclu de l’établissement', 'n’est plus placé'],
+       ['sortie', 'Sorti de l’établissement (retiré)', 'n’est plus placé']].forEach(function (m) {
+        var b = creer('button', 'dehors-' + m[0]);
+        b.type = 'button';
+        b.append(creer('strong', '', m[1]), creer('small', '', m[2]));
+        b.addEventListener('click', function () {
+          var auj = cn.dateLocale ? cn.dateLocale() : new Date().toISOString().slice(0, 10);
+          dialogueDehors.close();
+          if (m[0] !== 'exclu_cours') { var p = placeDe(idEleve); if (p) { delete carte[p]; modifie(); } }
+          cn.definirStatut(d.classe, e.numero, m[0], auj);   // redessine (événement « centrale-noms »)
+        });
+        choix.appendChild(b);
+      });
+      var annuler = creer('button', 'secondaire petit', 'Annuler');
+      annuler.type = 'button';
+      annuler.addEventListener('click', function () { dialogueDehors.close(); });
+      dialogueDehors.append(choix, annuler);
+      dialogueDehors.showModal();
+    }
+    /** L'élève revient : son motif est effacé (il retrouve sa place s'il l'avait gardée). */
+    function rentrer(e) {
+      var dh = dehors(d.classe, e.numero), cn = window.CentraleNoms;
+      if (dh && cn && cn.definirStatut) cn.definirStatut(d.classe, e.numero, dh.motif, '');
+    }
+    function rendreDehors() {
+      if (!zoneDehors) return;
+      var ul = zoneDehors.querySelector('.dehors-liste');
+      ul.replaceChildren();
+      d.eleves.forEach(function (e) {
+        var dh = dehors(d.classe, e.numero);
+        if (!dh) return;
+        var li = creer('li', 'dehors-eleve motif-' + dh.motif), v = creer('span', 'vignette');
+        var visage = photo(d.classe, e.numero);
+        if (visage) window.CentraleNoms.styleVisage(v, visage, 26 / visage.l, 26, 32);
+        var retour = creer('button', 'lien-bouton', '↩ revenir');
+        retour.type = 'button';
+        retour.title = 'Effacer le motif : l’élève revient dans la classe';
+        retour.addEventListener('click', function () { rentrer(e); });
+        li.append(v, creer('span', 'nom', nom(e)), creer('span', 'discret', dh.texte), retour);
+        ul.appendChild(li);
+      });
+      zoneDehors.classList.toggle('vide', !ul.children.length);
+    }
+    if (zoneDehors) {
+      zoneDehors.addEventListener('dragover', function (ev) { ev.preventDefault(); zoneDehors.classList.add('survol'); });
+      zoneDehors.addEventListener('dragleave', function () { zoneDehors.classList.remove('survol'); });
+      zoneDehors.addEventListener('drop', function (ev) {   // depuis la liste
+        ev.preventDefault();
+        zoneDehors.classList.remove('survol');
+        var idE = +ev.dataTransfer.getData('text/plain');
+        if (idE) sortir(idE);
+      });
+    }
 
     /** Vue à plat : glisser une place occupée vers une autre place (échange) ou vers la liste (l'élève n'est plus placé). */
     function glisserSvg(g, idPlace, ev) {
@@ -1031,6 +1113,7 @@ window.PlanSalle = (function () {
         cible = p;
         if (cible) cible.classList.add('survol');
         liste.classList.toggle('depot', !!(sous && sous.closest && sous.closest('#liste-eleves')));
+        if (zoneDehors) zoneDehors.classList.toggle('survol', !!(sous && sous.closest && sous.closest('#zone-dehors')));
       }
       function lache(e2) {
         document.removeEventListener('pointermove', bouge);
@@ -1042,7 +1125,8 @@ window.PlanSalle = (function () {
         ignorerClic = true;
         setTimeout(function () { ignorerClic = false; }, 0);
         var sous = document.elementFromPoint(e2.clientX, e2.clientY);
-        if (sous && sous.closest && sous.closest('#liste-eleves')) { delete carte[idPlace]; modifie(); rendre(); return; }
+        if (zoneDehors) zoneDehors.classList.remove('survol');
+        if (lacheHorsPlan(idPlace, sous)) return;
         if (cible) glisser(idPlace, cible.getAttribute('data-place'));
       }
       document.addEventListener('pointermove', bouge);
@@ -1062,6 +1146,7 @@ window.PlanSalle = (function () {
             g.classList.add('occupee');
             g.addEventListener('pointerdown', function (ev) { glisserSvg(g, o.id, ev); });
             var e = eleve(id);
+            if (e && dehors(d.classe, e.numero)) g.classList.add('dehors');   // exclu du cours aujourd'hui : place gardée, grisée
             var visage = e ? photo(d.classe, e.numero) : null;
             if (visage) photoPlace(g, w, h, visage);
             if (ctx.nom) ctx.nom(e ? nom(e) : '?'); else ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? nom(e) : '?');
@@ -1103,7 +1188,9 @@ window.PlanSalle = (function () {
         if (b.length) li.querySelector('.nom').after(window.CentraleNoms.pastilles(b));
         var nbCartons = window.CentraleNoms && window.CentraleNoms.cartons ? window.CentraleNoms.cartons(d.classe, e.numero).length : 0;
         if (nbCartons) li.querySelector('.nom').after(creer('span', 'pastille-carton', String(nbCartons)));
-        li.querySelector('.ou').textContent = place ? 'place ' + nums[place] : '';
+        var dhl = dehors(d.classe, e.numero);
+        li.querySelector('.ou').textContent = (place ? 'place ' + nums[place] : '') + (dhl ? (place ? ' · ' : '') + 'dehors' : '');
+        if (dhl) li.title = dhl.texte;
         li.onclick = function () { choisi = choisi === e.id ? null : e.id; rendre(); };
         var fiche = creer('button', 'bouton-fiche', '🗂');
         fiche.type = 'button';
@@ -1113,6 +1200,7 @@ window.PlanSalle = (function () {
         li.addEventListener('dragstart', function (ev) { ev.dataTransfer.setData('text/plain', String(e.id)); });
         liste.appendChild(li);
       });
+      rendreDehors();
       var nbPlaces = plan.objets.filter(estPlace).length;
       var nbPlaces2 = Object.keys(carte).length;
       document.getElementById('compte-places').textContent = nbPlaces2 + ' élève' + (nbPlaces2 > 1 ? 's' : '') + ' placé' + (nbPlaces2 > 1 ? 's' : '')
@@ -1239,6 +1327,8 @@ window.PlanSalle = (function () {
     if (statuts.sortie) etats.push('Sorti depuis le ' + statuts.sortie);
     if (statuts.exclu) etats.push('Exclu depuis le ' + statuts.exclu);
     if (statuts.changement) etats.push('Changement de classe depuis le ' + statuts.changement);
+    var dhf = dehors(d.classe, e.numero);
+    if (dhf && dhf.motif === 'exclu_cours') etats.push('Exclu du cours aujourd’hui');
     rang('État', (etats.length ? etats.join(' · ') : 'Présent') + (e.actif ? '' : ' · compte désactivé'));
     if (besoins.length && cn.pastilles) rang('Besoins', cn.pastilles(besoins));
     function puces(codes, defs, vide) {
@@ -1486,6 +1576,7 @@ window.PlanSalle = (function () {
     retard:         { forme: 'rond', glyphe: 'R', couleur: '#e67e22', libelle: 'En retard à ce cours (appel)' },
     'cl-absences':  { forme: 'rond', glyphe: 'A+', couleur: '#8e44ad', libelle: 'Absences répétées (3 ou plus à l’appel)' },
     'cl-retards':   { forme: 'rond', glyphe: 'R+', couleur: '#a04000', libelle: 'Retards répétés (2 ou plus à l’appel)' },
+    'cl-dehors':    { forme: 'rond', glyphe: '⇥', couleur: '#5d6d7e', libelle: 'Hors de la classe (exclu du cours, exclu, sorti)' },
     observation:    { forme: 'carton', glyphe: '', couleur: '#f2b705', libelle: 'Observation (carton)' },
     recompense:     { forme: 'medaille', glyphe: '', couleur: '#2e8b57', libelle: 'Récompense' },
   };
@@ -1501,9 +1592,25 @@ window.PlanSalle = (function () {
   };
   /** Sur la plateforme : repères calculés par la Centrale (rien de ce qui est noté en classe). */
   function reperesEleve(d, e) { return (e.reperes || []).slice(); }
+  /**
+   * Élève « hors de la classe » (statuts gardés sur cet ordinateur) : exclu du cours aujourd'hui (il garde sa place),
+   * exclu ou sorti de l'établissement. Renvoie { motif, date, texte } ou null.
+   */
+  var MOTIFS_DEHORS = { exclu_cours: 'Exclu du cours', exclu: 'Exclu de l’établissement', sortie: 'Sorti de l’établissement' };
+  function dehors(classe, numero) {
+    var cn = window.CentraleNoms, st = cn && cn.statuts ? cn.statuts(classe, numero) : {};
+    var auj = cn && cn.dateLocale ? cn.dateLocale() : new Date().toISOString().slice(0, 10);
+    var jour = function (dt) { return dt.split('-').reverse().join('/'); };
+    if (st.sortie) return { motif: 'sortie', date: st.sortie, texte: MOTIFS_DEHORS.sortie + ' le ' + jour(st.sortie) };
+    if (st.exclu) return { motif: 'exclu', date: st.exclu, texte: MOTIFS_DEHORS.exclu + ' depuis le ' + jour(st.exclu) };
+    if (st.exclu_cours === auj) return { motif: 'exclu_cours', date: auj, texte: MOTIFS_DEHORS.exclu_cours + ' aujourd’hui' };
+    return null;
+  }
   /** Observé en classe, répété : absences (3 ou plus) et retards (2 ou plus) notés à l'appel sur cet ordinateur. */
   function observationsClasse(d, e) {
     var cn = window.CentraleNoms, res = [];
+    var dh = dehors(d.classe, e.numero);
+    if (dh) res.push({ code: 'cl-dehors', texte: dh.texte });
     if (!cn || !cn.absences) return res;
     var a = cn.absences(d.classe, e.numero), nA = a.filter(function (x) { return x.etat === 'absent'; }).length, nR = a.length - nA;
     if (nA >= 3) res.push({ code: 'cl-absences', texte: nA + ' absences notées à l’appel' });
