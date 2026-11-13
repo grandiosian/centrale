@@ -398,7 +398,7 @@ window.PlanSalle3D = (function () {
     return null;
   }
 
-  var ECHELLE_CARTON = 0.0135;   // unités 3D par pixel des petits cartons (et des pastilles d'appel et de repères)
+  var ECHELLE_CARTON = 0.009;    // unités 3D par pixel des petits cartons (et des pastilles d'appel et de repères)
   /**
    * Pastilles au-dessus d'un élève, en deux groupes séparés par un trait blanc (« | ») :
    *   observé en classe (ronds et cartons : appel de la séance, absences ou retards répétés, observations, récompenses),

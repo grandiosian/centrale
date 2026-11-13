@@ -846,7 +846,9 @@ a.usage.app::before { content: "⚙ "; }
 .plan-svg .cotes .clavier { fill: #3b4250; stroke: #1c2029; stroke-width: .5; }
 .plan-svg .cotes .ecran-iso { fill: #173a5e; stroke: #0c2238; stroke-width: .6; }
 .plan-svg .cotes .face-x, .plan-svg .cotes .face-y { stroke-width: .6; }
-.plan-svg .calque-survol .bulle { opacity: 0; transform: scale(.4); transform-box: fill-box; transform-origin: center; transition: opacity .15s, transform .18s; pointer-events: none; }
+/* la bulle est dessinée centrée sur son point (0, 0) : elle grandit depuis ce point. (fill-box prenait le centre de toute la
+   planche du trombinoscope, découpée en rond mais comptée entière, d'où un grossissement décalé.) */
+.plan-svg .calque-survol .bulle { opacity: 0; transform: scale(.4); transform-box: view-box; transform-origin: 0 0; transition: opacity .15s, transform .18s; pointer-events: none; }
 .plan-svg .calque-survol .bulle.montre { opacity: 1; transform: scale(1); }
 .plan-svg .calque-survol .bulle .anneau-photo { stroke: #fff; stroke-width: 2.5px; }
 .angle-vue { display: inline-flex; align-items: center; gap: 8px; }
