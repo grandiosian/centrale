@@ -334,6 +334,15 @@ function creer_tables(PDO $pdo): void
     ajouter_colonne($pdo, 'eleves', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'cours', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'seances_modifiees', 'groupe_id', 'INTEGER REFERENCES groupes(id) ON DELETE SET NULL');
+    // FicheStudio (outil enseignant) : avancement de la correction projetée, par classe ou groupe (cible « c5 », « c5g2 »)
+    // et par document. valeur = JSON de FicheStudio { last, mark, sessions, pages } (lu tel quel, jamais interprété ici)
+    $pdo->exec('CREATE TABLE IF NOT EXISTS fichestudio_avancement (
+        cible  TEXT NOT NULL,
+        doc    TEXT NOT NULL,
+        valeur TEXT NOT NULL,
+        maj    INTEGER NOT NULL,
+        PRIMARY KEY (cible, doc)
+    )');
     // Ateliers transversaux : parcours individuel ou en équipe, étapes qui reçoivent / produisent des fichiers
     ajouter_colonne($pdo, 'parcours', 'mode', "TEXT NOT NULL DEFAULT 'individuel'");      // individuel | equipe
     ajouter_colonne($pdo, 'parcours', 'deblocage', "TEXT NOT NULL DEFAULT 'libre'");      // libre | ordre | validation
