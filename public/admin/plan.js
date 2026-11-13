@@ -304,6 +304,43 @@ window.PlanSalle = (function () {
     if (texte) lab(w / 2, h / 2, zt, 'etiquette' + (estPlace(o) ? ' numero-place' : ''), texte);
   }
 
+  /**
+   * Nom d'un élève sous sa place (vue à plat) : prénom, puis NOM en petit dessous, chacun ramené à la largeur disponible
+   * (jusqu'à la place voisine) : resserré un peu, puis coupé avec « … » s'il reste trop long. Le nom complet est au survol.
+   */
+  function nomSurPlace(g, w, h, texte, max) {
+    blocNom(g, w / 2, h + 11, texte, max);
+    el('title', {}, g).textContent = texte;
+  }
+
+  /**
+   * Prénom (puis NOM en petit dessous) centré en (cx, y), sur un encadré jaune transparent qui le fait ressortir.
+   * max : largeur disponible ; un nom trop long est resserré un peu, puis coupé avec « … ».
+   */
+  function blocNom(parent, cx, y, texte, max) {
+    var id = separerNom(texte), bloc = el('g', { class: 'bloc-nom' }, parent), larg = 0;
+    function longueur(txt, t, taille) {
+      var l = txt.getComputedTextLength ? txt.getComputedTextLength() : 0;
+      return l || t.length * taille * 0.56;   // pas encore affiché (calque des bulles) : estimation
+    }
+    function ligne(yl, cls, t, taille) {
+      var txt = el('text', { x: cx, y: yl, class: 'nom-eleve ' + cls }, bloc);
+      txt.textContent = t;
+      var l = longueur(txt, t, taille);
+      if (l > max) {
+        var s2 = t;
+        while (s2.length > 3 && l > max / 0.8) { s2 = s2.slice(0, -1); txt.textContent = s2.replace(/[\s-]+$/, '') + '…'; l = longueur(txt, txt.textContent, taille); }
+        if (l > max) { txt.setAttribute('textLength', max); txt.setAttribute('lengthAdjust', 'spacingAndGlyphs'); l = max; }
+      }
+      larg = Math.max(larg, l);
+    }
+    ligne(y, 'prenom-place', id.prenom, 10);
+    if (id.nom) ligne(y + 9, 'nom-place', id.nom, 8);
+    var cadre = el('rect', { x: cx - larg / 2 - 3, y: y - 9, width: larg + 6, height: id.nom ? 21 : 12, rx: 3, class: 'cadre-nom' }, null);
+    bloc.insertBefore(cadre, bloc.firstChild);
+    return bloc;
+  }
+
   /** Dessine la salle et ses objets. options.surObjet(o, groupe, w, h, ctx) : ctx.lab (texte), ctx.bulle (bulle au survol). options.sansVue : éditeur. */
   function dessiner(svg, plan, options) {
     options = options || {};
@@ -347,6 +384,16 @@ window.PlanSalle = (function () {
     var nums = numeros(plan), groupes = {};
     var survol = el('g', { class: 'calque-survol' }, null);   // bulles : ajoutées en dernier, au-dessus de tout
     var ordre = plan.objets.slice().sort(function (a, b) { return (estPlace(a) ? 1 : 0) - (estPlace(b) ? 1 : 0); });
+    // largeur disponible pour le nom sous chaque place : jusqu'à la place voisine sur la même rangée
+    var rectsPlaces = plan.objets.filter(estPlace).map(function (o) { return { id: o.id, r: tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o)) }; });
+    function largeurNom(id, r) {
+      var cx = r.x + r.w / 2, cy = r.y + r.h / 2, d = 2.4;
+      rectsPlaces.forEach(function (q) {
+        if (q.id === id || Math.abs(q.r.y + q.r.h / 2 - cy) > 0.7) return;
+        d = Math.min(d, Math.abs(q.r.x + q.r.w / 2 - cx));
+      });
+      return Math.max(r.w, d) * U - 4;
+    }
     ordre.forEach(function (o) {
       var r = tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o));
       var g = el('g', { class: 'objet type-' + o.type, transform: 'translate(' + (r.x * U) + ',' + (r.y * U) + ')', 'data-id': o.id }, svg);
@@ -355,6 +402,7 @@ window.PlanSalle = (function () {
       groupes[o.id] = g;
       if (options.surObjet) options.surObjet(o, g, r.w * U, r.h * U, {
         lab: lab,
+        nom: function (texte) { nomSurPlace(g, r.w * U, r.h * U, texte, largeurNom(o.id, r)); },
         bulle: function (u, v) {
           var out = el('g', { transform: 'translate(' + (r.x * U + u) + ',' + (r.y * U + v) + ')' }, survol);
           return el('g', { class: 'bulle' }, out);
@@ -845,11 +893,12 @@ window.PlanSalle = (function () {
   }
 
   /** Bulle du visage : apparaît au survol de la place et grandit. */
-  function bulleVisage(g, ctx, visage, u, v, z) {
+  function bulleVisage(g, ctx, visage, u, v, z, texte) {
     var bulle = ctx.bulle(u, v, z);
     var W = 64;
     var interieur = el('g', { transform: 'translate(' + (-W / 2) + ',' + (-W / 2) + ')' }, bulle);
     photoPlace(interieur, W, W, visage);
+    if (texte) blocNom(bulle, 0, W / 2 + 13, texte, 150);   // agrandie, la photo garde son nom juste dessous
     g.addEventListener('mouseenter', function () { bulle.classList.add('montre'); });
     g.addEventListener('mouseleave', function () { bulle.classList.remove('montre'); });
   }
@@ -969,13 +1018,13 @@ window.PlanSalle = (function () {
             var e = eleve(id);
             var visage = e ? photo(d.classe, e.numero) : null;
             if (visage) photoPlace(g, w, h, visage);
-            ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? nom(e) : '?');
+            if (ctx.nom) ctx.nom(e ? nom(e) : '?'); else ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? nom(e) : '?');
             var bes = e && window.CentraleNoms && window.CentraleNoms.besoins ? window.CentraleNoms.besoins(d.classe, e.numero) : [];
             if (bes.length) {   // petit repère sur la place (masqué à l'impression)
               var m = el('circle', { cx: w - 5, cy: 5, r: 4.5, class: 'marque-besoin' }, g);
               el('title', {}, m).textContent = bes.join(', ');
             }
-            if (visage) bulleVisage(g, ctx, visage, w / 2, h / 2, 0.9);
+            if (visage) bulleVisage(g, ctx, visage, w / 2, h / 2, 0.9, e ? nom(e) : '');
             else bulleNom(g, ctx, e ? nom(e) : '?', w / 2, h / 2, 0.9);
           }
           g.addEventListener('click', function () { clicPlace(o.id); });
@@ -1466,8 +1515,8 @@ window.PlanSalle = (function () {
           var e = eleve(carte[o.id]);
           var visage = e ? photo(d.classe, e.numero) : null;
           if (visage) photoPlace(g, w, h, visage);
-          ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? nom(e) : '?');
-          if (visage) bulleVisage(g, ctx, visage, w / 2, h / 2, 0.9);
+          if (ctx.nom) ctx.nom(e ? nom(e) : '?'); else ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? nom(e) : '?');
+          if (visage) bulleVisage(g, ctx, visage, w / 2, h / 2, 0.9, e ? nom(e) : '');
           else bulleNom(g, ctx, e ? nom(e) : '?', w / 2, h / 2, 0.9);
         },
         infos: {

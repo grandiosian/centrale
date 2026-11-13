@@ -305,6 +305,13 @@ tr.choisie td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .plan-svg .place-cliquable:hover .forme, .plan-svg .survol .forme { stroke: var(--accent); stroke-width: 3; }
 .plan-svg .occupee .forme { fill: color-mix(in srgb, var(--ok) 35%, var(--c, var(--surface))); }
 .plan-svg .nom-eleve { font: 600 11px system-ui, sans-serif; text-anchor: middle; fill: var(--texte); paint-order: stroke; stroke: var(--sol); stroke-width: 3px; pointer-events: none; }
+.plan-svg .nom-eleve.prenom-place { font: 600 10px system-ui, sans-serif; }
+.plan-svg .nom-eleve.nom-place { font: 500 8px system-ui, sans-serif; letter-spacing: .02em; fill: #4a4030; }
+/* encadré jaune transparent derrière prénom / nom (vue à plat et photo agrandie) */
+.plan-svg .cadre-nom { fill: rgba(255, 214, 74, .62); stroke: rgba(176, 132, 0, .55); stroke-width: .8; }
+.plan-svg .bloc-nom .nom-eleve { stroke: none; fill: #1d1a10; }
+.plan-svg .bloc-nom .nom-eleve.nom-place { fill: #4a4030; }
+@media print { .plan-svg .cadre-nom { fill: rgba(255, 214, 74, .35); } }
 .plan-svg .numero-place { font-size: 11px; fill: var(--doux); }
 .liste-eleves { list-style: none; margin: 8px 0 12px; padding: 0; max-height: 60vh; overflow: auto; }
 .liste-eleves li { display: grid; grid-template-columns: 26px 32px 1fr auto; gap: 6px; align-items: center; padding: 6px 6px; border-radius: 6px; cursor: grab; font-size: .92rem; }
