@@ -14,7 +14,7 @@
   var CLE_CARTONS = 'centrale-cartons';     // { "4F": { "07": [ { type: "observation" | "recompense", texte, date } ] } } — gardés ici, comme les noms
   var CLE_PRESENCES = 'centrale-presences'; // { "4F": { "07": { "2026-11-13 08:45": "absent" | "retard" } } } — l'appel, séance par séance
   var CLE_OBSERVATIONS = 'centrale-observations'; // { "4F": { "07": { "2026-11-13 08:45": { "participation": 2, "comportement": -1, "_c": { "comportement": "bavarde avec X" } } } } }
-  var CLE_INCIDENTS = 'centrale-incidents';       // { "4F": [ { id, membres: ["05", "07", "12"], type: "dissipation" | "altercation", seance, texte } ] } — à ne pas placer ensemble
+  var CLE_INCIDENTS = 'centrale-incidents';       // { "4F": [ { id, membres: ["05", "07", "12"], type: "dissipation" | "altercation" | "entente", seance, texte } ] } — à ne pas placer ensemble (entente : à garder ensemble)
   var CLE_CRITERES = 'centrale-criteres';         // critères observés à chaque séance : ["participation", "comportement", "cahier"]
   var CLE_BESOINS = 'centrale-besoins';     // { "5A": { "07": ["PAP", "PAI"], … } } — PPS, PAP, PAI, PPRE
   var TYPES_BESOINS = ['PPS', 'PAP', 'PAI', 'PPRE'];
@@ -555,7 +555,7 @@
     var e = carte[classe][numero] = carte[classe][numero] || {};
     var x = e[seance] = e[seance] || {};
     var c = x._c = x._c || {};
-    texte = sansNoms(String(texte || '').trim(), classe).slice(0, 300);
+    texte = sansNoms(String(texte || '').trim(), classe).slice(0, 1200);   // plusieurs commentaires, séparés par « ; »
     if (texte) c[critere] = texte; else delete c[critere];
     if (!Object.keys(c).length) delete x._c;
     if (!Object.keys(x).length) delete e[seance];
@@ -567,10 +567,12 @@
 
   /* Incidents : des élèves (deux ou plus) qui se dissipent ensemble ou se sont disputés, à ne pas placer ensemble
      (synchronisé avec la Centrale). On peut ajouter des élèves à un incident déjà noté. */
+  /** dissipation, altercation : à séparer ; entente : bonne dynamique, à garder ensemble. */
+  function typeIncident(t) { return t === 'altercation' || t === 'entente' ? t : 'dissipation'; }
   function normaliserIncident(x) {
     var m = Array.isArray(x.membres) ? x.membres : [x.a, x.b];
     m = m.filter(function (v) { return v != null && v !== ''; }).map(String).filter(function (v, i, t) { return t.indexOf(v) === i; });
-    return { id: x.id, membres: m, type: x.type === 'altercation' ? 'altercation' : 'dissipation', seance: x.seance || '', texte: x.texte || '' };
+    return { id: x.id, membres: m, type: typeIncident(x.type), seance: x.seance || '', texte: x.texte || '' };
   }
   function incidentsLocaux(classe) { return (lireCle(CLE_INCIDENTS)[classe] || []).map(normaliserIncident).filter(function (x) { return x.membres.length >= 2; }); }
   function modifierIncidents(classe, f) {
@@ -592,7 +594,7 @@
         if (x.id !== id) return x;
         if (champs.ajouter) x.membres = x.membres.concat(champs.ajouter.map(String)).filter(function (v, i, t) { return t.indexOf(v) === i; });
         if (champs.retirer != null) x.membres = x.membres.filter(function (v) { return v !== String(champs.retirer); });
-        if (champs.type) x.type = champs.type === 'altercation' ? 'altercation' : 'dissipation';
+        if (champs.type) x.type = typeIncident(champs.type);
         if (champs.texte != null) x.texte = sansNoms(String(champs.texte).trim(), classe).slice(0, 200);
         return x;
       });
@@ -607,7 +609,7 @@
     Object.keys(ob).forEach(function (n) { if (n !== '_classe' && ob[n][seance]) notes[n] = true; });
     var c = (ob._classe || {})[seance] || {};
     return { eleves: Object.keys(notes).length, terminee: c.terminee === 1, interruption: !!c.interruption,
-      incidents: incidentsLocaux(classe).filter(function (x) { return x.seance === seance; }).length,
+      incidents: incidentsLocaux(classe).filter(function (x) { return x.seance === seance && x.type !== 'entente'; }).length,
       classe: Object.keys(c).some(function (k) { return k !== 'terminee'; }) };
   }
 

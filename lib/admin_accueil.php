@@ -564,6 +564,15 @@ function page_tableau_de_bord(): void
                                         <p class="discret reperes-aide">Calculé d’après l’activité dans les ateliers, en comparant l’élève à sa classe. ☁ puis carrés, au-dessus de la photo.</p>
                                         <ul class="reperes-legende" id="reperes-legende"></ul>
                                     </div>
+                                    <div class="reperes-source">
+                                        <label class="reperes-afficher"><input type="checkbox" id="liens-afficher" checked> <strong>Liens entre élèves</strong></label>
+                                        <p class="discret reperes-aide">Un arc relie les élèves notés ensemble (feuille de séance, cartons « avec qui ? »). Au survol d’un élève, seuls ses liens restent.</p>
+                                        <ul class="reperes-legende liens-legende">
+                                            <li><span class="lien-pastille lien-altercation">⚔️</span> Altercation : à séparer</li>
+                                            <li><span class="lien-pastille lien-dissipation">💬</span> Bavardage, dissipation : à séparer</li>
+                                            <li><span class="lien-pastille lien-entente">🤝</span> Bonne dynamique : à garder ensemble</li>
+                                        </ul>
+                                    </div>
                                     <p class="discret reperes-aide">Le détail chiffré est dans la fiche de l’élève (clic sur l’élève).</p>
                                 </div>
                             </div>
@@ -1346,7 +1355,8 @@ function page_tableau_de_bord(): void
                     if (!repPanneau.hidden) repPanneau.scrollIntoView({ block: 'nearest', behavior: 'smooth' });   // menu qui défile : on montre la légende
                 });
                 // chaque source se montre ou se cache sur le plan (réglage gardé sur cet ordinateur)
-                [['classe-afficher', 'sans-classe', 'centrale-classe-cache'], ['reperes-afficher', 'sans-reperes', 'centrale-reperes-caches']].forEach(function (x) {
+                [['classe-afficher', 'sans-classe', 'centrale-classe-cache'], ['reperes-afficher', 'sans-reperes', 'centrale-reperes-caches'],
+                 ['liens-afficher', 'sans-liens', 'centrale-liens-caches']].forEach(function (x) {
                     var c = document.getElementById(x[0]);
                     function appliquer(cache) { document.documentElement.classList.toggle(x[1], cache); c.checked = !cache; }
                     try { appliquer(localStorage.getItem(x[2]) === '1'); } catch (e) { /* rien */ }

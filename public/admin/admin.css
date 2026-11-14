@@ -2128,3 +2128,367 @@ body.plan-modifie .plan-non-enregistre { display: inline; }
 .suivi-alerte { bottom: 14px; background: #fff4e5; color: #8a4b00; border: 1px solid #e0a800; }
 .centrale-toast { bottom: 64px; background: #1d2b4a; color: #fff; }
 .suivi-alerte[hidden], .centrale-toast[hidden] { display: none; }
+
+/* Motifs prêts à l'emploi : les petits cartons d'avant, sur deux colonnes « À revoir » (jaune, orange ou rouge selon
+   la gravité du critère) et « Bien » (vert) — dans la palette d'un critère de la feuille et dans la fiche de l'élève */
+.niv-motifs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; margin-top: 2px; }
+.motifs-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.motifs-titre { font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--doux); }
+.motifs-plus .motifs-titre { color: #2e8b57; }
+.motifs-cases { display: flex; flex-direction: column; gap: 6px; }
+.niv-motifs .motif.carton-pre { width: 100%; min-height: 34px; padding: 5px 7px; font-size: .7rem; line-height: 1.2; white-space: normal; box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+    transition: transform .12s, box-shadow .12s; }
+.niv-motifs .motif.carton-pre:hover, .niv-motifs .motif.carton-pre:focus-visible { transform: translateY(-3px) rotate(-1.2deg); box-shadow: 0 8px 14px rgba(0, 0, 0, .25); }
+.niv-motifs .motif.carton-pre-observation { background: #ffd54a; color: #3b2c00; border-left: 5px solid #d99c00; }
+.niv-motifs.grav-orange .motif.carton-pre-observation { background: #ffb36b; color: #3d1d00; border-left-color: #c8600f; }
+.niv-motifs.grav-rouge .motif.carton-pre-observation { background: #f2958b; color: #3e0d08; border-left-color: #a8281c; }
+.niv-motifs .motif.carton-pre-recompense { background: #3fb17a; color: #062c18; border-left: 5px solid #1d6e47; }
+.motifs-vide { font-size: .8rem; }
+.niv-palette .niv-motifs { width: 270px; }
+/* fiche : cartons un peu plus grands */
+.fiche-motifs .motif.carton-pre { min-height: 40px; font-size: .74rem; }
+@media (max-width: 720px) {
+  .niv-palette .niv-motifs { width: auto; }
+  .niv-motifs .motif.carton-pre { font-size: .8rem; min-height: 40px; }
+}
+/* fiche de l'élève : les motifs sur toute la largeur, sous le commentaire */
+.obs-ligne { grid-template-areas: "crit choix total" "points points points" "com com com" "motifs motifs motifs" "anciens anciens anciens"; }
+.obs-ligne .fiche-motifs { grid-area: motifs; }
+.niv-palette:has(.niv-motifs) .niv-com { width: 100%; }
+
+/* Rangée d'un critère : cartons « À revoir » à gauche, niveaux −− · ++ au milieu, cartons « Bien » à droite */
+.niv-motifs { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; }
+.niv-motifs .motifs-centre { align-self: start; margin-top: 16px; }   /* au niveau du premier carton, sous les titres */
+.motifs-moins .motifs-titre { text-align: right; }
+.niv-palette .niv-motifs { width: 400px; }
+.niv-palette:has(.niv-motifs) { align-items: stretch; }
+/* fiche : le nom du critère et le cumul au-dessus, puis la rangée sur toute la largeur */
+.obs-ligne:has(.fiche-motifs) { grid-template-areas: "crit crit total" "motifs motifs motifs" "points points points" "com com com" "anciens anciens anciens"; }
+.obs-ligne .fiche-motifs { margin-top: 2px; }
+.fiche-motifs .motifs-centre.obs-choix { grid-area: auto; }
+@media (max-width: 720px) {
+  /* smartphone (bandeau en bas) : les niveaux en haut, les deux paquets dessous */
+  .niv-motifs { grid-template-columns: 1fr 1fr; }
+  .niv-motifs .motifs-centre { grid-column: 1 / -1; order: -1; margin-top: 0; justify-self: center; }
+  .motifs-moins .motifs-titre { text-align: left; }
+  .niv-palette .niv-motifs { width: auto; }
+}
+
+/* ---------- Popup d'évaluation condensé : paquets repliés à la hauteur des boutons −− · ++ ----------
+   Le paquet montre son premier carton (texte sur une ligne) et le nombre de motifs ; au survol, les autres cartons
+   s'ouvrent dans une petite liste flottante sous le paquet (le popup ne grandit pas). Tactile : liste toujours ouverte. */
+.motifs-titre { display: none; }
+.niv-motifs { gap: 6px; }
+.niv-motifs .motifs-centre { margin-top: 0; align-self: start; }
+.niv-palette .niv-boutons .niv, .fiche-motifs .obs-choix button { height: 28px; }
+.niv-motifs .motif.carton-pre { height: 28px; min-height: 0; padding: 0 7px; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    box-sizing: border-box; }
+.niv-motifs .motif.carton-pre { display: block; line-height: 28px; }
+.motifs-cases { position: relative; }
+.motifs-cases.en-pile > .motif.carton-pre { box-shadow: 0 3px 0 -1px rgba(0, 0, 0, .16), 0 6px 0 -2px rgba(0, 0, 0, .1); }
+.motifs-suite { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 9; flex-direction: column; gap: 5px; padding: 6px; box-sizing: border-box;
+    min-width: 100%; width: max-content; max-width: 230px; background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; box-shadow: 0 10px 24px rgba(0, 0, 0, .25); }
+.motifs-plus .motifs-suite { left: auto; right: 0; }
+.motifs-cases.en-pile:hover > .motifs-suite, .motifs-cases.en-pile:focus-within > .motifs-suite { display: flex; }
+.motifs-suite .motif.carton-pre { height: auto; min-height: 28px; line-height: 1.2; padding: 5px 8px; white-space: normal; overflow: visible; }
+.motifs-nombre { position: absolute; top: -6px; right: -5px; z-index: 2; min-width: 15px; height: 15px; padding: 0 3px; box-sizing: border-box; border-radius: 8px;
+    background: #1d2b4a; color: #fff; font-size: .6rem; font-weight: 800; line-height: 15px; text-align: center; pointer-events: none; }
+.niv-palette .niv-motifs { width: 360px; }
+.fiche-motifs .motif.carton-pre { height: 28px; min-height: 0; font-size: .74rem; }
+@media (hover: none) {
+  .motifs-suite { display: flex; position: static; width: auto; max-width: none; margin-top: 5px; padding: 0; border: 0; background: none; box-shadow: none; }
+  .motifs-nombre { display: none; }
+  .motifs-cases.en-pile > .motif.carton-pre { box-shadow: none; }
+}
+@media (max-width: 720px) {
+  .niv-palette .niv-motifs { width: auto; }
+  .niv-motifs .motif.carton-pre { height: 40px; line-height: 40px; font-size: .8rem; }
+  .motifs-suite .motif.carton-pre { height: auto; min-height: 40px; line-height: 1.2; }
+}
+/* le petit espace entre le carton et la liste fait partie de la liste : la souris peut descendre sans la refermer */
+.motifs-suite::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+
+/* cartons « −− » et « ++ » : un ton plus foncé (barre et paquets de la fiche) */
+.motif.carton-pre-observation.fort { background: #f0bd1f; color: #2b2000; border-left-color: #8a6500; }
+.grav-orange .motif.carton-pre-observation.fort, .niv-motifs.grav-orange .motif.carton-pre-observation.fort { background: #f0893a; color: #2a1200; border-left-color: #8f430a; }
+.grav-rouge .motif.carton-pre-observation.fort, .niv-motifs.grav-rouge .motif.carton-pre-observation.fort { background: #d9584b; color: #fff; border-left-color: #7d1a10; }
+.motif.carton-pre-recompense.fort, .niv-motifs .motif.carton-pre-recompense.fort { background: #23804f; color: #fff; border-left-color: #0f4a2b; }
+
+/* Commentaires d'un critère qui s'accumulent : champ d'ajout avec ↵, liste repliée « ▸ 3 commentaires · le dernier » */
+.coms { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.coms-saisie { position: relative; display: flex; }
+.coms .coms-champ { flex: 1; width: 100%; box-sizing: border-box; padding-right: 32px; }
+.coms-ok { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); width: 26px; height: 22px; padding: 0; margin: 0; min-width: 0; box-shadow: none;
+    border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: 800 .9rem/22px system-ui, sans-serif; cursor: pointer; }
+.coms-ok[hidden] { display: none; }
+.coms-tete { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; margin: 0; padding: 3px 7px; box-sizing: border-box; box-shadow: none; border: 0; border-radius: 6px;
+    font: inherit; font-size: .72rem; text-align: left; color: var(--texte); background: color-mix(in srgb, var(--bord) 30%, transparent); cursor: pointer; }
+.coms-tete[hidden] { display: none; }
+.coms-tete:hover { background: color-mix(in srgb, var(--bord) 55%, transparent); }
+.coms-fleche { color: var(--doux); }
+.coms-nombre { font-weight: 700; white-space: nowrap; }
+.coms-dernier { min-width: 0; color: var(--doux); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.coms-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 170px; overflow: auto; }
+.coms-liste[hidden] { display: none; }
+.coms-liste li { display: flex; align-items: flex-start; gap: 4px; padding: 3px 3px 3px 7px; border-left: 3px solid var(--accent); border-radius: 4px; font-size: .74rem; line-height: 1.3;
+    background: color-mix(in srgb, var(--bord) 18%, var(--surface)); }
+.coms-liste li > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.coms-retirer { flex: none; width: 18px; height: 18px; padding: 0; margin: 0; min-width: 0; box-shadow: none; border: 0; background: transparent; color: var(--doux); cursor: pointer; font-size: .9rem; line-height: 1; }
+.coms-retirer:hover { color: #c0392b; }
+.niv-palette .coms { width: 210px; }
+.obs-ligne .obs-coms { grid-area: com; margin-top: 3px; }
+.obs-coms .coms-champ { font-size: .82rem; padding-top: 4px; padding-bottom: 4px; }
+@media (max-width: 720px) {
+  .niv-palette .coms { width: auto; }
+  .coms-ok { width: 34px; height: 30px; }
+  .coms-tete { padding: 7px 9px; font-size: .82rem; }
+  .coms-retirer { width: 30px; height: 30px; }
+}
+/* élève absent : sa ligne est estompée, mais la case survolée (et son popup) reste nette */
+.feuille-table tr.absent td:hover, .feuille-table tr.absent td:focus-within { opacity: 1; }
+.coms, .coms-liste li, .coms-tete { text-align: left; }
+
+/* ---------- Évaluation d'un critère : bulle résumé au survol, fenêtre complète au clic ---------- */
+.eval-bulle { position: fixed; z-index: 110; width: 260px; box-sizing: border-box; padding: 10px 12px; border-radius: 12px; pointer-events: none; font-size: .82rem; line-height: 1.35;
+    background: var(--carte-fond, var(--surface)); color: var(--texte); border: 1px solid var(--bord); box-shadow: 0 10px 28px rgba(0, 0, 0, .25); text-align: left; }
+.eval-bulle[hidden] { display: none; }
+.eval-bulle-niveau { display: flex; align-items: center; gap: 8px; margin: 7px 0 6px; font-weight: 700; }
+.eval-bulle-coms { margin: 0; padding-left: 16px; }
+.eval-bulle-coms li { font-size: .78rem; margin: 1px 0; }
+.eval-bulle-vide { margin: 0; font-size: .78rem; }
+.eval-bulle-aide { margin: 7px 0 0; font-size: .7rem; font-weight: 800; color: var(--accent); }
+@media (hover: none) { .eval-bulle { display: none !important; } }
+
+.eval-fond { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+    background: rgba(15, 20, 30, .38); }
+.eval-fond[hidden] { display: none; }
+.eval-carte { position: relative; width: min(680px, 100%); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; padding: 16px 18px 14px;
+    display: flex; flex-direction: column; gap: 14px; border-radius: 16px; background: var(--carte-fond, var(--surface)); color: var(--texte);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .35); text-align: left; }
+.eval-tete { display: flex; align-items: center; gap: 12px; padding-right: 40px; }
+.eval-photo { flex: none; width: 46px; height: 56px; border-radius: 8px; display: grid; place-items: center; background-color: var(--code-fond); color: var(--doux); font-weight: 800; }
+.eval-nom { font-size: 1.1rem; font-weight: 800; line-height: 1.2; }
+.eval-critere { font-weight: 700; color: var(--texte); }
+.eval-seance { font-size: .82rem; }
+.eval-carte .eval-fermer { top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+.eval-section-titre { margin: 0 0 7px; font-size: .7rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--doux); }
+.eval-niveaux { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.eval-niv { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0; padding: 8px 4px; min-width: 0; box-shadow: none; cursor: pointer;
+    font: inherit; color: var(--texte); background: var(--surface); border: 2px solid var(--bord); border-radius: 12px; }
+.eval-signe { font-size: 1.25rem; font-weight: 800; line-height: 1; }
+.eval-lib { font-size: .7rem; color: var(--doux); text-align: center; line-height: 1.15; }
+.eval-niv:hover { border-color: var(--accent); }
+.eval-niv[aria-pressed="true"] .eval-lib { color: inherit; }
+.eval-niv.eval-neutre[aria-pressed="true"] { background: color-mix(in srgb, var(--bord) 45%, var(--surface)); border-color: var(--doux); }
+.eval-niv.eval-plus[aria-pressed="true"] { background: #2e8b57; border-color: #2e8b57; color: #fff; }
+.eval-niv.eval-plus.fort[aria-pressed="true"] { background: #1e6b42; border-color: #1e6b42; }
+.eval-niv.eval-moins[aria-pressed="true"] { background: #e0a800; border-color: #e0a800; color: #2b2000; }
+.eval-niv.eval-moins.fort[aria-pressed="true"] { background: #a87b00; border-color: #a87b00; color: #fff; }
+.grav-orange .eval-niv.eval-moins[aria-pressed="true"] { background: #e67e22; border-color: #e67e22; color: #fff; }
+.grav-orange .eval-niv.eval-moins.fort[aria-pressed="true"] { background: #a84f0c; border-color: #a84f0c; }
+.grav-rouge .eval-niv.eval-moins[aria-pressed="true"] { background: #c0392b; border-color: #c0392b; color: #fff; }
+.grav-rouge .eval-niv.eval-moins.fort[aria-pressed="true"] { background: #8e1f15; border-color: #8e1f15; }
+.eval-cartons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.eval-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.eval-col-titre { font-size: .74rem; font-weight: 800; padding-bottom: 3px; border-bottom: 2px solid #e0a800; }
+.grav-orange .eval-col-moins .eval-col-titre { border-bottom-color: #e67e22; }
+.grav-rouge .eval-col-moins .eval-col-titre { border-bottom-color: #c0392b; }
+.eval-col-plus .eval-col-titre { border-bottom-color: #2e8b57; }
+.eval-col .motif.carton-pre { width: 100%; min-height: 36px; padding: 6px 8px; font-size: .74rem; line-height: 1.2; white-space: normal; box-sizing: border-box;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .15); transition: transform .12s, box-shadow .12s; }
+.eval-col .motif.carton-pre:hover { transform: translateY(-2px) rotate(-1deg); box-shadow: 0 6px 12px rgba(0, 0, 0, .22); }
+.grav-orange .eval-col .carton-pre-observation:not(.fort) { background: #ffb36b; color: #3d1d00; border-left-color: #c8600f; }
+.grav-rouge .eval-col .carton-pre-observation:not(.fort) { background: #f2958b; color: #3e0d08; border-left-color: #a8281c; }
+.eval-coms .coms-champ { font-size: .88rem; padding-top: 7px; padding-bottom: 7px; }
+.eval-coms .coms-ok { height: 28px; }
+.eval-coms .coms-liste { max-height: 200px; }
+.eval-coms .coms-liste li { font-size: .82rem; }
+.eval-pied { display: flex; justify-content: flex-end; }
+@media (max-width: 720px) {
+  .eval-fond { align-items: flex-end; padding: 0; }
+  .eval-carte { width: 100%; max-height: 92vh; border-radius: 16px 16px 0 0; padding: 14px 12px; }
+  .eval-niveaux { gap: 4px; }
+  .eval-lib { font-size: .62rem; }
+  .eval-cartons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Fenêtre d'évaluation : au-dessus de chaque niveau, son paquet de cartons — replié (le premier carton et leur nombre),
+   déplié sur place au survol (tous les cartons, en entier, par-dessus les boutons) ; tablette : au premier toucher. */
+.eval-grille { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.eval-colonne { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.eval-pile { position: relative; height: 40px; }
+.eval-pile.pile-vide { visibility: hidden; }
+.eval-pile .eval-pile-dessus.motif.carton-pre { width: 100%; height: 40px; min-height: 0; padding: 0 8px; box-sizing: border-box; font-size: .74rem; line-height: 40px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 3px 0 -1px rgba(0, 0, 0, .18), 0 6px 0 -2px rgba(0, 0, 0, .1); }
+.eval-pile-nombre { position: absolute; top: -7px; right: -6px; z-index: 2; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px;
+    background: #1d2b4a; color: #fff; font-size: .66rem; font-weight: 800; line-height: 18px; text-align: center; pointer-events: none; }
+.eval-pile-suite { display: none; position: absolute; top: -6px; z-index: 6; flex-direction: column; gap: 5px; padding: 6px; box-sizing: border-box;
+    width: max-content; min-width: calc(100% + 12px); max-width: 230px; background: var(--surface); border: 1px solid var(--bord); border-radius: 12px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .28); }
+.pile-moins .eval-pile-suite { left: -6px; }
+.pile-plus .eval-pile-suite { right: -6px; }
+.eval-pile:hover .eval-pile-suite, .eval-pile:focus-within .eval-pile-suite, .eval-pile.ouverte .eval-pile-suite { display: flex; }
+.eval-pile-titre { font-size: .7rem; font-weight: 800; padding: 0 2px 3px; border-bottom: 2px solid #e0a800; }
+.grav-orange .pile-moins .eval-pile-titre { border-bottom-color: #e67e22; }
+.grav-rouge .pile-moins .eval-pile-titre { border-bottom-color: #c0392b; }
+.pile-plus .eval-pile-titre { border-bottom-color: #2e8b57; }
+.eval-pile-suite .motif.carton-pre { width: 100%; min-height: 34px; padding: 6px 8px; font-size: .76rem; line-height: 1.2; white-space: normal; box-sizing: border-box;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .15); transition: transform .12s, box-shadow .12s; }
+.eval-pile-suite .motif.carton-pre:hover { transform: translateX(2px) rotate(-.6deg); box-shadow: 0 5px 10px rgba(0, 0, 0, .2); }
+.grav-orange .eval-pile .carton-pre-observation:not(.fort) { background: #ffb36b; color: #3d1d00; border-left-color: #c8600f; }
+.grav-rouge .eval-pile .carton-pre-observation:not(.fort) { background: #f2958b; color: #3e0d08; border-left-color: #a8281c; }
+@media (max-width: 720px) {
+  .eval-grille { gap: 4px; }
+  .eval-pile .eval-pile-dessus.motif.carton-pre { font-size: .66rem; padding: 0 5px; }
+  .eval-pile-suite { max-width: min(230px, 70vw); }
+}
+
+/* Cartons « avec qui ? » (bavardage avec…, propos blessants…) : marque 👥, puis la fenêtre de choix des camarades */
+.motif.carton-pre.avec::after { content: " 👥"; font-size: .85em; }
+.camarades-fond { position: fixed; inset: 0; z-index: 130; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+    background: rgba(15, 20, 30, .38); }
+.camarades-carte { width: min(580px, 100%); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
+    border-radius: 16px; background: var(--carte-fond, var(--surface)); color: var(--texte); box-shadow: 0 20px 50px rgba(0, 0, 0, .35); text-align: left; }
+.camarades-titre { margin: 0; font-size: 1.05rem; }
+.camarades-aide { margin: 0; font-size: .8rem; }
+.camarades-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; }
+.camarade { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 5px 8px; box-shadow: none; cursor: pointer; text-align: left;
+    font: inherit; font-size: .82rem; color: var(--texte); background: var(--surface); border: 2px solid var(--bord); border-radius: 10px; }
+.camarade:hover { border-color: var(--accent); }
+.camarade[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.camarade-photo { flex: none; width: 30px; height: 36px; border-radius: 6px; display: grid; place-items: center; background-color: var(--code-fond); color: var(--doux); font-weight: 800; }
+.camarade-nom { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.camarade-num { flex: none; font-size: .7rem; color: var(--doux); }
+.camarades-pied { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.camarades-valider:disabled { opacity: .45; cursor: default; }
+@media (max-width: 720px) {
+  .camarades-fond { align-items: flex-end; padding: 0; }
+  .camarades-carte { width: 100%; max-height: 88vh; border-radius: 16px 16px 0 0; padding: 14px 12px; }
+  .camarades-grille { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .camarade { padding: 8px; }
+}
+
+/* Commentaires horodatés : l'heure, puis le carton (son niveau, aux couleurs) ou ✎ pour un commentaire écrit */
+.coms-liste li > .coms-heure { flex: none; min-width: 36px; padding-top: 1px; font-size: .68rem; color: var(--doux); font-variant-numeric: tabular-nums; }
+.coms-liste li > .coms-texte { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.coms-carton { display: inline-block; min-width: 22px; padding: 0 4px; margin-right: 2px; box-sizing: border-box; border-radius: 4px; font-size: .7rem; font-weight: 800;
+    line-height: 1.5; text-align: center; vertical-align: baseline; background: #ffd54a; color: #3b2c00; border-left: 3px solid #d99c00; }
+.coms-carton.moins.fort { background: #f0bd1f; color: #2b2000; border-left-color: #8a6500; }
+.grav-orange .coms-carton.moins { background: #ffb36b; color: #3d1d00; border-left-color: #c8600f; }
+.grav-orange .coms-carton.moins.fort { background: #f0893a; color: #2a1200; border-left-color: #8f430a; }
+.grav-rouge .coms-carton.moins { background: #f2958b; color: #3e0d08; border-left-color: #a8281c; }
+.grav-rouge .coms-carton.moins.fort { background: #d9584b; color: #fff; border-left-color: #7d1a10; }
+.coms-carton.plus { background: #3fb17a; color: #062c18; border-left-color: #1d6e47; }
+.coms-carton.plus.fort { background: #23804f; color: #fff; border-left-color: #0f4a2b; }
+.coms-ecrit { display: inline-block; min-width: 22px; text-align: center; color: var(--doux); }
+.eval-moyenne { margin: -6px 0 0; font-size: .8rem; color: var(--doux); }
+
+/* Modifier un carton ou un commentaire, sur place : son niveau (−− − ✎ + ++) et son texte */
+.coms-modifier { flex: none; width: 18px; height: 18px; padding: 0; margin: 0; min-width: 0; box-shadow: none; border: 0; background: transparent; color: var(--doux);
+    cursor: pointer; font-size: .78rem; line-height: 1; }
+.coms-modifier:hover { color: var(--accent); }
+.coms-liste li.en-edition { align-items: flex-start; border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.coms-edition { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.coms-edition-niveaux { display: flex; gap: 4px; flex-wrap: wrap; }
+.coms-edition-niv { min-width: 34px; height: 26px; margin: 0; padding: 0 6px; box-shadow: none; cursor: pointer; font: inherit; font-weight: 800; font-size: .8rem;
+    border-radius: 6px; border: 1px solid var(--bord); background: var(--surface); color: var(--texte); }
+.coms-edition-niv.moins[aria-pressed="true"] { background: #e0a800; border-color: #e0a800; color: #2b2000; }
+.coms-edition-niv.moins.fort[aria-pressed="true"] { background: #a87b00; border-color: #a87b00; color: #fff; }
+.grav-orange .coms-edition-niv.moins[aria-pressed="true"] { background: #e67e22; border-color: #e67e22; color: #fff; }
+.grav-orange .coms-edition-niv.moins.fort[aria-pressed="true"] { background: #a84f0c; border-color: #a84f0c; }
+.grav-rouge .coms-edition-niv.moins[aria-pressed="true"] { background: #c0392b; border-color: #c0392b; color: #fff; }
+.grav-rouge .coms-edition-niv.moins.fort[aria-pressed="true"] { background: #8e1f15; border-color: #8e1f15; }
+.coms-edition-niv.plus[aria-pressed="true"] { background: #2e8b57; border-color: #2e8b57; color: #fff; }
+.coms-edition-niv.plus.fort[aria-pressed="true"] { background: #1e6b42; border-color: #1e6b42; }
+.coms-edition-niv.ecrit[aria-pressed="true"] { background: color-mix(in srgb, var(--bord) 50%, var(--surface)); border-color: var(--doux); }
+.coms-edition .niv-com { width: 100%; box-sizing: border-box; }
+.coms-edition-boutons { display: flex; justify-content: flex-end; gap: 6px; }
+@media (pointer: coarse) { .coms-modifier { width: 30px; height: 30px; font-size: .95rem; } .coms-edition-niv { height: 34px; min-width: 42px; } }
+/* édition d'un carton « avec » des camarades : les élèves associés, modifiables dans la fenêtre de sélection */
+.coms-edition-avec { align-self: flex-start; margin: 0; padding: 4px 10px; box-shadow: none; cursor: pointer; font: inherit; font-size: .78rem; font-weight: 600; text-align: left;
+    border: 1px dashed var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); color: var(--texte); }
+.coms-edition-avec:hover { border-style: solid; }
+
+/* Fenêtre d'évaluation, compacte : pas de titre de section pour la grille, pas de pied ; la moyenne au-dessus de « = » ;
+   la liste dépliée d'un paquet défile si elle est longue */
+.eval-carte { gap: 10px; padding: 14px 16px 12px; }
+.eval-tete { gap: 10px; padding-right: 40px; }
+.eval-photo { width: 40px; height: 48px; }
+.eval-nom { font-size: 1.05rem; }
+.eval-critere { font-size: .9rem; }
+.eval-critere .discret { font-size: .82rem; }
+.eval-section-titre { margin-bottom: 5px; }
+.eval-pile.pile-vide { visibility: visible; display: flex; align-items: center; justify-content: center; }
+.eval-moyenne { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; width: 100%; height: 100%; box-sizing: border-box;
+    border-radius: 8px; border: 1px dashed var(--bord); font-size: .66rem; line-height: 1.15; color: var(--doux); text-align: center; }
+.eval-moyenne-valeur { font-size: .95rem; font-weight: 800; color: var(--texte); }
+.eval-moyenne-main { color: var(--accent); font-weight: 700; }
+.eval-pile-suite { max-height: min(300px, 48vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.eval-pile-titre { position: sticky; top: -6px; z-index: 1; margin: -6px -6px 0; padding: 7px 8px 5px; background: var(--surface); }
+.eval-coms .coms-liste { max-height: 180px; }
+.eval-pied { display: none; }
+@media (max-width: 720px) {
+  .eval-pile-suite { max-height: 46vh; }
+  .eval-moyenne { font-size: .58rem; }
+  .eval-moyenne-valeur { font-size: .85rem; }
+}
+.eval-pile-suite.a-suivre { box-shadow: inset 0 -18px 12px -12px rgba(0, 0, 0, .3), 0 12px 28px rgba(0, 0, 0, .28); }
+
+/* Fiche élève (vue plan) : l'historique des séances (points + / −) remonte sur la ligne du critère, à côté du total — plus sous les cartons */
+.obs-ligne:has(.fiche-motifs) { grid-template-areas: "crit points total" "motifs motifs motifs" "com com com" "anciens anciens anciens"; }
+.obs-ligne:has(.fiche-motifs) .obs-points { justify-self: end; }
+.obs-ligne:has(.fiche-motifs) .obs-points:empty { display: none; }
+
+/* Liens entre élèves (bonne dynamique, à séparer) : feuille de séance, légende des repères, vue à plat */
+.duo-bouton.duo-entente { border-style: solid; border-color: #2e8b57; background: color-mix(in srgb, #2e8b57 18%, var(--surface)); color: var(--texte); }
+.duo-type.duo-entente[aria-pressed="true"] { background: #2e8b57; border-color: #2e8b57; color: #fff; }
+.duo-liste li.duo-entente { border-left-color: #2e8b57; }
+.liens-legende li { display: flex; align-items: center; gap: 6px; }
+.lien-pastille { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 2.5px solid; font-size: 11px; flex: none; }
+.lien-pastille.lien-altercation { border-color: #c0392b; }
+.lien-pastille.lien-dissipation { border-color: #e0a800; }
+.lien-pastille.lien-entente { border-color: #2e8b57; }
+.lien-eleves path { opacity: .8; }
+.lien-eleves.voisins path { opacity: 1; }
+.lien-badge { cursor: default; }
+@media print { .calque-liens, .liens-badges { display: none; } }
+
+/* Feuille de séance : le × est dans l'en-tête, à droite de « Feuille terminée » (plus de position absolue ni de décalage) */
+.feuille-entete { margin-right: 0; }
+.feuille-entete-droite { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.feuille-entete-droite .feuille-terminee { margin: 0; }
+.feuille-carte .fiche-trois-fermer.feuille-fermer { position: static; flex: none; width: 38px; height: 38px; padding: 0; margin: 0; line-height: 1;
+  display: grid; place-items: center; border-radius: 10px; font-size: 1.6rem; }
+@media (max-width: 720px) { .feuille-entete { margin-right: 0; } }
+@media (max-width: 720px) {   /* smartphone : le titre et le × sur la première ligne, « Feuille terminée » dessous */
+  .feuille-entete-droite { display: contents; }
+  .feuille-entete .feuille-titre { flex: 1 1 0; order: 0; }
+  .feuille-entete .feuille-fermer { order: 1; align-self: flex-start; }
+  .feuille-entete::after { content: ''; flex-basis: 100%; order: 2; }
+  .feuille-entete .feuille-terminee { order: 3; }
+}
+.liens-focus .lien-eleves:not(.actif), .liens-focus .lien-badge:not(.actif) { opacity: .1; }
+.liens-focus .lien-eleves.actif path { opacity: 1; }
+.lien-eleves, .lien-badge { transition: opacity .15s; }
+
+/* Plan de classe : aperçu d'un nouveau plan (proposé d'après les liens entre élèves), avant de le garder */
+.apercu-plan { margin: 0 0 12px; padding: 12px 14px; border: 2px dashed #2b6cb0; border-radius: 12px; background: color-mix(in srgb, #2b6cb0 8%, var(--surface)); }
+.apercu-plan.secoue { animation: apercu-secoue .4s; }
+@keyframes apercu-secoue { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.apercu-titre { margin: 0 0 8px; font-weight: 800; color: #2b6cb0; }
+.apercu-modes, .apercu-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.apercu-bilan { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 4px; font-size: .88rem; }
+.apercu-bilan li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.apercu-bilan .apercu-avant { color: var(--doux); }
+.apercu-bilan .apercu-fleche { color: var(--doux); }
+.apercu-bilan li.mieux strong { color: #2e8b57; }
+.apercu-bilan li.moins-bien strong { color: #c0392b; }
+.deplace-marque { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2.5px dashed #2b6cb0; }
+body.plan-apercu .zone-plan .plan-svg, body.plan-apercu .zone-plan .plan-trois { outline: 2px dashed #2b6cb0; outline-offset: 4px; border-radius: 6px; }
+.objet.deplace > :first-child { stroke: #2b6cb0; stroke-width: 3; stroke-dasharray: 5 3; }
+.objet.deplace { filter: drop-shadow(0 0 4px rgba(43, 108, 176, .8)); }
+@media print { .apercu-plan { display: none; } }
+.apercu-version { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed color-mix(in srgb, #2b6cb0 45%, transparent); }
+.apercu-version-ligne { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.apercu-version-nom { flex: 1 1 180px; max-width: 280px; }
+.apercu-version-aide { margin: 4px 0 0; font-size: .8rem; }

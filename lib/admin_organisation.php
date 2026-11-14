@@ -1329,11 +1329,13 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
                         Glissez un élève du plan vers la liste pour le retirer. On peut aussi cliquer sur un élève puis sur une place.</p>
                     <ul class="liste-eleves" id="liste-eleves"></ul>
                     <div class="ligne-actions">
+                        <button type="button" class="petit" id="p-proposer" title="Calcule un plan qui éloigne les élèves à séparer et rapproche les bonnes dynamiques (feuille de séance) : vous le voyez avant de le garder">Proposer un nouveau plan…</button>
                         <button type="button" class="petit secondaire" id="p-aleatoire">Placement aléatoire</button>
                         <button type="button" class="petit secondaire" id="p-vider">Tout vider</button>
                     </div>
                 </aside>
                 <div class="zone-plan carte">
+                    <div class="apercu-plan" id="apercu-plan" hidden></div>
                     <svg id="plan" class="plan-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                     <div class="zone-dehors vide" id="zone-dehors" aria-label="Hors de la classe">
                         <p class="zone-dehors-titre"><span aria-hidden="true">🚪</span> Hors de la classe</p>

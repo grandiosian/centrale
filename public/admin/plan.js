@@ -42,7 +42,7 @@ window.PlanSalle = (function () {
 
   function el(tag, attrs, parent) {
     var e = document.createElementNS(NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); });
     if (parent) parent.appendChild(e);
     return e;
   }
@@ -489,12 +489,19 @@ window.PlanSalle = (function () {
     });
     window.PlanSalle3D.rendre(conteneur, {
       L: tr.L, H: tr.H, sol: plan.sol, angle: angleDe(plan), objets: items, palette: options.palette || 0, etiquette: options.etiquette || null,
+      liens: infos.liens ? infos.liens() : [],   // liens entre élèves (à séparer, bonne dynamique)
       rectFrac: function (o, fx, fy, fw, fh) {
         var lw = largeurVue(o), lh = hauteurVue(o);
         return tr.rect(o.x + fx * lw, o.y + fy * lh, fw * lw, fh * lh);
       },
     }, { surClic: infos.surClic || null, surGlisser: infos.surGlisser || null, peutGlisser: infos.peutGlisser || null, libelle: infos.libelle || null,
          surLacherAilleurs: infos.surLacherAilleurs || null, immediat: infos.immediat || null,
+         eviter: function () {   // accueil : les widgets posés sur la vue (le titre de la classe se place là où ils ne le cachent pas)
+           var vue = svg.closest('.dash-vue');
+           if (!vue) return [];
+           return Array.prototype.filter.call(vue.querySelectorAll('.dz > *'), function (x) { return x.offsetParent && x.offsetWidth && x.offsetHeight; })
+             .map(function (x) { return x.getBoundingClientRect(); });
+         },
          quand: function () { document.dispatchEvent(new Event('centrale-vue')); } });
     return {};
   }
@@ -928,6 +935,64 @@ window.PlanSalle = (function () {
      Placement des élèves d'une classe
      ====================================================================== */
 
+  /** Couleurs des liens entre élèves (mêmes qu'en 3D : plan3d.js, COULEURS_LIENS). */
+  var COULEURS_LIENS = { altercation: '#c0392b', dissipation: '#e0a800', entente: '#2e8b57' };
+  /**
+   * Vue à plat : un arc entre deux élèves liés, sous les photos ; un rond au milieu (💬 ⚔️ 🤝 et le nombre de fois).
+   * trop : les duos à séparer assis trop près (duosTropPres) — leur trait est plus marqué.
+   */
+  function tracerLiens2D(svg, plan, tr, liens, trop) {
+    if (!liens.length) return;
+    var pres = {};
+    (trop || []).forEach(function (c) { pres[[c.pa, c.pb].sort().join('|')] = c.voisins ? 'voisins' : 'proches'; });
+    function centre(id) {
+      var o = plan.objets.find(function (x) { return x.id === id; });
+      if (!o) return null;
+      var r = tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o));
+      return { x: (r.x + r.w / 2) * U, y: (r.y + r.h / 2) * U };
+    }
+    var calque = el('g', { class: 'calque-duos calque-liens' }, null);
+    svg.insertBefore(calque, svg.querySelector('.objet.type-place') || svg.querySelector('.calque-survol'));
+    var badges = el('g', { class: 'liens-badges' }, null);
+    liens.forEach(function (l, i) {
+      var A = centre(l.a), B = centre(l.b);
+      if (!A || !B) return;
+      var dx = B.x - A.x, dy = B.y - A.y, dist = Math.hypot(dx, dy) || 1, courbe = (i % 2 ? -1 : 1) * Math.min(0.22 * dist, 40);
+      var C = { x: (A.x + B.x) / 2 - dy / dist * courbe, y: (A.y + B.y) / 2 + dx / dist * courbe };
+      var M = { x: (A.x + 2 * C.x + B.x) / 4, y: (A.y + 2 * C.y + B.y) / 4 };   // milieu de l'arc
+      var etat = l.type === 'entente' ? '' : (pres[[l.a, l.b].sort().join('|')] || '');
+      var g = el('g', { class: 'lien-eleves lien-' + l.type + (etat ? ' ' + etat : '') }, calque);
+      el('path', { d: 'M' + A.x + ',' + A.y + ' Q' + C.x + ',' + C.y + ' ' + B.x + ',' + B.y, fill: 'none', stroke: COULEURS_LIENS[l.type],
+        'stroke-width': 2.5 + Math.min(l.nb, 4) + (etat === 'voisins' ? 2 : 0), 'stroke-linecap': 'round', 'stroke-dasharray': etat === 'proches' ? '6 5' : null }, g);
+      el('title', {}, g).textContent = l.titre;
+      var b = el('g', { class: 'lien-badge lien-' + l.type, transform: 'translate(' + M.x + ',' + M.y + ')' }, badges);
+      el('circle', { r: 8.5, fill: '#ffffff', stroke: COULEURS_LIENS[l.type], 'stroke-width': 2 }, b);
+      el('text', { y: 3.2, 'text-anchor': 'middle', 'font-size': 9 }, b).textContent = l.icone;
+      if (l.nb > 1) {
+        el('circle', { cx: 7.5, cy: -7, r: 5, fill: COULEURS_LIENS[l.type] }, b);
+        el('text', { x: 7.5, y: -4.8, 'text-anchor': 'middle', 'font-size': 6.5, 'font-weight': 800, fill: '#ffffff' }, b).textContent = String(l.nb);
+      }
+      el('title', {}, b).textContent = l.titre;
+      g.setAttribute('data-liens', l.a + ' ' + l.b);
+      b.setAttribute('data-liens', l.a + ' ' + l.b);
+    });
+    svg.insertBefore(badges, svg.querySelector('.calque-survol'));   // les ronds au-dessus des photos, sous les bulles
+    // survol d'un élève : ses liens ressortent, les autres s'effacent (comme en 3D)
+    svg.querySelectorAll('.objet.type-place').forEach(function (gp) {
+      var id = gp.getAttribute('data-id');
+      gp.addEventListener('mouseenter', function () {
+        var aDesLiens = false;
+        svg.querySelectorAll('[data-liens]').forEach(function (x) {
+          var a = x.getAttribute('data-liens').split(' ').indexOf(id) >= 0;
+          x.classList.toggle('actif', a);
+          aDesLiens = aDesLiens || a;
+        });
+        svg.classList.toggle('liens-focus', aDesLiens);
+      });
+      gp.addEventListener('mouseleave', function () { svg.classList.remove('liens-focus'); });
+    });
+  }
+
   /** Bulle sans photo : le nom de l'élève, dans un disque, apparaît au survol. */
   /**
    * Vue à plat : les pastilles d'un élève, comme en 3D — la plateforme (☁ puis les repères) au-dessus de la photo,
@@ -1021,6 +1086,7 @@ window.PlanSalle = (function () {
     /** Pose l'élève sur la place ; si elle est prise, son occupant part à l'ancienne place de l'élève (échange),
         ou redevient non placé si l'élève venait de la liste. */
     function poser(place, id) {
+      if (apercu) return;   // aperçu d'un nouveau plan : on le garde ou on revient d'abord
       var ancienne = placeDe(id), occupant = carte[place];
       if (ancienne) delete carte[ancienne];
       carte[place] = id;
@@ -1036,10 +1102,12 @@ window.PlanSalle = (function () {
       document.body.classList.toggle('plan-modifie', maintenant !== initial);
     }
     var ignorerClic = false;   // un glisser-déposer ne compte pas comme un clic
+    var apercu = null;          // aperçu d'un nouveau plan : { avant: plan affiché avant, minimal } ; carte est alors la proposition
 
     /** Clic sur une place (plan ou vue 3D) : pose l'élève sélectionné, ou reprend celui de la place. */
     function clicPlace(id) {
       if (ignorerClic) { ignorerClic = false; return; }
+      if (apercu) return;
       if (choisi) { poser(id, choisi); choisi = null; }
       else if (carte[id]) { choisi = carte[id]; delete carte[id]; modifie(); }
       rendre();
@@ -1053,7 +1121,9 @@ window.PlanSalle = (function () {
     }
 
     /** Ce que la vue 3D affiche sur chaque place : le nom de l'élève et sa photo. */
+    function nomNumero(num) { var e = d.eleves.find(function (x) { return String(x.numero) === String(num); }); return e ? nom(e) : 'n° ' + num; }
     var infosPlaces = {
+      liens: function () { return liensPlaces(d, carte, nomNumero); },
       nomPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? nom(e) : ''; },
       visagePlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? photo(d.classe, e.numero) : null; },
       cartonsPlace: function (o) {
@@ -1067,7 +1137,7 @@ window.PlanSalle = (function () {
       },
       surClic: function (idPlace) { clicPlace(idPlace); },
       surGlisser: glisser,
-      peutGlisser: function (idPlace) { return !!carte[idPlace]; },
+      peutGlisser: function (idPlace) { return !apercu && !!carte[idPlace]; },
       libelle: function (idPlace) { var e = eleve(carte[idPlace]); return e ? nom(e) : ''; },
       // lâché hors de la vue 3D : dans « Hors de la classe », ou dans la liste (l'élève n'est plus placé)
       surLacherAilleurs: function (idPlace, sous) { lacheHorsPlan(idPlace, sous); },
@@ -1232,21 +1302,11 @@ window.PlanSalle = (function () {
       });
       boiteDuos.append(ul, creer('p', 'discret', 'Glissez l’un des deux ailleurs, ou « Placement aléatoire » : il les éloigne.'));
     }
-    /** Vue à plat : un trait entre deux élèves d'un duo trop près (rouge : voisins, orange : tout proches). */
+    /** Vue à plat : les liens entre élèves assis (à séparer : rouge, jaune ; bonne dynamique : vert), plus marqués s'ils sont voisins. */
     function tracerDuos() {
       var p = affichage(plan);
       if ((p.vue || {}).iso || svg.style.display === 'none') return;
-      var trop = duosTropPres(carte);
-      if (!trop.length) return;
-      var tr = transformation(p), calque = el('g', { class: 'calque-duos' }, svg);
-      trop.forEach(function (c) {
-        var oa = plan.objets.find(function (o) { return o.id === c.pa; }), ob = plan.objets.find(function (o) { return o.id === c.pb; });
-        if (!oa || !ob) return;
-        var ra = tr.rect(oa.x, oa.y, largeurVue(oa), hauteurVue(oa)), rb = tr.rect(ob.x, ob.y, largeurVue(ob), hauteurVue(ob));
-        var ln = el('line', { x1: (ra.x + ra.w / 2) * U, y1: (ra.y + ra.h / 2) * U, x2: (rb.x + rb.w / 2) * U, y2: (rb.y + rb.h / 2) * U,
-          class: 'ligne-duo ' + (c.voisins ? 'voisins' : 'proches') }, calque);
-        el('title', {}, ln).textContent = 'À séparer · ' + resumePaire(c.paire);
-      });
+      tracerLiens2D(svg, plan, transformation(p), liensPlaces(d, carte, nomNumero), duosTropPres(carte));
     }
 
     function rendre() {
@@ -1260,7 +1320,8 @@ window.PlanSalle = (function () {
           var id = carte[o.id];
           if (id) {
             g.classList.add('occupee');
-            g.addEventListener('pointerdown', function (ev) { glisserSvg(g, o.id, ev); });
+            if (apercu && apercu.avant[o.id] !== id) g.classList.add('deplace');   // aperçu : l'élève change de place
+            g.addEventListener('pointerdown', function (ev) { if (!apercu) glisserSvg(g, o.id, ev); });
             var e = eleve(id);
             if (e && dehors(d.classe, e.numero)) g.classList.add('dehors');   // exclu du cours aujourd'hui : place gardée, grisée
             var visage = e ? photo(d.classe, e.numero) : null;
@@ -1329,9 +1390,167 @@ window.PlanSalle = (function () {
 
     var boutonVider = document.getElementById('p-vider');
     boutonVider.onclick = function () {
+      if (apercu) revenirApercu();
       if (confirmerEnLigne(boutonVider, 'Confirmer : tout vider ?')) { carte = {}; choisi = null; modifie(); rendre(); }
     };
+    /* ---------- Aperçu d'un nouveau plan : proposé d'après les liens entre élèves (feuille de séance), vu avant d'être gardé ---------- */
+    var boiteApercu = document.getElementById('apercu-plan');
+    function placesEleves() { return plan.objets.filter(estPlace).map(function (o) { return o.id; }); }
+    function elevesAPlacer() { return d.eleves.filter(function (e) { return e.actif && !sorti(d.classe, e.numero); }).map(function (e) { return e.id; }); }
+    /** Les paires à considérer : { a, b (ids d'élèves), neg (à séparer : altercation ×2 + dissipations), pos (bonnes dynamiques) }. */
+    function pairesPlan() {
+      var parNum = {};
+      d.eleves.forEach(function (e) { parNum[String(e.numero)] = e.id; });
+      return liensClasse(d.classe).map(function (p) {
+        return { a: parNum[p.a], b: parNum[p.b], neg: p.altercation * 2 + p.dissipation, pos: p.entente };
+      }).filter(function (p) { return p.a && p.b; });
+    }
+    function distance(pa, pb) {
+      var A = centresPlaces[pa], B = centresPlaces[pb];
+      return A && B ? Math.hypot(A.x - B.x, A.y - B.y) : Infinity;
+    }
+    /** Bilan d'une répartition : à séparer assis trop près, bonnes dynamiques assises côte à côte, élèves déplacés. */
+    function bilanPlan(rep, paires, depart) {
+      var ou = {}, b = { trop: 0, voisins: 0, ensemble: 0, deplaces: 0, cout: 0 };
+      Object.keys(rep).forEach(function (pl) { ou[rep[pl]] = pl; });
+      paires.forEach(function (p) {
+        var dd = ou[p.a] && ou[p.b] ? distance(ou[p.a], ou[p.b]) : Infinity;
+        if (p.neg && dd <= PROCHES) { b.trop++; if (dd <= VOISINS) b.voisins++; b.cout += p.neg * (dd <= VOISINS ? 4 : 1); }
+        if (p.pos && dd <= VOISINS) { b.ensemble++; b.cout -= p.pos * 1.5; }
+        else if (p.pos && dd <= PROCHES) b.cout -= p.pos * 0.5;
+      });
+      if (depart) Object.keys(ou).forEach(function (id) { if (!depart[ou[id]] || String(depart[ou[id]]) !== String(id)) b.deplaces++; });
+      return b;
+    }
+    /**
+     * Cherche un plan : échanges de places au hasard, gardés s'ils n'aggravent pas le coût (à séparer trop près, bonnes dynamiques
+     * éloignées ; « minimal » : chaque élève déplacé coûte un peu, on part du plan affiché). Plusieurs départs : on garde le meilleur.
+     */
+    function chercherPlan(depart, minimal) {
+      var places = placesEleves(), ids = elevesAPlacer(), paires = pairesPlan(), meilleur = null, coutMin = Infinity;
+      function cout(rep) { var b = bilanPlan(rep, paires, depart); return b.cout + (minimal ? b.deplaces * 0.35 : 0); }
+      for (var essai = 0; essai < (minimal ? 4 : 8); essai++) {
+        var t = places.map(function () { return null; }), libres = ids.slice();
+        if (minimal) {   // le plan affiché, puis les élèves non placés sur les places libres
+          places.forEach(function (pl, i) { var id = depart[pl]; if (id && libres.indexOf(id) >= 0) { t[i] = id; libres.splice(libres.indexOf(id), 1); } });
+          t.forEach(function (x, i) { if (!x && libres.length) t[i] = libres.shift(); });
+        } else {
+          for (var i = libres.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), u = libres[i]; libres[i] = libres[j]; libres[j] = u; }
+          libres.forEach(function (id, k) { if (k < t.length) t[k] = id; });
+          for (var i2 = t.length - 1; i2 > 0; i2--) { var j2 = Math.floor(Math.random() * (i2 + 1)), u2 = t[i2]; t[i2] = t[j2]; t[j2] = u2; }
+        }
+        function rep() { var r = {}; t.forEach(function (id, k) { if (id) r[places[k]] = id; }); return r; }
+        var c = cout(rep());
+        if (paires.length) for (var n = 0; n < 2500; n++) {
+          var x = Math.floor(Math.random() * t.length), y = Math.floor(Math.random() * t.length);
+          if (x === y || (!t[x] && !t[y])) continue;
+          var v = t[x]; t[x] = t[y]; t[y] = v;
+          var c2 = cout(rep());
+          if (c2 <= c) c = c2; else { v = t[x]; t[x] = t[y]; t[y] = v; }
+        }
+        if (c < coutMin) { coutMin = c; meilleur = rep(); }
+      }
+      return meilleur || {};
+    }
+    function texteBilan(b) {
+      return b.trop + ' paire' + (b.trop > 1 ? 's' : '') + ' à séparer assise' + (b.trop > 1 ? 's' : '') + ' trop près'
+        + (b.voisins ? ' (dont ' + b.voisins + ' côte à côte)' : '');
+    }
+    function proposer(minimal) {
+      var avant = apercu ? apercu.avant : Object.assign({}, carte);
+      carte = chercherPlan(avant, minimal);
+      apercu = { avant: avant, minimal: minimal };
+      choisi = null;
+      majApercu();
+      rendre();
+    }
+    function majApercu() {
+      document.body.classList.toggle('plan-apercu', !!apercu);
+      boiteApercu.hidden = !apercu;
+      boiteApercu.replaceChildren();
+      if (!apercu) return;
+      var paires = pairesPlan(), b0 = bilanPlan(apercu.avant, paires), b1 = bilanPlan(carte, paires, apercu.avant);
+      var nbPos = paires.filter(function (p) { return p.pos; }).length;
+      boiteApercu.appendChild(creer('p', 'apercu-titre', '👁 Aperçu d’un nouveau plan — pas encore appliqué'));
+      var modes = creer('div', 'apercu-modes');
+      [[true, 'Changer le moins de places possible'], [false, 'Tout redistribuer']].forEach(function (m) {
+        var b = creer('button', 'petit ' + (apercu.minimal === m[0] ? '' : 'secondaire'), m[1]);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(apercu.minimal === m[0]));
+        b.addEventListener('click', function () { proposer(m[0]); });
+        modes.appendChild(b);
+      });
+      var ul = creer('ul', 'apercu-bilan');
+      function ligne(cls, avantT, apresT) {
+        var li = creer('li', cls);
+        li.append(creer('span', 'apercu-avant', avantT), creer('span', 'apercu-fleche', '→'), creer('strong', '', apresT));
+        ul.appendChild(li);
+      }
+      ligne(b1.trop < b0.trop ? 'mieux' : b1.trop > b0.trop ? 'moins-bien' : '', texteBilan(b0), texteBilan(b1));
+      if (nbPos) ligne(b1.ensemble > b0.ensemble ? 'mieux' : b1.ensemble < b0.ensemble ? 'moins-bien' : '',
+        b0.ensemble + ' / ' + nbPos + ' bonne' + (nbPos > 1 ? 's' : '') + ' dynamique' + (nbPos > 1 ? 's' : '') + ' côte à côte', b1.ensemble + ' / ' + nbPos + ' côte à côte');
+      var dep = creer('li', 'apercu-deplaces');
+      dep.append(creer('span', 'deplace-marque'), ' ' + b1.deplaces + ' élève' + (b1.deplaces > 1 ? 's' : '') + ' change' + (b1.deplaces > 1 ? 'nt' : '') + ' de place (cerclés en bleu sur le plan à plat)');
+      ul.appendChild(dep);
+      if (!paires.length) ul.appendChild(creer('li', 'discret', 'Aucun lien noté entre élèves dans la feuille de séance : la proposition est faite au hasard.'));
+      var actions = creer('div', 'apercu-actions'), garder = creer('button', 'petit', '✓ Garder ce plan'),
+          autre = creer('button', 'petit secondaire', '↻ Autre proposition'), retour = creer('button', 'petit secondaire', 'Revenir au plan actuel');
+      [garder, autre, retour].forEach(function (b) { b.type = 'button'; });
+      garder.title = 'Le plan proposé remplace le plan affiché ; « Enregistrer le plan de classe » le garde pour de bon';
+      garder.addEventListener('click', function () { apercu = null; modifie(); majApercu(); rendre(); });
+      autre.addEventListener('click', function () { proposer(apercu.minimal); });
+      retour.addEventListener('click', revenirApercu);
+      actions.append(garder, autre, retour);
+      boiteApercu.append(modes, ul, actions, formVersion());
+    }
+    /**
+     * « Ajouter comme version » : la proposition est enregistrée comme nouvelle variante (action enregistrer_version), sans toucher
+     * au plan de la classe ; la page se recharge sur le plan d'origine, la variante apparaît dans « Variantes ».
+     */
+    function formVersion() {
+      var fv = creer('form', 'apercu-version'), fp = document.getElementById('form-placement');
+      fv.method = 'post';
+      function cache(nom, valeur) { var i = creer('input'); i.type = 'hidden'; i.name = nom; i.value = valeur; fv.appendChild(i); return i; }
+      ['csrf', 'classe_id', 'salle_id', 'groupe_id'].forEach(function (n) { var src = fp && fp.querySelector('[name="' + n + '"]'); if (src) cache(n, src.value); });
+      cache('action', 'enregistrer_version');
+      var champPlacement = cache('placement', '');
+      var existants = Array.prototype.map.call(document.querySelectorAll('.form-variante .variante'), function (b) { return b.textContent.trim().toLowerCase(); });
+      var n = 1;
+      while (existants.indexOf('proposition ' + n) >= 0) n++;
+      var nomV = creer('input', 'niv-com apercu-version-nom'), ajouter = creer('button', 'petit', '＋ Ajouter comme version');
+      nomV.type = 'text'; nomV.name = 'nom_version'; nomV.maxLength = 60; nomV.required = true;
+      nomV.value = 'Proposition ' + n;
+      nomV.placeholder = 'Nom de la version';
+      nomV.setAttribute('aria-label', 'Nom de la nouvelle version');
+      ajouter.type = 'submit';
+      ajouter.title = 'Enregistre ce plan proposé comme nouvelle variante ; le plan de la classe ne change pas';
+      var ligne = creer('div', 'apercu-version-ligne');
+      ligne.append(nomV, ajouter);
+      fv.append(ligne, creer('p', 'discret apercu-version-aide', 'Garde la proposition sous ce nom, sans modifier le plan de la classe : elle s’ouvrira plus tard d’un clic dans « Variantes ».'));
+      fv.addEventListener('submit', function (ev) {
+        if (!nomV.value.trim()) { ev.preventDefault(); nomV.focus(); return; }
+        // le plan affiché avant l'aperçu avait des changements non enregistrés : ils seraient perdus au rechargement
+        var avantModifie = JSON.stringify(Object.keys(apercu.avant).sort().map(function (k) { return [k, apercu.avant[k]]; })) !== initial;
+        if (avantModifie && !confirmerEnLigne(ajouter, 'Modifications non enregistrées perdues : confirmer ?')) { ev.preventDefault(); return; }
+        champPlacement.value = JSON.stringify(carte);
+      });
+      return fv;
+    }
+    function revenirApercu() {
+      if (!apercu) return;
+      carte = apercu.avant;
+      apercu = null;
+      majApercu();
+      rendre();
+    }
+    document.getElementById('p-proposer').addEventListener('click', function () {
+      proposer(Object.keys(carte).length > 0);   // un plan existe : on le retouche ; sinon on répartit tout
+      boiteApercu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && apercu && !document.querySelector('dialog[open]')) revenirApercu(); });
+
     document.getElementById('p-aleatoire').onclick = function () {
+      if (apercu) revenirApercu();
       var places = plan.objets.filter(estPlace).map(function (o) { return o.id; });
       var eleves = d.eleves.filter(function (e) { return e.actif && !sorti(d.classe, e.numero); }).map(function (e) { return e.id; });
       // plusieurs tirages : on garde celui où les duos (dissipation, altercation) sont le plus éloignés
@@ -1351,7 +1570,13 @@ window.PlanSalle = (function () {
       choisi = null;
       rendre();
     };
-    document.getElementById('form-placement').addEventListener('submit', function () {
+    document.getElementById('form-placement').addEventListener('submit', function (ev) {
+      if (apercu) {   // on n'enregistre pas un aperçu par mégarde : il faut d'abord le garder
+        ev.preventDefault();
+        boiteApercu.classList.remove('secoue'); void boiteApercu.offsetWidth; boiteApercu.classList.add('secoue');
+        boiteApercu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
       document.getElementById('champ-placement').value = JSON.stringify(carte);
     });
     // « Enregistrer comme version » / « Dupliquer en variante » : gardent le plan tel qu'il est affiché
@@ -1469,7 +1694,7 @@ window.PlanSalle = (function () {
       cn.criteres().forEach(function (k) {
         if (!oSeance[k] || !CRITERES[k]) return;
         var x = creer('span', (oSeance[k] > 0 ? 'plus' : 'moins') + (Math.abs(oSeance[k]) > 1 ? ' fort' : ''), CRITERES[k].lettre + signeNiveau(oSeance[k]));
-        x.title = CRITERES[k].libelle + ((oSeance._c || {})[k] ? ' : ' + oSeance._c[k] : '');
+        x.title = CRITERES[k].libelle + ((oSeance._c || {})[k] ? ' : ' + commentairesLisibles(oSeance._c[k], formateurNoms(d)) : '');
         ddO.appendChild(x);
       });
       if (!ddO.childNodes.length) ddO.appendChild(creer('span', 'discret', 'rien de noté'));
@@ -1505,20 +1730,36 @@ window.PlanSalle = (function () {
           bt.addEventListener('click', function () { cn.definirObservation(d.classe, e.numero, sObs.cle, k, v); actualiser(); });
           choix.appendChild(bt);
         });
-        ligneO.append(choix, creer('span', 'obs-total', (b.plus || b.moins) ? '+' + b.plus + ' / −' + b.moins : '—'), pointsSeances(b, 8));
+        function texteF() { return (cn.observation(d.classe, e.numero, sObs.cle)._c || {})[k] || ''; }
+        var motifsF = pastillesMotifs(k, function (motif, signe) {   // les anciens cartons : niveau et commentaire de la séance
+          function appliquer(texte) {   // le carton, avec son heure et son niveau ; le critère prend la moyenne des cartons
+            var garde = cn.definirCommentaire(d.classe, e.numero, sObs.cle, k, ajouterEntree(texteF(), ecrireEntree(signe, texte)));
+            var moy = niveauMoyen(garde);
+            cn.definirObservation(d.classe, e.numero, sObs.cle, k, moy ? moy.niveau : signe);
+            actualiser();
+          }
+          var type = MOTIFS_AVEC[motif];
+          if (!type) { appliquer(motif); return; }
+          choisirCamarades(document.querySelector('dialog[open]') || document.body, d, e.numero, motif, type, function (nums) {
+            if (nums.length && TYPES_DUO[type] && cn.ajouterIncident) cn.ajouterIncident(d.classe, [String(e.numero)].concat(nums), type, sObs.cle, motif);
+            if (MOTIFS_POUR_TOUS[motif]) repercuterCarton(d.classe, e.numero, nums, sObs.cle, k, signe, motif);   // les camarades reçoivent aussi le carton
+            appliquer(motifAvec(motif, nums));
+          });
+        }, choix);
+        if (motifsF) motifsF.classList.add('fiche-motifs');
+        ligneO.append(motifsF || choix, creer('span', 'obs-total', (b.plus || b.moins) ? '+' + b.plus + ' / −' + b.moins : '—'), pointsSeances(b, 8));
         // commentaire de la séance pour ce critère (enregistré en quittant le champ), puis les précédents
-        var com = creer('input', 'obs-commentaire');
-        com.type = 'text';
-        com.maxLength = 300;
-        com.placeholder = 'Commentaire pour préciser (facultatif)';
-        com.value = (actuelles._c || {})[k] || '';
-        com.addEventListener('change', function () { com.value = cn.definirCommentaire(d.classe, e.numero, sObs.cle, k, com.value) || ''; });
-        com.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') com.blur(); });
+        var com = zoneCommentaires(texteF, function (t) { return cn.definirCommentaire(d.classe, e.numero, sObs.cle, k, t) || ''; }, null,
+          'Ajouter un commentaire pour préciser', false, formateurNoms(d),
+          function () { var moy = niveauMoyen(texteF()); cn.definirObservation(d.classe, e.numero, sObs.cle, k, moy ? moy.niveau : 0); actualiser(); },
+          { d: d, num: e.numero, seance: sObs.cle, k: k, conteneur: function () { return document.querySelector('dialog[open]') || document.body; } });
+        com.classList.add('obs-coms');
         ligneO.appendChild(com);
+
         var anciens = b.commentaires.filter(function (c) { return c.cle !== sObs.cle; }).slice(0, 3);
         if (anciens.length) {
           var ul = creer('ul', 'obs-anciens');
-          anciens.forEach(function (c) { ul.appendChild(creer('li', '', c.cle.slice(0, 10).split('-').reverse().join('/') + ' (' + signeNiveau(c.v) + ') : ' + c.texte)); });
+          anciens.forEach(function (c) { ul.appendChild(creer('li', '', c.cle.slice(0, 10).split('-').reverse().join('/') + ' (' + signeNiveau(c.v) + ') : ' + commentairesLisibles(c.texte, formateurNoms(d)))); });
           ligneO.appendChild(ul);
         }
         obsP.appendChild(ligneO);
@@ -1527,8 +1768,11 @@ window.PlanSalle = (function () {
     var appel = partie('appel', 'Appel · observé en classe', 'classe', 'Noté par vous, enregistré sur la Centrale.');
     lignesReperes(appel, obs, CLASSE);
     if (cn && cn.presence) appel.appendChild(sectionPresence(d, e.numero, actualiser));
-    var blocCartons = partie('cartons', 'Cartons · observé en classe', 'classe', 'Observations et récompenses, enregistrées sur la Centrale.');
-    if (cn && cn.cartons) blocCartons.appendChild(sectionCartons(d.classe, e.numero, actualiser));
+    // les cartons sont devenus des motifs des observations de séance (ci-dessus) ; les anciens restent consultables
+    if (cn && cn.cartons && cn.cartons(d.classe, e.numero).length) {
+      var blocCartons = partie('cartons', 'Anciens cartons · observé en classe', 'classe', 'Donnés avant que les cartons deviennent des motifs des observations de séance.');
+      blocCartons.appendChild(sectionCartons(d.classe, e.numero, actualiser));
+    }
 
     // 3. Sur la plateforme : calculé par la Centrale d'après l'activité dans les ateliers
     var plateforme = partie('plateforme', 'Plateforme · activité dans les ateliers', 'plateforme', 'Calculé par la Centrale, en comparant l’élève à sa classe.');
@@ -1597,64 +1841,10 @@ window.PlanSalle = (function () {
     return bloc;
   }
 
-  /** Cartons de l'élève : cartons préremplis en rang, carton personnalisé, puis la liste des cartons donnés. */
+  /** Anciens cartons de l'élève (avant les motifs de la feuille de séance) : la liste, avec retrait. */
   function sectionCartons(classe, numero, actualiser) {
     var cn = window.CentraleNoms, bloc = creer('div', 'fiche-trois-cartons');
-    bloc.appendChild(creer('p', 'fiche-trois-cartons-titre', 'Cartons'));
-
-    // cartons préremplis : un clic donne le carton ; alignés en rang, décollés au survol
-    [['observation', 'Observations', cn.motifsCartons, 'carton-pre-observation'],
-     ['recompense', 'Récompenses', cn.motifsRecompenses, 'carton-pre-recompense']].forEach(function (g) {
-      var rang = creer('div', 'cartons-rang');
-      rang.appendChild(creer('span', 'cartons-rang-titre', g[1]));
-      var cases = creer('div', 'cartons-cases');
-      g[2].forEach(function (m) {
-        if (m === cn.autreMotif) return;
-        var b = creer('button', 'carton-pre ' + g[3], m);
-        b.type = 'button';
-        b.title = 'Donner : ' + m;
-        b.addEventListener('click', function () { cn.ajouterCarton(classe, numero, g[0], m); actualiser(); });
-        cases.appendChild(b);
-      });
-      rang.appendChild(cases);
-      bloc.appendChild(rang);
-    });
-
-    // carton personnalisé : même champ que ci-dessous
-    bloc.appendChild(creer('p', 'cartons-sous-titre', 'Carton personnalisé'));
-    var form = creer('form', 'carton-ajout');
-    var choix = creer('select', '');
-    Object.keys(cn.typesCartons).forEach(function (t) { var o = creer('option', '', cn.typesCartons[t]); o.value = t; choix.appendChild(o); });
-    var motifs = creer('select', '');
-    function remplirMotifs() {   // les motifs suivent le type choisi
-      motifs.replaceChildren();
-      var vide = creer('option', '', 'Motif…');
-      vide.value = '';
-      motifs.appendChild(vide);
-      (choix.value === 'recompense' ? cn.motifsRecompenses : cn.motifsCartons).forEach(function (m) { var o = creer('option', '', m); o.value = m; motifs.appendChild(o); });
-    }
-    choix.addEventListener('change', remplirMotifs);
-    remplirMotifs();
-    var champ = creer('input', '');
-    champ.type = 'text';
-    champ.maxLength = 200;
-    champ.placeholder = 'Précision (facultative)';
-    var ajouter = creer('button', 'petit', 'Ajouter');
-    ajouter.type = 'submit';
-    form.append(choix, motifs, champ, ajouter);
-    form.addEventListener('submit', function (ev) {
-      ev.preventDefault();
-      var motif = motifs.value, precision = champ.value.trim();
-      if (!motif) return;
-      if (motif === cn.autreMotif && !precision) { champ.focus(); return; }   // « Autre » demande une précision
-      var texte = motif === cn.autreMotif ? precision : motif + (precision ? ' — ' + precision : '');
-      cn.ajouterCarton(classe, numero, choix.value, texte);
-      actualiser();
-    });
-    bloc.appendChild(form);
-
     // liste des cartons déjà donnés, avec retrait
-    bloc.appendChild(creer('p', 'cartons-sous-titre', 'Cartons donnés'));
     var liste = cn.cartons(classe, numero);
     if (!liste.length) bloc.appendChild(creer('p', 'discret', 'Aucun carton pour l’instant.'));
     liste.forEach(function (c, i) {
@@ -1729,7 +1919,10 @@ window.PlanSalle = (function () {
   function etiquetteAccueil(d) {
     var cn = window.CentraleNoms, observations = 0;
     (d.eleves || []).forEach(function (e) {
-      if (cn && cn.cartons) cn.cartons(d.classe, e.numero).forEach(function (c) { if (c.type !== 'recompense') observations++; });
+      if (cn && cn.observation) {   // « − » notés pour ce cours (les cartons sont devenus des motifs de la feuille de séance)
+        var o = cn.observation(d.classe, e.numero, seanceDe(d).cle);
+        Object.keys(o).forEach(function (k) { if (k !== '_c' && k !== 'note' && typeof o[k] === 'number' && o[k] < 0) observations++; });
+      }
     });
     var actifs = (d.eleves || []).filter(function (e) { return e.actif; }).length;
     return Object.assign({}, d.etiquette, { atelier: d.atelier || 'aucun cours', eleves: actifs, observations: observations });
@@ -1759,6 +1952,354 @@ window.PlanSalle = (function () {
     securite:      { lettre: 'S', libelle: 'Sécurité', court: 'Sécurité', gravite: 'rouge' },
     numerique:     { lettre: 'N', libelle: 'Usage du numérique', court: 'Numér.', gravite: 'jaune' },
   };
+  /**
+   * Motifs prêts à l'emploi pour préciser un critère (les anciens cartons d'observation et de récompense) : un clic
+   * met le niveau (− ou +, s'il n'est pas déjà de ce côté) et ajoute le motif au commentaire de la séance.
+   */
+  var MOTIFS_CRITERES = {   // moins / plus : « − » et « + » ; moinsFort / plusFort : « −− » et « ++ »
+    comportement:  { moins: ['Bavardage à voix haute', 'Bavardage hors de son groupe', 'Parle sans demander la parole', 'Ne lève pas la main avant de prendre la parole',
+                             'Interrompt le prof quand il parle', 'Crie sans raison', 'Se lève sans autorisation', 'Se lève sans raison, sans autorisation'],
+                     moinsFort: ['Insolent envers l’adulte', 'Refuse les consignes', 'Perturbe toute la classe', 'Jette un projectile dans la classe',
+                                 'Jette un projectile derrière mon dos', 'Propos blessants', 'Gestes dangereux'],
+                     plus: ['Calme et sérieux', 'Travaille calmement avec son voisin'], plusFort: ['Comportement exemplaire', 'Aide ses camarades', 'Bonne entente avec ses camarades', 'Ramène le calme dans son groupe'] },
+    participation: { moins: ['Ne travaille pas sur son atelier', 'Ne participe pas', 'Surfe sur l’ordinateur pendant la correction'],
+                     moinsFort: ['Refuse de participer', 'Aucun travail', 'Aucun travail malgré les relances'],
+                     plus: ['Travail sérieux', 'Fait des efforts sur son atelier', 'Participe activement', 'Travaille bien en binôme'], plusFort: ['Travail remarquable', 'Va au-delà de la consigne', 'Moteur dans le groupe', 'Bonne dynamique de groupe'] },
+    travail:       { moins: ['Ne travaille pas sur son atelier'], moinsFort: ['Aucun travail', 'Aucun travail malgré les relances', 'Refuse de travailler'],
+                     plus: ['Travail sérieux', 'Fait des efforts sur son atelier', 'Travaille bien en binôme'], plusFort: ['Travail remarquable', 'Va au-delà de la consigne', 'Bonne dynamique de groupe'] },
+    cahier:        { moins: ['Cahier non tenu', 'Classeur incomplet', 'Ne colle pas les feuilles distribuées', 'Ne prend pas la correction'],
+                     moinsFort: ['Pas de cahier', 'Cahier perdu ou abîmé'],
+                     plus: ['Cahier soigné'], plusFort: ['Cahier exemplaire'] },
+    materiel:      { moins: ['Matériel mal utilisé'], moinsFort: ['Matériel dégradé'], plus: ['Prend soin du matériel'], plusFort: ['Soin exemplaire du matériel'] },
+    rangement:     { moins: ['Poste non rangé'], moinsFort: ['Poste laissé en désordre, matériel abandonné'], plus: ['Range son poste'], plusFort: ['Range aussi pour les autres'] },
+    securite:      { moins: ['Consignes de sécurité non respectées'], moinsFort: ['Comportement dangereux', 'Manipulation interdite'], plus: [], plusFort: [] },
+    equipe:        { moins: ['Ne coopère pas'], moinsFort: ['Empêche son équipe de travailler'], plus: ['Aide ses camarades', 'Travaille bien en binôme'], plusFort: ['Moteur de son équipe', 'Bonne dynamique de groupe'] },
+    numerique:     { moins: ['Usage du numérique hors consigne', 'Surfe sur l’ordinateur pendant la correction'], moinsFort: ['Usage interdit du numérique'], plus: [], plusFort: [] },
+  };
+  /** Cartons qui concernent d'autres élèves : on choisit les camarades (enregistrés par numéro, jamais par leur nom) ;
+      dissipation / altercation : ils sont aussi notés « À séparer » ; entente : « Bonne dynamique » (à garder ensemble).
+      Le plan de classe relie ces élèves (liensClasse). */
+  var MOTIFS_AVEC = {
+    'Bavardage à voix haute': 'dissipation', 'Bavardage hors de son groupe': 'dissipation',
+    'Propos blessants': 'altercation', 'Gestes dangereux': 'altercation',
+    'Aide ses camarades': 'entente', 'Travaille calmement avec son voisin': 'entente', 'Bonne entente avec ses camarades': 'entente',
+    'Travaille bien en binôme': 'entente', 'Bonne dynamique de groupe': 'entente',
+  };
+  /** Cartons que les camarades choisis reçoivent aussi (on bavarde, on travaille bien… à plusieurs). */
+  var MOTIFS_POUR_TOUS = {
+    'Bavardage à voix haute': 1, 'Bavardage hors de son groupe': 1,
+    'Travaille calmement avec son voisin': 1, 'Bonne entente avec ses camarades': 1, 'Travaille bien en binôme': 1, 'Bonne dynamique de groupe': 1,
+  };
+  /** Pour l'affichage seulement : « n° 07 » d'un commentaire devient le nom de l'élève (gardé sur cet ordinateur). */
+  function formateurNoms(d) {
+    var cn = window.CentraleNoms, par = {};
+    (d.eleves || []).forEach(function (x) { par[String(x.numero)] = x; });
+    return function (t) {
+      return String(t || '').replace(/n° (\d+)(?!\d)(?! \()/g, function (tout, n) {
+        var x = par[n], nom = x && ((cn && cn.nomLocal ? cn.nomLocal(d.classe, n) : '') || x.simule);
+        return nom || tout;
+      });
+    };
+  }
+  /**
+   * Fenêtre « avec qui ? » d'un carton qui concerne des camarades (bavardage avec…, propos blessants envers…) : les élèves
+   * de la classe en pastilles (photo, nom) ; valider(numéros) — [] avec « Sans préciser ». Ajoutée dans conteneur
+   * (la feuille, ou la fiche ouverte en fenêtre modale).
+   */
+  function choisirCamarades(conteneur, d, num, motif, type, valider, preselection) {
+    var cn = window.CentraleNoms, fondC = creer('div', 'camarades-fond'), carte = creer('div', 'camarades-carte'), choix = {};
+    (preselection || []).forEach(function (n) { choix[String(n)] = true; });
+    function fermer() { fondC.remove(); document.removeEventListener('keydown', echap, true); }
+    function echap(ev) { if (ev.key === 'Escape') { ev.stopImmediatePropagation(); fermer(); } }
+    document.addEventListener('keydown', echap, true);
+    fondC.addEventListener('click', function (ev) { ev.stopPropagation(); if (ev.target === fondC) fermer(); });
+    var titre = creer('h4', 'camarades-titre', motif + ' : avec qui ?');
+    var aide = creer('p', 'discret camarades-aide', 'Seuls les numéros sont enregistrés, jamais les noms.'
+      + (type === 'dissipation' ? ' Les élèves choisis sont aussi notés « À séparer » (dissipation).' : type === 'altercation' ? ' Les élèves choisis sont aussi notés « À séparer » (altercation).'
+        : type === 'entente' ? ' Les élèves choisis sont aussi notés « Bonne dynamique » : le plan de classe les relie en vert.' : '')
+      + (MOTIFS_POUR_TOUS[motif] ? ' Ils reçoivent aussi ce carton.' : ''));
+    var grille = creer('div', 'camarades-grille'), valide = creer('button', 'petit camarades-valider');
+    function majValide() { var n = Object.keys(choix).filter(function (k) { return choix[k]; }).length; valide.textContent = n ? 'Valider (' + n + ')' : 'Valider'; valide.disabled = !n; }
+    (d.eleves || []).filter(function (x) { return x.actif && String(x.numero) !== String(num); })
+      .sort(function (a, b) { return String(a.numero).localeCompare(String(b.numero), 'fr', { numeric: true }); })
+      .forEach(function (x) {
+        var b = creer('button', 'camarade'), v = creer('span', 'camarade-photo'), visage = photo(d.classe, x.numero);
+        var nom = (cn.nomLocal ? cn.nomLocal(d.classe, x.numero) : '') || x.simule || ('n° ' + x.numero);
+        b.type = 'button';
+        if (visage && cn.styleVisage) cn.styleVisage(v, visage, 30 / visage.l, 30, 36); else v.textContent = String(nom).replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 1);
+        b.append(v, creer('span', 'camarade-nom', nom), creer('span', 'camarade-num', 'n° ' + x.numero));
+        b.setAttribute('aria-pressed', String(!!choix[String(x.numero)]));
+        b.addEventListener('click', function () { choix[x.numero] = !choix[x.numero]; b.setAttribute('aria-pressed', String(!!choix[x.numero])); majValide(); });
+        grille.appendChild(b);
+      });
+    var pied = creer('div', 'camarades-pied'), annuler = creer('button', 'petit secondaire', 'Annuler'), sans = creer('button', 'petit secondaire', 'Sans préciser');
+    annuler.type = sans.type = valide.type = 'button';
+    annuler.addEventListener('click', fermer);
+    sans.addEventListener('click', function () { fermer(); valider([]); });
+    valide.addEventListener('click', function () {
+      var nums = Object.keys(choix).filter(function (k) { return choix[k]; }).sort(function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); });
+      fermer();
+      valider(nums);
+    });
+    majValide();
+    pied.append(annuler, sans, valide);
+    carte.append(titre, aide, grille, pied);
+    fondC.appendChild(carte);
+    conteneur.appendChild(fondC);
+  }
+  /** Ajoute un carton (avec son heure) aux commentaires d'un élève pour un critère, et met son niveau à la moyenne des cartons. */
+  function ajouterCartonEleve(classe, num, seance, k, v, texte, heure) {
+    var cn = window.CentraleNoms;
+    var garde = cn.definirCommentaire(classe, num, seance, k, ajouterEntree((cn.observation(classe, num, seance)._c || {})[k], ecrireEntree(v, texte, heure)));
+    var moy = niveauMoyen(garde), niveau = moy ? moy.niveau : v;
+    cn.definirObservation(classe, num, seance, k, niveau);
+    return niveau;
+  }
+  /** Retire chez un camarade le carton répercuté (même heure, même motif, « avec » l'élève) ; son niveau suit la moyenne. */
+  function retirerCartonRepercute(classe, n, seance, k, num, heure, base) {
+    var cn = window.CentraleNoms, l = decouperCommentaires((cn.observation(classe, n, seance)._c || {})[k]), garde = null;
+    var reste = l.filter(function (t) {
+      var x = lireEntree(t), a = extraireAvec(x.texte);
+      var meme = garde === null && x.heure === heure && a.base === base && a.nums.indexOf(String(num)) >= 0;
+      if (meme) garde = t;
+      return !meme;
+    });
+    if (garde === null) return null;
+    var texte = cn.definirCommentaire(classe, n, seance, k, reste.join(' ; ')), moy = niveauMoyen(texte), niveau = moy ? moy.niveau : 0;
+    cn.definirObservation(classe, n, seance, k, niveau);
+    return niveau;
+  }
+  /** Bavardage (dissipation) avec des camarades : chacun reçoit aussi le carton, « … avec » les autres. */
+  function repercuterCarton(classe, num, nums, seance, k, v, motif, apresEleve, heure) {
+    nums.forEach(function (n) {
+      var autres = [String(num)].concat(nums.filter(function (x) { return x !== n; }));
+      var niveau = ajouterCartonEleve(classe, n, seance, k, v, motifAvec(motif, autres), heure);
+      if (apresEleve) apresEleve(n, niveau);
+    });
+  }
+  /** Le texte du carton, avec les camarades choisis : « Bavardage hors de son groupe avec n° 07, n° 12 ». */
+  function motifAvec(motif, nums) { return motif + (nums.length ? ' avec ' + nums.map(function (n) { return 'n° ' + n; }).join(', ') : ''); }
+
+  /*
+   * Commentaires d'un critère pour une séance : des entrées séparées par « ; », chacune avec son heure et, pour un carton,
+   * son niveau : « [09:12] [−] Bavardage hors de son groupe avec n° 11 », « [09:20] lance une gomme ». (Un seul texte :
+   * il est enregistré et synchronisé tel quel ; les anciens commentaires sans crochets restent lisibles.)
+   * Le niveau du critère est la MOYENNE des cartons de la séance (arrondie), recalculée à chaque carton ajouté ou retiré.
+   */
+  var SIGNES_NIVEAU = { '−−': -2, '−': -1, '+': 1, '++': 2 };
+  function heureCourante() { var n = new Date(); return ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2); }
+  function lireEntree(t) {
+    var m = /^(?:\[(\d{1,2}:\d{2})\]\s*)?(?:\[(−−|−|\+\+|\+)\]\s*)?([\s\S]*)$/.exec(String(t || '').trim());
+    return { heure: m[1] || '', niveau: m[2] ? SIGNES_NIVEAU[m[2]] : null, texte: m[3] };
+  }
+  function ecrireEntree(niveau, texte, heure) { return '[' + (heure || heureCourante()) + '] ' + (niveau ? '[' + signeNiveau(niveau) + '] ' : '') + texte; }
+  /** « Bavardage hors de son groupe avec n° 11, n° 13 » → { base: 'Bavardage hors de son groupe', nums: ['11', '13'] }. */
+  function extraireAvec(texte) {
+    var m = / avec ((?:n° \d+(?:, )?)+)$/.exec(String(texte || ''));
+    if (!m) return { base: String(texte || ''), nums: [] };
+    return { base: texte.slice(0, m.index), nums: (m[1].match(/\d+/g) || []) };
+  }
+  function ajouterEntree(texte, entree) { return decouperCommentaires(texte).concat([entree]).join(' ; '); }
+  /** Moyenne des cartons d'un texte de commentaires : { n, moyenne, niveau } (niveau arrondi de −2 à 2), ou null sans carton. */
+  function niveauMoyen(texte) {
+    var vs = decouperCommentaires(texte).map(lireEntree).filter(function (x) { return x.niveau != null; }).map(function (x) { return x.niveau; });
+    if (!vs.length) return null;
+    var moy = vs.reduce(function (a, b) { return a + b; }, 0) / vs.length;
+    return { n: vs.length, moyenne: moy, niveau: Math.max(-2, Math.min(2, (moy < 0 ? -1 : 1) * Math.round(Math.abs(moy)))) };
+  }
+  /** Une entrée en texte simple (bulle, historique) : « 09:12 − Bavardage… ». */
+  function entreeLisible(t, f) {
+    var x = lireEntree(t);
+    return (x.heure ? x.heure + ' ' : '') + (x.niveau ? 'carton ' + signeNiveau(x.niveau) + ' · ' : '') + (f ? f(x.texte) : x.texte);
+  }
+  /** Tout un texte de commentaires, lisible : les entrées séparées par « ; ». */
+  function commentairesLisibles(texte, f) { return decouperCommentaires(texte).map(function (t) { return entreeLisible(t, f); }).join(' ; '); }
+  /** Les commentaires d'un critère pour une séance (un seul texte, séparés par « ; »). */
+  function decouperCommentaires(texte) { return String(texte || '').split(/\s*;\s*/).map(function (x) { return x.trim(); }).filter(Boolean); }
+  /**
+   * Commentaires d'un critère pour la séance, qui s'accumulent pendant le cours : un champ pour en ajouter un (↵ ou
+   * Entrée), puis la liste repliée (« ▸ 3 commentaires · le dernier ») qui se déplie, chaque commentaire avec ×.
+   * lire() : le texte enregistré ; ecrire(texte) : l'enregistre et renvoie le texte gardé ; apres() : après un changement.
+   */
+  function zoneCommentaires(lire, ecrire, apres, placeholder, ouverte, formater, apresRetraitCarton, camarades) {
+    // camarades : { d, num, seance, k, conteneur(), apresEleve(n, niveau) } — pour changer les élèves associés à un carton
+    var f = formater || function (t) { return t; };
+    var z = creer('div', 'coms'), saisie = creer('div', 'coms-saisie'), champ = creer('input', 'niv-com coms-champ'), ok = creer('button', 'coms-ok', '↵');
+    var tete = creer('button', 'coms-tete'), liste = creer('ul', 'coms-liste');
+    champ.type = 'text';
+    champ.maxLength = 200;
+    champ.placeholder = placeholder || 'Ajouter un commentaire';
+    ok.type = tete.type = 'button';
+    ok.title = 'Ajouter ce commentaire (Entrée)';
+    ok.hidden = true;
+    liste.hidden = !ouverte;
+    if (ouverte) z.classList.add('coms-ouverte');   // fenêtre d'évaluation : la liste toujours dépliée
+    function maj() {
+      var l = decouperCommentaires(lire());
+      tete.hidden = !l.length;
+      tete.replaceChildren(creer('span', 'coms-fleche', liste.hidden ? '▸' : '▾'), creer('span', 'coms-nombre', l.length + ' commentaire' + (l.length > 1 ? 's' : '')),
+        creer('span', 'coms-dernier', liste.hidden && l.length ? entreeLisible(l[l.length - 1], f) : ''));
+      tete.title = liste.hidden ? 'Voir les commentaires' : 'Replier';
+      liste.replaceChildren();
+      l.forEach(function (t, i) {
+        var li = creer('li'), x = creer('button', 'coms-retirer', '×');
+        x.type = 'button';
+        x.title = 'Retirer ce commentaire';
+        x.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          ecrire(l.filter(function (_, j) { return j !== i; }).join(' ; '));
+          maj();
+          if (en.niveau != null && apresRetraitCarton) apresRetraitCarton();   // carton retiré : le niveau (moyenne) se recalcule
+          if (apres) apres();
+        });
+        // l'heure, le carton (son niveau, aux couleurs) ou ✎ pour un commentaire écrit, puis le texte
+        var en = lireEntree(t), corps = creer('span', 'coms-texte');
+        if (en.niveau != null) {
+          var c = creer('span', 'coms-carton ' + (en.niveau < 0 ? 'moins' : 'plus') + (Math.abs(en.niveau) > 1 ? ' fort' : ''), signeNiveau(en.niveau));
+          c.title = 'Carton « ' + signeNiveau(en.niveau) + ' » (' + NIVEAUX[String(en.niveau)].libelle + ')';
+          corps.appendChild(c);
+        } else corps.appendChild(creer('span', 'coms-ecrit', '✎'));
+        corps.appendChild(creer('span', '', ' ' + f(en.texte)));
+        // ✎ : modifier sur place — le niveau du carton (ou commentaire écrit) et le texte ; l'heure reste
+        var mod = creer('button', 'coms-modifier', '✎');
+        mod.type = 'button';
+        mod.title = 'Modifier ce ' + (en.niveau != null ? 'carton' : 'commentaire');
+        mod.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          var form = creer('div', 'coms-edition'), niveaux = creer('div', 'coms-edition-niveaux'), champ = creer('input', 'niv-com'), choixNiv = en.niveau;
+          [-2, -1, null, 1, 2].forEach(function (v) {
+            var b = creer('button', 'coms-edition-niv ' + (v == null ? 'ecrit' : v < 0 ? 'moins' : 'plus') + (v != null && Math.abs(v) > 1 ? ' fort' : ''), v == null ? '✎' : signeNiveau(v));
+            b.type = 'button';
+            b.title = v == null ? 'Commentaire écrit (pas un carton : ne compte pas dans la moyenne)' : 'Carton « ' + signeNiveau(v) + ' » (' + NIVEAUX[String(v)].libelle + ')';
+            b.setAttribute('aria-pressed', String(v === choixNiv));
+            b.addEventListener('click', function (e2) {
+              e2.stopPropagation();
+              choixNiv = v;
+              niveaux.querySelectorAll('button').forEach(function (x2) { x2.setAttribute('aria-pressed', 'false'); });
+              b.setAttribute('aria-pressed', 'true');
+            });
+            niveaux.appendChild(b);
+          });
+          champ.type = 'text';
+          champ.maxLength = 200;
+          champ.value = f(en.texte);   // les noms affichés redeviennent des numéros à l'enregistrement
+          // carton avec des camarades (« … avec n° 11, n° 13 ») : les élèves se changent dans la fenêtre de sélection
+          var avec = extraireAvec(en.texte), typeAvec = camarades ? MOTIFS_AVEC[avec.base] : null, numsAvant = avec.nums.slice(), nums = avec.nums.slice(), btnAvec = null;
+          if (camarades && (nums.length || typeAvec)) {
+            champ.value = f(avec.base);
+            btnAvec = creer('button', 'coms-edition-avec');
+            btnAvec.type = 'button';
+            var majAvec = function () {
+              btnAvec.textContent = '👥 ' + (nums.length ? 'avec ' + nums.map(function (n) { return f('n° ' + n); }).join(', ') : 'aucun camarade') + ' — changer';
+            };
+            majAvec();
+            btnAvec.addEventListener('click', function (e2) {
+              e2.stopPropagation();
+              choisirCamarades(camarades.conteneur(), camarades.d, camarades.num, avec.base, typeAvec || 'camarades', function (nouveaux) { nums = nouveaux; majAvec(); }, nums);
+            });
+          }
+          var ok2 = creer('button', 'petit', 'Enregistrer'), annuler = creer('button', 'petit secondaire', 'Annuler'), boutons = creer('div', 'coms-edition-boutons');
+          ok2.type = annuler.type = 'button';
+          function enregistrer() {
+            var texte = champ.value.replace(/;/g, ',').trim();
+            if (!texte) { champ.focus(); return; }
+            if (btnAvec) {   // la base (sans noms) puis les élèves choisis, par numéro
+              texte = texte.replace(/ avec .*$/, '') + (nums.length ? ' avec ' + nums.map(function (n) { return 'n° ' + n; }).join(', ') : '');
+              var c = camarades, base = texte.replace(/ avec .*$/, ''), cn2 = window.CentraleNoms;
+              var ajoutes = nums.filter(function (n) { return numsAvant.indexOf(n) < 0; }), retires = numsAvant.filter(function (n) { return nums.indexOf(n) < 0; });
+              if (MOTIFS_POUR_TOUS[avec.base] && choixNiv != null) {   // bavardage, bonne dynamique : le carton suit chez les camarades ajoutés ou retirés
+                retires.forEach(function (n) { var niv = retirerCartonRepercute(c.d.classe, n, c.seance, c.k, c.num, en.heure, avec.base); if (niv !== null && c.apresEleve) c.apresEleve(n, niv); });
+                if (ajoutes.length) repercuterCarton(c.d.classe, c.num, ajoutes, c.seance, c.k, choixNiv, base, c.apresEleve, en.heure);
+              }
+              if (ajoutes.length && TYPES_DUO[typeAvec] && cn2 && cn2.ajouterIncident) cn2.ajouterIncident(c.d.classe, [String(c.num)].concat(ajoutes), typeAvec, c.seance, base);
+            }
+            var nouvelle = (en.heure ? '[' + en.heure + '] ' : '') + (choixNiv != null ? '[' + signeNiveau(choixNiv) + '] ' : '') + texte;
+            var l2 = decouperCommentaires(lire());
+            l2[i] = nouvelle;
+            ecrire(l2.join(' ; '));
+            maj();
+            if ((en.niveau != null || choixNiv != null) && apresRetraitCarton) apresRetraitCarton();   // un carton a changé : la moyenne se recalcule
+            if (apres) apres();
+          }
+          ok2.addEventListener('click', function (e2) { e2.stopPropagation(); enregistrer(); });
+          annuler.addEventListener('click', function (e2) { e2.stopPropagation(); maj(); });
+          champ.addEventListener('keydown', function (e2) {
+            if (e2.key === 'Enter') { e2.preventDefault(); e2.stopPropagation(); enregistrer(); }
+            if (e2.key === 'Escape') { e2.stopPropagation(); maj(); }
+          });
+          boutons.append(annuler, ok2);
+          form.append(niveaux, champ);
+          if (btnAvec) form.appendChild(btnAvec);
+          form.appendChild(boutons);
+          form.addEventListener('click', function (e2) { e2.stopPropagation(); });
+          li.replaceChildren(creer('span', 'coms-heure', en.heure || '—'), form);
+          li.classList.add('en-edition');
+          champ.focus();
+          champ.select();
+        });
+        li.append(creer('span', 'coms-heure', en.heure || '—'), corps, mod, x);
+        liste.appendChild(li);
+      });
+      if (!l.length) liste.hidden = true;
+      else if (ouverte) { liste.hidden = false; tete.hidden = true; }
+    }
+    function ajouter() {
+      var t = champ.value.replace(/;/g, ',').trim();
+      if (!t) return;
+      ecrire(ajouterEntree(lire(), ecrireEntree(null, t)));
+      champ.value = '';
+      ok.hidden = true;
+      maj();
+      if (apres) apres();
+    }
+    champ.addEventListener('input', function () { ok.hidden = !champ.value.trim(); });
+    champ.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); ajouter(); }
+      if (ev.key === 'Escape') { ev.stopPropagation(); champ.blur(); }
+    });
+    ok.addEventListener('click', function (ev) { ev.stopPropagation(); ajouter(); champ.focus(); });
+    tete.addEventListener('click', function (ev) { ev.stopPropagation(); liste.hidden = !liste.hidden; maj(); });
+    saisie.append(champ, ok);
+    z.append(saisie, tete, liste);
+    z.maj = maj;
+    z.champ = champ;
+    maj();
+    return z;
+  }
+  /** Une rangée : les cartons « À revoir » (couleur de la gravité) à gauche des niveaux −− · ++ (centre), les cartons
+      « Bien » (vert) à droite ; surMotif(motif, signe) au clic. null si le critère n'a pas de motifs. */
+  function pastillesMotifs(k, surMotif, centre) {
+    var m = MOTIFS_CRITERES[k], boite = creer('div', 'niv-motifs grav-' + ((CRITERES[k] || {}).gravite || 'orange'));
+    if (!m) return null;
+    centre.classList.add('motifs-centre');
+    [['moins', -1, 'À revoir', 'carton-pre-observation'], ['plus', 1, 'Bien', 'carton-pre-recompense']].forEach(function (g) {
+      var col = creer('div', 'motifs-col motifs-' + g[0]);
+      var liste = (m[g[0]] || []).map(function (x) { return { motif: x, fort: false }; }).concat((m[g[0] + 'Fort'] || []).map(function (x) { return { motif: x, fort: true }; }));
+      // paquet replié à la hauteur des boutons : le premier carton, les autres dans une liste qui s'ouvre au survol
+      var cases = creer('div', 'motifs-cases' + (liste.length > 1 ? ' en-pile' : '')), suite = liste.length > 1 ? creer('div', 'motifs-suite') : null;
+      liste.forEach(function (x, i) {
+        var motif = x.motif, signe = g[1] * (x.fort ? 2 : 1);
+        var b = creer('button', 'motif carton-pre ' + g[3] + (x.fort ? ' fort' : '') + (MOTIFS_AVEC[motif] ? ' avec' : ''), motif);
+        b.type = 'button';
+        b.title = (x.fort ? (signe < 0 ? 'Gros souci' : 'Très bien') : g[2]) + ' : ' + motif + ' (le critère passe à « ' + signeNiveau(signe) + ' », le motif s’ajoute aux commentaires)';
+        b.addEventListener('click', function (ev) { ev.stopPropagation(); surMotif(motif, signe); b.blur(); });
+        (i === 0 ? cases : suite).appendChild(b);
+      });
+      if (suite) {
+        cases.appendChild(suite);
+        var nb = creer('span', 'motifs-nombre', String(liste.length));
+        nb.title = liste.length + ' motifs « ' + g[2] + ' » : survolez le carton';
+        cases.appendChild(nb);
+      }
+      if (!liste.length) cases.appendChild(creer('span', 'discret motifs-vide', '—'));
+      col.appendChild(cases);
+      boite.appendChild(col);
+      if (g[1] < 0) boite.appendChild(centre);   // les niveaux entre les deux paquets
+    });
+    return boite;
+  }
+
+
   /** Couleurs par gravité, partout (feuille, légende, plan 3D) : retard, bavardage, dissipation en jaune ; cahier, oubli
       en orange ; exclusion, altercation en rouge ; absent en gris bleu (une information, pas un comportement). */
   var GRAVITE = {
@@ -1794,6 +2335,7 @@ window.PlanSalle = (function () {
   }
   function pointsSeances(b, n) {   // les n dernières séances notées : ● vert (+) ou rouge (−), la plus récente à droite
     var span = creer('span', 'obs-points');
+    span.title = 'Dernières séances notées (la plus récente à droite)';
     b.seances.slice(0, n).reverse().forEach(function (x) {
       var p = creer('i', (x.v > 0 ? 'plus' : 'moins') + (Math.abs(x.v) > 1 ? ' fort' : ''));
       p.title = x.cle.slice(0, 10).split('-').reverse().join('/') + (x.cle.length > 10 ? ' ' + x.cle.slice(11) : '') + ' : ' + signeNiveau(x.v);
@@ -1817,13 +2359,15 @@ window.PlanSalle = (function () {
    * ordinateur). Signalés sur le plan de classe quand ils sont voisins ; le placement au hasard les sépare. */
   var TYPES_DUO = {
     dissipation: { libelle: 'Dissipation', icone: '💬', texte: 'se dissipent ensemble (bavardages, chahut)' },
-    altercation: { libelle: 'Altercation', icone: '⚔️', texte: 'se sont disputés ou accrochés' }
+    altercation: { libelle: 'Altercation', icone: '⚔️', texte: 'se sont disputés ou accrochés' },
+    entente: { libelle: 'Bonne dynamique', icone: '🤝', texte: 'travaillent bien ensemble : à garder ensemble', positif: true }
   };
   /** Les paires d'une classe : [{ a, b, dissipation, altercation, poids, derniere, textes }], la plus lourde d'abord. */
   function pairesDuos(classe) {   // chaque incident à plusieurs donne toutes ses paires
     var cn = window.CentraleNoms, carte = {};
     if (!cn || !cn.incidents) return [];
     cn.incidents(classe).forEach(function (x) {
+      if (!TYPES_DUO[x.type] || TYPES_DUO[x.type].positif) return;   // bonne dynamique : pas à séparer
       var m = x.membres.slice().sort(function (u, v) { return u.localeCompare(v, 'fr', { numeric: true }); });
       for (var i = 0; i < m.length; i++) for (var j = i + 1; j < m.length; j++) {
         var a = m[i], b = m[j];
@@ -1838,8 +2382,49 @@ window.PlanSalle = (function () {
   }
   function jourSeance(cle) { return cle ? cle.slice(8, 10) + '/' + cle.slice(5, 7) : ''; }
   function resumePaire(p) {
-    return [p.dissipation ? p.dissipation + ' dissipation' + (p.dissipation > 1 ? 's' : '') : '', p.altercation ? p.altercation + ' altercation' + (p.altercation > 1 ? 's' : '') : '']
+    return [p.dissipation ? p.dissipation + ' dissipation' + (p.dissipation > 1 ? 's' : '') : '', p.altercation ? p.altercation + ' altercation' + (p.altercation > 1 ? 's' : '') : '',
+      p.entente ? p.entente + ' bonne' + (p.entente > 1 ? 's' : '') + ' dynamique' + (p.entente > 1 ? 's' : '') : '']
       .filter(Boolean).join(' · ') + (p.derniere ? ' (dernière le ' + jourSeance(p.derniere) + ')' : '');
+  }
+  /**
+   * Liens entre élèves (feuille de séance, cartons « avec qui ? »), par paire, toutes séances :
+   * [{ a, b, dissipation, altercation, entente, derniere, type, nb }] — type : altercation, sinon dissipation (à séparer), sinon entente.
+   */
+  function liensClasse(classe) {
+    var cn = window.CentraleNoms, carte = {};
+    if (!cn || !cn.incidents) return [];
+    cn.incidents(classe).forEach(function (x) {
+      if (!TYPES_DUO[x.type]) return;
+      var m = x.membres.slice().sort(function (u, v) { return u.localeCompare(v, 'fr', { numeric: true }); });
+      for (var i = 0; i < m.length; i++) for (var j = i + 1; j < m.length; j++) {
+        var p = carte[m[i] + '|' + m[j]] = carte[m[i] + '|' + m[j]] || { a: m[i], b: m[j], dissipation: 0, altercation: 0, entente: 0, derniere: '' };
+        p[x.type]++;
+        if (x.seance > p.derniere) p.derniere = x.seance;
+      }
+    });
+    return Object.keys(carte).map(function (k) {
+      var p = carte[k];
+      p.type = p.altercation ? 'altercation' : p.dissipation ? 'dissipation' : 'entente';
+      p.nb = p.type === 'entente' ? p.entente : p.altercation + p.dissipation;
+      return p;
+    });
+  }
+  function liensVisibles() { return !document.documentElement.classList.contains('sans-liens'); }
+  /**
+   * Les liens des élèves assis, pour le plan : [{ a, b (places), type, nb, titre }]. carte : place → id de l'élève ;
+   * nomDe(numéro) : le nom affiché (gardé sur cet ordinateur).
+   */
+  function liensPlaces(d, carte, nomDe) {
+    if (!liensVisibles()) return [];
+    var placeDe = {}, idParNum = {};
+    Object.keys(carte || {}).forEach(function (pl) { placeDe[String(carte[pl])] = pl; });
+    (d.eleves || []).forEach(function (e) { idParNum[String(e.numero)] = e.id; });
+    return liensClasse(d.classe).map(function (p) {
+      var pa = placeDe[String(idParNum[p.a])], pb = placeDe[String(idParNum[p.b])];
+      if (!pa || !pb) return null;
+      var titre = (TYPES_DUO[p.type].positif ? 'Bonne dynamique' : 'À séparer') + ' · ' + nomDe(p.a) + ' ↔ ' + nomDe(p.b) + ' : ' + resumePaire(p);
+      return { a: pa, b: pb, type: p.type, nb: p.nb, titre: titre, icone: TYPES_DUO[p.type].icone };
+    }).filter(Boolean);
   }
 
   /* ---------- Note de séance : moyenne des critères (non noté = 0, comme d'habitude ; oubli de matériel = −1),
@@ -2136,7 +2721,10 @@ window.PlanSalle = (function () {
     sousTitre.append(creer('span', 'feuille-sous-classe', d.classe), creer('span', '', s.libelle),
       creer('span', 'discret', (d.eleves || []).filter(function (e) { return e.actif; }).length + ' élèves'));
     blocTitre.append(creer('h3', '', 'Feuille de séance'), sousTitre);
-    enTete.append(blocTitre, caseTerminee(false));
+    var droite = creer('div', 'feuille-entete-droite');   // « Feuille terminée » et × côte à côte, centrés sur la même ligne
+    fermer.classList.add('feuille-fermer');
+    droite.append(caseTerminee(false), fermer);
+    enTete.append(blocTitre, droite);
     // Atelier papier (FicheStudio) : présentation et correction projetées, reprise là où la classe s'est arrêtée
     var fi = d.fiche || {}, barreAt = creer('div', 'feuille-atelier');
     function lienFiche(texte, titre, params, principal) {
@@ -2179,7 +2767,7 @@ window.PlanSalle = (function () {
         + (at.source === 'eleves' ? ' · ' + at.nb + ' élève' + (at.nb > 1 ? 's' : '') + ' dessus' + (at.sur ? ' sur ' + at.sur : '') : ' · ouvert pour la classe')));
       barreAt.appendChild(ranger(ligneA));
     }
-    carteF.append(fermer, enTete, barreAt, corpsL, popInt);
+    carteF.append(enTete, barreAt, corpsL, popInt);
 
     var defile = creer('div', 'bilan-defile'), table = creer('table', 'feuille-table');
     var thead = creer('thead'), groupes = creer('tr', 'feuille-groupes'), tete = creer('tr');
@@ -2208,7 +2796,7 @@ window.PlanSalle = (function () {
     entete('col-case col-excl', 'Excl.', 'Exclusion de cours', 'Exclusion de cours (avec un commentaire facultatif) : l’élève passe « hors de la classe » pour aujourd’hui');
     entete('col-case', 'Oubli', 'Oubli de matériel');
     criteres.forEach(function (k) {
-      entete('col-niveau', CRITERES[k].court || CRITERES[k].lettre, CRITERES[k].libelle, CRITERES[k].libelle + ' : de −− à ++, et un commentaire (survolez ou touchez la pastille)');
+      entete('col-niveau', CRITERES[k].court || CRITERES[k].lettre, CRITERES[k].libelle, CRITERES[k].libelle + ' : de −− à ++, cartons et commentaires (survol : résumé ; clic : évaluer)');
     });
     entete('col-duo', 'Sép.', 'À séparer', 'Dissipation ou altercation entre élèves (deux ou plus) : à ne pas placer ensemble (clic pour noter ou voir)');
     entete('col-note', 'Note', 'Note de la séance', 'Note de la séance : moyenne des critères (non noté = comme d’habitude, oubli = −1), corrigeable à la main avec un commentaire');
@@ -2386,6 +2974,168 @@ window.PlanSalle = (function () {
       pop.hidden = false;
     }
 
+    /* ---------- Évaluation d'un critère pour un élève ----------
+       Survol de la pastille : une bulle résumé (niveau, commentaires). Clic : une fenêtre avec tout — les cinq niveaux,
+       les cartons de chaque niveau (−− · − · + · ++), les commentaires de la séance (ajout ↵, liste, ×). */
+    var bulleEval = null, fenEval = null, ctxEval = null, avecNoms = formateurNoms(d), cellulesEval = {};   // « n° 07 » affiché avec le nom
+    function etatEval(ctx) {
+      var o = cn.observation(d.classe, ctx.e.numero, s.cle);
+      return { v: o[ctx.k] || 0, coms: decouperCommentaires((o._c || {})[ctx.k]) };
+    }
+    function pastilleNiveau(k, v) {   // la pastille du niveau, aux couleurs du critère
+      var boite = creer('span', 'feuille-niveaux grav-' + (CRITERES[k].gravite || 'orange')), p = creer('span');
+      niveauChip(p, v);
+      boite.appendChild(p);
+      return boite;
+    }
+    function montrerBulleEval(ctx, chip) {
+      if (fenEval && !fenEval.hidden) return;
+      if (!bulleEval) { bulleEval = creer('div', 'eval-bulle'); fond.appendChild(bulleEval); }
+      var st = etatEval(ctx), tete = creer('div', 'eval-bulle-tete'), niv = creer('div', 'eval-bulle-niveau');
+      tete.append(creer('strong', '', CRITERES[ctx.k].libelle), creer('span', 'discret', ' · ' + ctx.nomE));
+      niv.append(pastilleNiveau(ctx.k, st.v), creer('span', '', NIVEAUX[String(st.v)].libelle));
+      bulleEval.replaceChildren(tete, niv);
+      if (st.coms.length) {
+        var ul = creer('ul', 'eval-bulle-coms');
+        st.coms.slice(-5).forEach(function (t) { ul.appendChild(creer('li', '', entreeLisible(t, avecNoms))); });
+        if (st.coms.length > 5) ul.appendChild(creer('li', 'discret', '… et ' + (st.coms.length - 5) + ' de plus'));
+        bulleEval.appendChild(ul);
+      } else bulleEval.appendChild(creer('p', 'discret eval-bulle-vide', 'Aucun commentaire'));
+      bulleEval.appendChild(creer('p', 'eval-bulle-aide', 'Clic : évaluer'));
+      bulleEval.hidden = false;
+      var r = chip.getBoundingClientRect(), L = 260, H = bulleEval.offsetHeight;
+      bulleEval.style.left = Math.max(8, Math.min(window.innerWidth - L - 8, r.left + r.width / 2 - L / 2)) + 'px';
+      bulleEval.style.top = (r.bottom + 8 + H > window.innerHeight - 8 ? Math.max(8, r.top - 8 - H) : r.bottom + 8) + 'px';
+    }
+    function masquerBulleEval() { if (bulleEval) bulleEval.hidden = true; }
+    function fermerEval() { if (fenEval) fenEval.hidden = true; ctxEval = null; }
+    function ouvrirEval(ctx) {
+      masquerBulleEval();
+      ctxEval = ctx;
+      if (!fenEval) {
+        fenEval = creer('div', 'eval-fond');
+        fenEval.addEventListener('click', function (ev) { ev.stopPropagation(); if (ev.target === fenEval) fermerEval(); });
+        fond.appendChild(fenEval);
+        document.addEventListener('keydown', function (ev) {   // Échap : ferme la fenêtre d'évaluation (pas la feuille)
+          if (ev.key === 'Escape' && fenEval && !fenEval.hidden) { ev.stopImmediatePropagation(); fermerEval(); }
+        }, true);
+      }
+      var k = ctx.k, e = ctx.e, m = MOTIFS_CRITERES[k] || {};
+      var carte = creer('div', 'eval-carte grav-' + (CRITERES[k].gravite || 'orange'));
+      // en-tête : photo, élève, critère, séance
+      var tete = creer('div', 'eval-tete'), ph = creer('span', 'eval-photo'), visage = photo(d.classe, e.numero), titres = creer('div', 'eval-titres');
+      if (visage && cn.styleVisage) cn.styleVisage(ph, visage, 46 / visage.l, 46, 56);
+      else ph.textContent = String(ctx.nomE).replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 1);
+      var ligneCrit = creer('div', 'eval-critere');
+      ligneCrit.append(creer('strong', '', CRITERES[k].libelle), creer('span', 'discret', ' · ' + d.classe + ' · ' + s.libelle));
+      titres.append(creer('div', 'eval-nom', ctx.nomE + ' · n° ' + e.numero), ligneCrit);
+      var fermer = creer('button', 'fiche-trois-fermer eval-fermer', '×');
+      fermer.type = 'button';
+      fermer.title = 'Fermer (Échap)';
+      fermer.addEventListener('click', fermerEval);
+      tete.append(ph, titres, fermer);
+      // niveaux, avec au-dessus de chacun son paquet de cartons (replié ; déplié vers le haut au survol, au toucher sur tablette)
+      var tactile = window.matchMedia && window.matchMedia('(hover: none)').matches;
+      var moyenne = creer('div', 'eval-moyenne');   // au-dessus de « = » : la moyenne des cartons
+      var grille = creer('div', 'eval-grille'), btNiv = {}, CLES = { '-2': ['moinsFort', 'Gros souci'], '-1': ['moins', 'À revoir'], '1': ['plus', 'Bien'], '2': ['plusFort', 'Très bien'] };
+      function carteMotif(motif, v) {
+        var b = creer('button', 'motif carton-pre ' + (v < 0 ? 'carton-pre-observation' : 'carton-pre-recompense') + (Math.abs(v) > 1 ? ' fort' : '') + (MOTIFS_AVEC[motif] ? ' avec' : ''), motif);
+        b.type = 'button';
+        b.title = motif + ' — le critère passe à « ' + signeNiveau(v) + ' », le motif s’ajoute aux commentaires' + (MOTIFS_AVEC[motif] ? ' ; vous choisissez avec qui' : '');
+        b.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          grille.querySelectorAll('.eval-pile.ouverte').forEach(function (x) { x.classList.remove('ouverte'); });
+          function appliquer(texte) {   // le carton, avec son heure et son niveau ; le critère prend la moyenne des cartons
+            var garde = cn.definirCommentaire(d.classe, e.numero, s.cle, k, ajouterEntree((cn.observation(d.classe, e.numero, s.cle)._c || {})[k], ecrireEntree(v, texte)));
+            coms.maj();
+            var moy = niveauMoyen(garde);
+            choisir(moy ? moy.niveau : v);
+          }
+          var type = MOTIFS_AVEC[motif];
+          if (!type) { appliquer(motif); return; }
+          choisirCamarades(fond, d, e.numero, motif, type, function (nums) {   // avec qui ? (numéros) ; dissipation, altercation : « À séparer »
+            if (MOTIFS_POUR_TOUS[motif]) {   // bavardage, bonne dynamique : les camarades reçoivent aussi le carton (leur pastille et leur note suivent)
+              repercuterCarton(d.classe, e.numero, nums, s.cle, k, v, motif, function (n, niveau) {
+                var c = (cellulesEval[n] || {})[k];
+                if (c) { c.majChip(niveau); if (c.tr._majNote) c.tr._majNote(); }
+              });
+            }
+            appliquer(motifAvec(motif, nums));
+            if (nums.length && TYPES_DUO[type]) { cn.ajouterIncident(d.classe, [String(e.numero)].concat(nums), type, s.cle, motif); rafraichirDuos(); }
+          });
+        });
+        return b;
+      }
+      [-2, -1, 0, 1, 2].forEach(function (v) {
+        var col = creer('div', 'eval-colonne'), cle = CLES[String(v)], liste = cle ? (m[cle[0]] || []) : [];
+        var pile = creer('div', 'eval-pile ' + (v < 0 ? 'pile-moins' : v > 0 ? 'pile-plus' : 'pile-vide') + (Math.abs(v) > 1 ? ' fort' : ''));
+        if (liste.length) {
+          // replié : le premier carton (texte sur une ligne) et le nombre ; déplié : tous les cartons, en entier
+          var dessus = carteMotif(liste[0], v), suite = creer('div', 'eval-pile-suite'), nb = creer('span', 'eval-pile-nombre', String(liste.length));
+          dessus.classList.add('eval-pile-dessus');
+          if (tactile) {   // tablette : le premier toucher déplie le paquet (un second toucher choisit un carton)
+            dessus.addEventListener('click', function (ev) {
+              if (pile.classList.contains('ouverte')) return;
+              ev.stopImmediatePropagation();
+              grille.querySelectorAll('.eval-pile.ouverte').forEach(function (x) { x.classList.remove('ouverte'); });
+              pile.classList.add('ouverte');
+              if (pile._ajuster) pile._ajuster();
+            }, true);
+          }
+          suite.appendChild(creer('span', 'eval-pile-titre', signeNiveau(v) + ' ' + cle[1]));
+          liste.forEach(function (motif) { suite.appendChild(carteMotif(motif, v)); });
+          nb.title = liste.length + ' carton' + (liste.length > 1 ? 's' : '') + ' « ' + cle[1] + ' »';
+          pile.append(dessus, nb, suite);
+          // la liste dépliée tient dans la fenêtre : sa hauteur suit la place qui reste sous le paquet, et elle défile
+          var ajuster = function () {
+            var bas = carte.getBoundingClientRect().bottom, haut = pile.getBoundingClientRect().top;
+            suite.style.maxHeight = Math.max(150, Math.min(340, bas - haut - 6)) + 'px';
+            requestAnimationFrame(ombre);
+          };
+          var ombre = function () { suite.classList.toggle('a-suivre', suite.scrollTop + suite.clientHeight < suite.scrollHeight - 4); };   // d'autres cartons plus bas
+          suite.addEventListener('scroll', ombre);
+          pile._ajuster = ajuster;
+          pile.addEventListener('mouseenter', ajuster);
+          pile.addEventListener('focusin', ajuster);
+        }
+        if (v === 0) pile.appendChild(moyenne);
+        var b = creer('button', 'eval-niv ' + (v > 0 ? 'eval-plus' : v < 0 ? 'eval-moins' : 'eval-neutre') + (Math.abs(v) > 1 ? ' fort' : ''));
+        b.type = 'button';
+        b.append(creer('span', 'eval-signe', v === 0 ? '=' : signeNiveau(v)), creer('span', 'eval-lib', NIVEAUX[String(v)].libelle));
+        b.addEventListener('click', function () { var st = etatEval(ctx); choisir(st.v === v ? 0 : v); });
+        btNiv[v] = b;
+        col.append(pile, b);
+        grille.appendChild(col);
+      });
+      carte.addEventListener('click', function (ev) {   // toucher ailleurs : les paquets se replient
+        if (!ev.target.closest('.eval-pile')) grille.querySelectorAll('.eval-pile.ouverte').forEach(function (x) { x.classList.remove('ouverte'); });
+      });
+      // commentaires de la séance
+      var coms = zoneCommentaires(function () { return (cn.observation(d.classe, e.numero, s.cle)._c || {})[k] || ''; },
+        function (t) { return cn.definirCommentaire(d.classe, e.numero, s.cle, k, t) || ''; }, apres, 'Ajouter un commentaire', true, avecNoms,
+        function () { var moy = niveauMoyen((cn.observation(d.classe, e.numero, s.cle)._c || {})[k]); choisir(moy ? moy.niveau : 0); },
+        { d: d, num: e.numero, seance: s.cle, k: k, conteneur: function () { return fond; },
+          apresEleve: function (n, niveau) { var c = (cellulesEval[n] || {})[k]; if (c) { c.majChip(niveau); if (c.tr._majNote) c.tr._majNote(); } if (typeof rafraichirDuos === 'function') rafraichirDuos(); } });
+      coms.classList.add('eval-coms');
+      function section(titre, contenu) { var sec = creer('section', 'eval-section'); sec.append(creer('h4', 'eval-section-titre', titre), contenu); return sec; }
+      carte.append(tete, grille, section('Commentaires de la séance', coms));
+      fenEval.replaceChildren(carte);
+      fenEval.hidden = false;
+      function majNiveaux() {
+        var v = etatEval(ctx).v, moy = niveauMoyen((cn.observation(d.classe, e.numero, s.cle)._c || {})[k]);
+        Object.keys(btNiv).forEach(function (x) { btNiv[x].setAttribute('aria-pressed', String(+x === v)); });
+        moyenne.replaceChildren();
+        if (moy) {
+          moyenne.append(creer('span', 'eval-moyenne-valeur', texteNote(moy.moyenne)), creer('span', 'eval-moyenne-lib', 'moyenne de ' + moy.n + ' carton' + (moy.n > 1 ? 's' : '')));
+          if (moy.niveau !== v) moyenne.appendChild(creer('span', 'eval-moyenne-main', 'niveau choisi à la main'));
+        } else moyenne.appendChild(creer('span', 'eval-moyenne-lib', 'aucun carton'));
+        moyenne.title = moy ? 'Niveau du critère : moyenne des cartons de la séance (' + texteNote(moy.moyenne) + ')' : 'Pas encore de carton : choisissez un niveau, ou un carton';
+      }
+      function apres() { var v = etatEval(ctx).v; ctx.majChip(v); if (ctx.tr._majNote) ctx.tr._majNote(); compter(); }
+      function choisir(v) { cn.definirObservation(d.classe, e.numero, s.cle, k, v); majNiveaux(); apres(); }
+      majNiveaux();
+    }
+
     // À séparer (dissipation, altercation, à deux ou plus) : un panneau pour noter avec qui, et les incidents déjà notés
     var majDuos = [], parNumero = {};
     (d.eleves || []).forEach(function (e) { parNumero[String(e.numero)] = e; });
@@ -2427,7 +3177,7 @@ window.PlanSalle = (function () {
       pop.appendChild(ferme);
       var num = eleve ? String(eleve.numero) : null, nomE = eleve ? nomDe(num) : '';
       function rouvrir() { rafraichirDuos(); ouvrirDuos(eleve); }
-      pop.append(creer('h4', '', eleve ? 'À séparer · ' + nomE : 'À séparer · classe ' + d.classe),
+      pop.append(creer('h4', '', eleve ? 'Entre élèves · ' + nomE : 'Entre élèves · classe ' + d.classe),
         creer('p', 'discret', eleve ? 'Nouvel incident : avec qui ? un ou plusieurs camarades, puis le type.'
           : 'Nouvel incident : choisissez au moins deux élèves, puis le type. Le plan de classe signale ceux qui sont assis ensemble et le placement au hasard les sépare.'));
       // nouvel incident
@@ -2519,11 +3269,13 @@ window.PlanSalle = (function () {
     tdDC.appendChild(bDC);
     trC.appendChild(tdDC);
     majDuos.push(function () {
-      var l = cn.incidents(d.classe), alt = l.some(function (x) { return x.type === 'altercation'; });
-      bDC.textContent = l.length ? (alt ? '⚔️' : '💬') + l.length : '＋';
-      bDC.className = 'duo-bouton' + (l.length ? (alt ? ' duo-altercation' : ' duo-dissipation') : '');
-      bDC.title = l.length ? l.length + ' incident' + (l.length > 1 ? 's' : '') + ' noté' + (l.length > 1 ? 's' : '') + ' dans la classe : clic pour la liste, ou en noter un'
-        : 'Noter une dissipation ou une altercation entre élèves';
+      var tous = cn.incidents(d.classe), l = tous.filter(function (x) { return x.type !== 'entente'; }), ent = tous.length - l.length;
+      var alt = l.some(function (x) { return x.type === 'altercation'; });
+      bDC.textContent = l.length ? (alt ? '⚔️' : '💬') + l.length : ent ? '🤝' + ent : '＋';
+      bDC.className = 'duo-bouton' + (l.length ? (alt ? ' duo-altercation' : ' duo-dissipation') : ent ? ' duo-entente' : '');
+      bDC.title = tous.length ? (l.length ? l.length + ' incident' + (l.length > 1 ? 's' : '') + ' à séparer' : '') + (l.length && ent ? ', ' : '')
+        + (ent ? ent + ' bonne' + (ent > 1 ? 's' : '') + ' dynamique' + (ent > 1 ? 's' : '') : '') + ' dans la classe : clic pour la liste, ou en noter un'
+        : 'Noter une dissipation, une altercation ou une bonne dynamique entre élèves';
     });
     var majNoteClasse = celluleNote(trC, '_classe', 'classe ' + d.classe, function () { return noteClasseCalculee(s.cle); }, null);
     [[sc.avancement != null ? Math.round(sc.avancement) + ' %' : '—', 'Avancement médian'], ['', ''], [sc.terminees != null ? String(Math.round(sc.terminees)) : '—', 'Activités terminées : médiane'],
@@ -2646,51 +3398,22 @@ window.PlanSalle = (function () {
       co.addEventListener('change', function () { cn.definirObservation(d.classe, e.numero, s.cle, 'oubli', co.checked ? -1 : 0); if (tr._majNote) tr._majNote(); compter(); });
       tdO.appendChild(co);
       tr.appendChild(tdO);
-      // critères : pastille résumée ; au survol (ou au clic), les 5 niveaux ; re-cliquer sur le niveau choisi l'efface
+      // critères : pastille résumée ; au survol, une bulle résumé ; au clic, la fenêtre d'évaluation (niveaux, cartons, commentaires)
       criteres.forEach(function (k) {
-        var td = creer('td', 'col-niveau'), boite = creer('span', 'feuille-niveaux grav-' + (CRITERES[k].gravite || 'orange')), chip = creer('button'), palette = creer('span', 'niv-palette'),
-            boutons = creer('span', 'niv-boutons'), comK = creer('input', 'niv-com');
+        var td = creer('td', 'col-niveau'), boite = creer('span', 'feuille-niveaux grav-' + (CRITERES[k].gravite || 'orange')), chip = creer('button');
         chip.type = 'button';
-        comK.type = 'text';
-        comK.maxLength = 300;
-        comK.placeholder = 'Préciser (facultatif)';
-        comK.value = (ob._c || {})[k] || '';
-        function majChip(v) {   // pastille : niveau, « C » s'il y a un commentaire, commentaire au survol
+        function majChip(v) {   // pastille : niveau, « C » s'il y a des commentaires
           niveauChip(chip, v);
-          chip.classList.toggle('avec-com', !!comK.value.trim());
-          chip.title = CRITERES[k].libelle + ' · ' + nomE + (comK.value.trim() ? ' : « ' + comK.value.trim() + ' »' : ' : survolez pour choisir');
+          chip.classList.toggle('avec-com', decouperCommentaires((cn.observation(d.classe, e.numero, s.cle)._c || {})[k]).length > 0);
+          chip.setAttribute('aria-label', CRITERES[k].libelle + ' · ' + nomE + ' : ' + NIVEAUX[String(v)].libelle + ' — cliquer pour évaluer');
         }
         majChip(ob[k] || 0);
-        comK.addEventListener('change', function () {
-          comK.value = cn.definirCommentaire(d.classe, e.numero, s.cle, k, comK.value) || '';
-          majChip(cn.observation(d.classe, e.numero, s.cle)[k] || 0);
-        });
-        comK.addEventListener('keydown', function (ev) {
-          if (ev.key === 'Enter' || ev.key === 'Escape') { ev.stopPropagation(); comK.blur(); boite.classList.remove('ouvert'); }
-        });
-        chip.addEventListener('click', function () {   // toucher (tablette, smartphone) : ouvre ou ferme, un seul à la fois
-          var ouvrir = !boite.classList.contains('ouvert');
-          fond.querySelectorAll('.feuille-niveaux.ouvert, .feuille-com.ouvert').forEach(function (x) { x.classList.remove('ouvert'); });
-          boite.classList.toggle('ouvert', ouvrir);
-        });
-        [-2, -1, 0, 1, 2].forEach(function (v) {
-          var bt = creer('button', 'niv niv-' + (v > 0 ? 'plus' : v < 0 ? 'moins' : 'neutre') + (Math.abs(v) > 1 ? ' fort' : ''), v === 0 ? '·' : signeNiveau(v));
-          bt.type = 'button';
-          bt.title = CRITERES[k].libelle + ' : ' + NIVEAUX[String(v)].libelle;
-          bt.setAttribute('aria-pressed', String((ob[k] || 0) === v && v !== 0));
-          bt.addEventListener('click', function () {
-            var actuel = cn.observation(d.classe, e.numero, s.cle)[k] || 0, nouveau = actuel === v ? 0 : v;
-            cn.definirObservation(d.classe, e.numero, s.cle, k, nouveau);
-            boutons.querySelectorAll('button').forEach(function (b2, i) { b2.setAttribute('aria-pressed', String([-2, -1, 0, 1, 2][i] === nouveau && nouveau !== 0)); });
-            majChip(nouveau);
-            if (tr._majNote) tr._majNote();
-            bt.blur();   // au survol, la palette reste là le temps d'écrire un commentaire ; elle se replie quand la souris s'en va
-            compter();
-          });
-          boutons.appendChild(bt);
-        });
-        palette.append(creer('span', 'niv-titre', CRITERES[k].libelle + ' · ' + nomE), boutons, comK);   // titre : affiché sur smartphone (bandeau en bas)
-        boite.append(chip, palette);
+        var ctx = { e: e, k: k, nomE: nomE, tr: tr, majChip: majChip };
+        (cellulesEval[String(e.numero)] = cellulesEval[String(e.numero)] || {})[k] = ctx;   // pour les cartons répercutés (bavardage avec…)
+        chip.addEventListener('mouseenter', function () { montrerBulleEval(ctx, chip); });
+        chip.addEventListener('mouseleave', masquerBulleEval);
+        chip.addEventListener('click', function (ev) { ev.stopPropagation(); ouvrirEval(ctx); });
+        boite.appendChild(chip);
         td.appendChild(boite);
         tr.appendChild(td);
       });
@@ -2703,10 +3426,13 @@ window.PlanSalle = (function () {
       majDuos.push(function () {
         var num = String(e.numero), l = pairesDuos(d.classe).filter(function (p) { return p.a === num || p.b === num; });
         var alt = l.some(function (p) { return p.altercation; });
-        bD.textContent = l.length ? (alt ? '⚔️' : '💬') + l.length : '·';
-        bD.className = 'duo-bouton' + (l.length ? (alt ? ' duo-altercation' : ' duo-dissipation') : '');
-        bD.title = l.length ? 'À séparer de : ' + l.map(function (p) { return nomDe(p.a === num ? p.b : p.a) + ' (' + resumePaire(p) + ')'; }).join(', ')
-          : nomE + ' : clic pour noter une dissipation ou une altercation avec un ou plusieurs camarades';
+        var ent = liensClasse(d.classe).filter(function (p) { return p.entente && (p.a === num || p.b === num); });
+        bD.textContent = l.length ? (alt ? '⚔️' : '💬') + l.length : ent.length ? '🤝' + ent.length : '·';
+        bD.className = 'duo-bouton' + (l.length ? (alt ? ' duo-altercation' : ' duo-dissipation') : ent.length ? ' duo-entente' : '');
+        bD.title = (l.length ? 'À séparer de : ' + l.map(function (p) { return nomDe(p.a === num ? p.b : p.a) + ' (' + resumePaire(p) + ')'; }).join(', ') : '')
+          + (l.length && ent.length ? ' · ' : '')
+          + (ent.length ? 'Bonne dynamique avec : ' + ent.map(function (p) { return nomDe(p.a === num ? p.b : p.a); }).join(', ') : '')
+          || nomE + ' : clic pour noter une dissipation, une altercation ou une bonne dynamique avec un ou plusieurs camarades';
       });
       // note de la séance (calculée, corrigeable)
       tr._majNote = celluleNote(tr, e.numero, nomE, function () { return noteCalculee(cn.observation(d.classe, e.numero, s.cle), criteres); },
@@ -2915,6 +3641,9 @@ window.PlanSalle = (function () {
           else bulleNom(g, ctx, e ? nom(e) : '?', w / 2, h / 2, 0.9);
         },
         infos: {
+          liens: function () {
+            return liensPlaces(d, carte, function (num) { var e = (d.eleves || []).find(function (x) { return String(x.numero) === String(num); }); return e ? nom(e) : 'n° ' + num; });
+          },
           nomPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? nom(e) : ''; },
           visagePlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? photo(d.classe, e.numero) : null; },
           cartonsPlace: function (o) {

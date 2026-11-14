@@ -10,7 +10,8 @@ window.PlanSalle3D = (function () {
   var VOLUMES = { table: [0, 0.75], paillasse: [0, 0.9], bureau: [0, 0.8], place: [0, 0.45], poste: [0.75, 1.05], tableau: [0.9, 2], armoire: [0, 2.2], porte: [0, 2.1], fenetre: [0.9, 2] };
   var ECRAN = { 0: [0.15, 0.08, 0.7, 0.12], 90: [0.8, 0.15, 0.12, 0.7], 180: [0.15, 0.8, 0.7, 0.12], 270: [0.08, 0.15, 0.12, 0.7] };
   var CLAVIER = { 0: [0.2, 0.55, 0.6, 0.25], 90: [0.2, 0.2, 0.25, 0.6], 180: [0.15, 0.2, 0.7, 0.25], 270: [0.55, 0.2, 0.25, 0.6] };
-  var MURS = 2.6, SOCLE = 0.35;
+  // MURS : hauteur des murs, assez hauts pour porter en haut le bandeau de la classe, au-dessus des meubles (armoire : 2,2)
+  var MURS = 3.8, SOCLE = 0.35;
   /** Palettes : murs, chapeau, chaises, tableau. La classe choisit la sienne (classe_id modulo le nombre de palettes). */
   var PALETTES = [
     { mur: '#f78f4a', chapeau: '#b9c8d6', chaise: '#3f9b6a', tableau: '#2c4a3e' },   // orange et vert
@@ -183,7 +184,7 @@ window.PlanSalle3D = (function () {
 
   /** Murs extérieurs : peints en orange chaud, avec un chapeau clair sur les deux murs du fond. */
   function murs(scene, L, H) {
-    var mat = new THREE.MeshLambertMaterial({ color: pal.mur, map: texture(texMur(), 2, 1), side: THREE.FrontSide });
+    var mat = new THREE.MeshLambertMaterial({ color: pal.mur, map: texture(texMur(), 2, MURS / 2.6), side: THREE.FrontSide });   // le motif garde sa taille
     function mur(w, x, z, ry) {
       var m = new THREE.Mesh(new THREE.PlaneGeometry(w, MURS), mat);
       m.position.set(x, MURS / 2, z);
@@ -199,78 +200,133 @@ window.PlanSalle3D = (function () {
     boite(scene, 0.06, MURS, H / 2, 0.12, 0.12, H, pal.chapeau);
   }
 
+  var BANDEAU = { haut: 1.55, marge: 0.08 };   // hauteur du bandeau et marge au bord du mur (unités 3D)
+  /** Le texte du bandeau (deux lignes centrées, fond transparent), à la largeur de son contenu : { tex, w, h } en unités 3D. */
+  function carteTitre(pastille, largeurMax) {
+    var PH = 200, u = BANDEAU.haut / PH, PAD = 24, BLEU = '#1565c0', bord = pastille.bord ? 7 : 0;
+    var Wmax = Math.min(4096, Math.round(largeurMax / u));
+    var mesure = document.createElement('canvas').getContext('2d');
+    function ajuster(texte, taille, poids, largeur) {   // taille de police (≤ taille) pour que le texte tienne dans la largeur
+      var t = taille;
+      mesure.font = poids + ' ' + t + 'px system-ui, sans-serif';
+      while (t > 14 && mesure.measureText(texte).width > largeur) { t -= 2; mesure.font = poids + ' ' + t + 'px system-ui, sans-serif'; }
+      return { t: t, w: mesure.measureText(texte).width };
+    }
+    var H1 = 104, y1 = 12, police = '800 70px system-ui, sans-serif', ecart = 26;
+    mesure.font = police;
+    var pillW = Math.ceil(mesure.measureText(pastille.texte).width) + 60 + 2 * bord;
+    var infos = pastille.infos || '', fi = infos ? ajuster(infos, 62, '700', Wmax - 2 * PAD - pillW - ecart) : { t: 0, w: 0 };
+    var l1 = pillW + (infos ? ecart + fi.w : 0);
+    var morceaux = [];
+    if (pastille.atelier) morceaux.push('Atelier : ' + pastille.atelier);
+    if (pastille.eleves !== undefined) morceaux.push(pastille.eleves + ' élève' + (pastille.eleves > 1 ? 's' : ''));
+    if (pastille.observations !== undefined) morceaux.push(pastille.observations + ' observation' + (pastille.observations > 1 ? 's' : ''));
+    var ligne2 = morceaux.join('   ·   '), f2 = ligne2 ? ajuster(ligne2, 54, '600', Wmax - 2 * PAD) : { t: 0, w: 0 };
+    var W = Math.min(Wmax, Math.ceil(Math.max(l1, f2.w)) + 2 * PAD);
+    var cv = document.createElement('canvas'), g = cv.getContext('2d');
+    cv.width = W; cv.height = PH;
+    function pilule(x, y, w, h, r) {
+      g.beginPath(); g.moveTo(x + r, y); g.lineTo(x + w - r, y);
+      g.arc(x + w - r, y + r, r, -Math.PI / 2, Math.PI / 2);
+      g.lineTo(x + r, y + h); g.arc(x + r, y + r, r, Math.PI / 2, 3 * Math.PI / 2); g.closePath();
+    }
+    // ligne 1 : pastille de la classe (fond = niveau, bord = établissement), puis salle · collège
+    var x0 = (W - l1) / 2;
+    if (bord) { g.fillStyle = pastille.bord; pilule(x0, y1, pillW, H1, H1 / 2); g.fill(); }
+    g.fillStyle = pastille.fond; pilule(x0 + bord, y1 + bord, pillW - 2 * bord, H1 - 2 * bord, H1 / 2 - bord); g.fill();
+    g.fillStyle = '#1d1f24'; g.font = police; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(pastille.texte, x0 + pillW / 2, y1 + H1 / 2 + 3);
+    if (infos) {
+      g.font = '700 ' + fi.t + 'px system-ui, sans-serif'; g.fillStyle = BLEU; g.textAlign = 'left';
+      g.fillText(infos, x0 + pillW + ecart, y1 + H1 / 2 + 3);
+    }
+    // ligne 2 : atelier · élèves · observations
+    if (ligne2) {
+      g.font = '600 ' + f2.t + 'px system-ui, sans-serif'; g.fillStyle = BLEU; g.textAlign = 'center';
+      g.fillText(ligne2, W / 2, y1 + H1 + (PH - y1 - H1 - 12) / 2 + 2);
+    }
+    return { tex: texture(cv, 1, 1), w: W * u, h: BANDEAU.haut };
+  }
   /**
-   * Pastille de la classe (nom court, fond = niveau, bord = établissement) : une étiquette au centre de chaque mur,
-   * posée dans le plan du mur. Seule celle du mur qui fait face à la caméra est montrée (voir panneauFace).
+   * Étiquette de la classe : un bandeau blanc en haut de chaque mur, sur toute sa largeur, avec deux lignes —
+   *   1. la pastille de la classe, puis « Salle · Collège » ;  2. « Atelier : … · 28 élèves · 10 observations ».
+   * Seul le bandeau du mur face à la caméra est montré, et son texte glisse le long du mur là où les widgets ne le cachent pas
+   * (panneauFace).
    */
   function panneauxClasse(scene, st, L, H, pastille) {
-    var police = '700 96px system-ui, sans-serif', police2 = '600 64px system-ui, sans-serif', police3 = '600 66px system-ui, sans-serif';
-    var BLEU = '#1565c0', HT = 150, bord = pastille.bord ? 12 : 0, r = HT / 2, ligne = 80, espace = 18, ecart = 44;   // ecart : entre les infos du haut et la pastille
-    // de haut en bas, sur le même axe à gauche : atelier en cours, nombre d'observations, pastille, puis « Salle - Collège »
-    var dessus = [];
-    if (pastille.atelier) dessus.push({ texte: 'Atelier : ' + pastille.atelier, police: police3, hauteur: ligne });
-    if (pastille.eleves !== undefined) dessus.push({ texte: pastille.eleves + ' élève' + (pastille.eleves > 1 ? 's' : ''), police: police3, hauteur: ligne });
-    if (pastille.observations !== undefined) dessus.push({ texte: pastille.observations + ' observation' + (pastille.observations > 1 ? 's' : ''), police: police3, hauteur: ligne });
-    var dessous = pastille.infos ? [{ texte: pastille.infos, police: police2 }] : [];   // à droite de la pastille, même niveau
-    var mesure = document.createElement('canvas').getContext('2d');
-    mesure.font = police;
-    var pillW = Math.ceil(mesure.measureText(pastille.texte).width + 96 + 2 * bord), W = pillW;
-    dessus.forEach(function (it) { mesure.font = it.police; W = Math.max(W, Math.ceil(mesure.measureText(it.texte).width)); });
-    dessous.forEach(function (it) { mesure.font = it.police; it.x = pillW + 2 * espace; W = Math.max(W, it.x + Math.ceil(mesure.measureText(it.texte).width)); });
-    var y = 0;
-    dessus.forEach(function (it) { it.y = y; y += it.hauteur; });
-    var yPastille = y + (dessus.length ? ecart : 0);
-    dessous.forEach(function (it) { it.y = yPastille + HT / 2; });   // centré sur la pastille
-    y = yPastille + HT;
-    var cv = document.createElement('canvas'), g = cv.getContext('2d');
-    cv.width = W; cv.height = y;
-    function pilule(x, yy, w, h, rayon) {
-      g.beginPath(); g.moveTo(x + rayon, yy); g.lineTo(x + w - rayon, yy);
-      g.arc(x + w - rayon, yy + rayon, rayon, -Math.PI / 2, Math.PI / 2);
-      g.lineTo(x + rayon, yy + h); g.arc(x + rayon, yy + rayon, rayon, Math.PI / 2, 3 * Math.PI / 2); g.closePath();
-    }
-    // lignes en bleu au-dessus de la pastille
-    g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = BLEU;
-    dessus.forEach(function (it) { g.font = it.police; g.fillText(it.texte, 0, it.y + it.hauteur / 2); });
-    // pastille de la classe
-    if (bord) { g.fillStyle = pastille.bord; pilule(0, yPastille, pillW, HT, r); g.fill(); }
-    g.fillStyle = pastille.fond; pilule(bord, yPastille + bord, pillW - 2 * bord, HT - 2 * bord, r - bord); g.fill();
-    g.fillStyle = '#1d1f24'; g.font = police; g.textAlign = 'center';
-    g.fillText(pastille.texte, pillW / 2, yPastille + HT / 2 + 4);
-    // « Salle - Collège » à droite de la pastille, en bleu
-    g.textAlign = 'left'; g.fillStyle = BLEU;
-    dessous.forEach(function (it) { g.font = it.police; g.fillText(it.texte, it.x, it.y); });
-    var mat = new THREE.MeshBasicMaterial({ map: texture(cv, 1, 1), transparent: true, toneMapped: false });
-    var lw = W * ECHELLE * 0.75, lh = cv.height * ECHELLE * 0.75, bordure = 0.12;   // marge au bord du mur
-    // murs : centre, rotation, longueur ; l'axe local +x va de la gauche à la droite de qui regarde la salle
+    // murs : centre, rotation, longueur
     st.murs = [{ x: L / 2, z: 0, ry: 0, w: L }, { x: 0, z: H / 2, ry: Math.PI / 2, w: H }, { x: L / 2, z: H, ry: Math.PI, w: L }, { x: L, z: H / 2, ry: -Math.PI / 2, w: H }];
-    var anciens = st.panneaux || [];   // on garde l'état du fondu quand la scène est reconstruite
+    var anciens = st.panneaux || [], cartes = {};   // on garde l'état du fondu quand la scène est reconstruite ; une carte par longueur de mur
     st.panneaux = st.murs.map(function (c, i) {
-      var k = Math.min(1, c.w * 0.5 / lw), lx = lw * k, ly = lh * k, sc = ECHELLE * 0.75 * k;
-      var m = new THREE.Mesh(new THREE.PlaneGeometry(lx, ly), mat.clone());   // un matériau par mur : chacun a son opacité
+      var lx = c.w - 2 * BANDEAU.marge, ly = BANDEAU.haut;
+      var carte = cartes[lx] = cartes[lx] || carteTitre(pastille, lx);
+      // depthTest false : le bandeau passe devant ce qui dépasse du mur (armoire) ; les élèves et les liens restent devant lui
+      var m = new THREE.Mesh(new THREE.PlaneGeometry(lx, ly),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, toneMapped: false, depthTest: false, depthWrite: false }));
+      var texte = new THREE.Mesh(new THREE.PlaneGeometry(carte.w, ly),
+        new THREE.MeshBasicMaterial({ map: carte.tex, transparent: true, toneMapped: false, depthTest: false, depthWrite: false }));
+      texte.position.z = 0.005;
+      texte.userData = { lx: carte.w, ly: ly };
+      m.add(texte);
+      m.renderOrder = 0.4; texte.renderOrder = 0.45;
       var p = anciens[i] ? anciens[i].userData.p : 0;
-      m.userData = { p: p, cible: anciens[i] ? anciens[i].userData.cible : 0 };
-      m.material.opacity = p;
-      var ax = Math.cos(c.ry), az = -Math.sin(c.ry), d = -c.w / 2 + bordure + lx / 2;   // à gauche du mur
-      // la pastille est calée sur le bord haut du mur ; les lignes au-dessus dépassent du mur (en dehors de la salle)
-      var haut = MURS - bordure + yPastille * sc - ly / 2;
-      m.position.set(c.x + ax * d + Math.sin(c.ry) * 0.02, haut, c.z + az * d + Math.cos(c.ry) * 0.02);
+      m.userData = { p: p, cible: anciens[i] ? anciens[i].userData.cible : 0, mur: i, lx: lx, ly: ly, texte: texte, glisse: anciens[i] ? anciens[i].userData.glisse : 0 };
+      texte.position.x = m.userData.glisse * (lx - carte.w) / 2;
+      opacitePanneau(m, p);
+      m.position.set(c.x + Math.sin(c.ry) * 0.02, MURS - BANDEAU.marge - ly / 2, c.z + Math.cos(c.ry) * 0.02);   // en haut du mur, centré
       m.rotation.y = c.ry;
       m.visible = p > 0;
       scene.add(m);
       return m;
     });
   }
+  function opacitePanneau(m, p) { m.material.opacity = 0.94 * p; m.userData.texte.material.opacity = p; }
 
-  /** Montre l'étiquette du mur dont la normale (vers l'intérieur) pointe vers la caméra ; les autres sont cachées. */
+  /** Part (0 à 1) du titre posé en m qui serait caché à l'écran : hors du cadre, ou sous un widget de l'accueil (opts.eviter). */
+  function partCachee(st, m, caches) {
+    var cv = st.renderer.domElement.getBoundingClientRect(), u = m.userData, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    if (!cv.width || !cv.height) return 0;
+    m.updateMatrixWorld(true);
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (q) {
+      var v = m.localToWorld(new THREE.Vector3(q[0] * u.lx / 2, q[1] * u.ly / 2, 0)).project(st.camera);
+      var x = cv.left + (v.x + 1) / 2 * cv.width, y = cv.top + (1 - v.y) / 2 * cv.height;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    });
+    var aire = Math.max(1, (x1 - x0) * (y1 - y0));
+    function inter(r) { return Math.max(0, Math.min(x1, r.right) - Math.max(x0, r.left)) * Math.max(0, Math.min(y1, r.bottom) - Math.max(y0, r.top)); }
+    var cache = aire - inter(cv);   // ce qui sort du cadre
+    caches.forEach(function (r) { cache += inter(r); });   // les widgets ne se chevauchent pas : on additionne
+    return Math.min(1, cache / aire);
+  }
+
+  /**
+   * Montre le bandeau d'un mur qui fait face à la caméra ; son texte glisse le long du mur (9 positions) là où il est le moins
+   * caché (widgets de l'accueil, bord du cadre) — au milieu du mur le plus en face, à égalité. On garde le choix affiché s'il
+   * n'y a pas nettement mieux, pour que le titre ne saute pas pendant qu'on tourne la vue.
+   */
   function panneauFace(st) {
     if (!st.panneaux) return;
-    var cam = st.camera.position, meilleur = 0, score = -Infinity;
-    st.murs.forEach(function (c, i) {
-      var s = Math.sin(c.ry) * (cam.x - c.x) + Math.cos(c.ry) * (cam.z - c.z);
-      if (s > score) { score = s; meilleur = i; }
+    var cam = st.camera.position, caches = st.opts && st.opts.eviter ? st.opts.eviter() : [];
+    var faces = st.murs.map(function (c) { return Math.sin(c.ry) * (cam.x - c.x) + Math.cos(c.ry) * (cam.z - c.z); });
+    var maxi = Math.max.apply(null, faces), meilleur = null, score = Infinity;
+    st.panneaux.forEach(function (m, i) {
+      var f = faces[m.userData.mur], u = m.userData, tx = u.texte, ancienX = tx.position.x;
+      if (f <= 0 || f < maxi * 0.35) return;   // mur vu de dos, ou trop de biais
+      for (var k = -4; k <= 4; k++) {
+        var t = k / 4;
+        tx.position.x = t * (u.lx - tx.userData.lx) / 2;
+        m.updateMatrixWorld(true);
+        var sc = partCachee(st, tx, caches) * 10 - f / maxi * 0.5 + Math.abs(t) * 0.05
+          - (u.cible && Math.abs(t - u.glisse) < 0.13 ? 0.3 : 0);
+        if (sc < score) { score = sc; meilleur = { i: i, t: t }; }
+      }
+      tx.position.x = ancienX;
     });
-    st.panneaux.forEach(function (m, i) { m.userData.cible = i === meilleur ? 1 : 0; });
+    st.panneaux.forEach(function (m, i) {
+      var u = m.userData, choisi = meilleur && meilleur.i === i;
+      if (choisi) { u.glisse = meilleur.t; u.texte.position.x = meilleur.t * (u.lx - u.texte.userData.lx) / 2; }
+      u.cible = choisi ? 1 : 0;
+    });
     animer(st);   // le fondu se joue dans la boucle d'animation
   }
 
@@ -553,7 +609,56 @@ window.PlanSalle3D = (function () {
   /** Le survol fait grandir l'étiquette sous le pointeur, en douceur (une animation à la fois). */
   function mettreEnValeur(st) {
     Object.keys(st.labels).forEach(function (k) { st.labels[k].cible = k === st.survol ? 1 : 0; });
+    (st.liens || []).forEach(function (l) {   // élève survolé : ses liens ressortent, les autres s'effacent
+      var a = !st.survol || l.a === st.survol || l.b === st.survol;
+      l.arc.material.opacity = a ? (st.survol ? 1 : 0.85) : 0.12;
+      l.rond.material.opacity = a ? 1 : 0.15;
+    });
     animer(st);
+  }
+
+  /* ---------- Liens entre élèves : un arc d'un élève à l'autre, au-dessus des tables, et un rond au sommet ---------- */
+  var COULEURS_LIENS = { altercation: '#c0392b', dissipation: '#e0a800', entente: '#2e8b57' };   // comme la vue à plat (plan.js)
+  /** Le rond au sommet de l'arc : l'icône (💬 ⚔️ 🤝) et le nombre de fois. */
+  function rondLien(l) {
+    var cv = document.createElement('canvas'), T = 72, g;
+    cv.width = cv.height = T;
+    g = cv.getContext('2d');
+    g.beginPath(); g.arc(T / 2, T / 2 + 4, 26, 0, Math.PI * 2);
+    g.fillStyle = '#ffffff'; g.fill();
+    g.lineWidth = 6; g.strokeStyle = COULEURS_LIENS[l.type]; g.stroke();
+    g.font = '28px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(l.icone || '•', T / 2, T / 2 + 6);
+    if (l.nb > 1) {
+      g.beginPath(); g.arc(T - 14, 14, 13, 0, Math.PI * 2);
+      g.fillStyle = COULEURS_LIENS[l.type]; g.fill();
+      g.font = '800 17px system-ui,sans-serif'; g.fillStyle = '#ffffff';
+      g.fillText(String(l.nb), T - 14, 15);
+    }
+    return texture(cv, 1, 1);
+  }
+  function liensEleves(scene, st, plan) {
+    st.liens = [];
+    var centres = {};
+    plan.objets.forEach(function (it) { if (it.obj.type === 'place') centres[it.obj.id] = { x: it.rect.x + it.rect.w / 2, z: it.rect.y + it.rect.h / 2 }; });
+    (plan.liens || []).forEach(function (l, i) {
+      var A = centres[l.a], B = centres[l.b];
+      if (!A || !B) return;
+      var dist = Math.hypot(B.x - A.x, B.z - A.z), y0 = 0.45, sommet = 1.75 + Math.min(dist, 8) * 0.12 + (i % 3) * 0.08;
+      var courbe = new THREE.QuadraticBezierCurve3(new THREE.Vector3(A.x, y0, A.z),
+        new THREE.Vector3((A.x + B.x) / 2, 2 * sommet - y0, (A.z + B.z) / 2), new THREE.Vector3(B.x, y0, B.z));
+      var arc = new THREE.Mesh(new THREE.TubeGeometry(courbe, 40, 0.028 + 0.012 * Math.min(l.nb || 1, 4), 6, false),
+        new THREE.MeshBasicMaterial({ color: COULEURS_LIENS[l.type] || '#888888', transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }));
+      arc.renderOrder = 0.5;   // devant le bandeau du mur, derrière les élèves
+      scene.add(arc);
+      var rond = new THREE.Sprite(new THREE.SpriteMaterial({ map: rondLien(l), transparent: true, depthTest: false, toneMapped: false }));
+      rond.scale.set(0.62, 0.62, 1);
+      rond.position.set((A.x + B.x) / 2, sommet, (A.z + B.z) / 2);
+      rond.renderOrder = 3;
+      scene.add(rond);
+      st.liens.push({ a: l.a, b: l.b, arc: arc, rond: rond });
+    });
   }
   function animer(st) {
     if (st.animation) return;
@@ -569,7 +674,7 @@ window.PlanSalle3D = (function () {
         var u = m.userData;
         u.p += (u.cible - u.p) * 0.15;
         if (Math.abs(u.cible - u.p) < 0.01) u.p = u.cible; else encore = true;
-        m.material.opacity = u.p; m.visible = u.p > 0;
+        opacitePanneau(m, u.p); m.visible = u.p > 0;
       });
       st.renderer.render(st.scene, st.camera);
       st.animation = encore ? requestAnimationFrame(pas) : null;
@@ -1066,6 +1171,7 @@ window.PlanSalle3D = (function () {
     if (plan.etiquette) panneauxClasse(scene, st, L, H, plan.etiquette);
     plan.objets.forEach(function (item) { meuble(scene, item, st); });
     plan.objets.forEach(function (item) { if (item.obj.type === 'place') etiquettePlace(scene, st, item); });
+    liensEleves(scene, st, plan);
     mettreEnValeur(st);
     demarrerDecor(st);
     return scene;
