@@ -49,7 +49,7 @@ function usages_competences(): array
     }
     foreach (db()->query("SELECT app, activite, titre, competences FROM activites WHERE competences <> '' ORDER BY app, ordre")->fetchAll() as $a) {
         foreach (liste_codes_competences($a['competences']) as $c) {
-            $res[$c][] = ['lien' => './?p=bibliotheque', 'texte' => $a['app'] . ' · ' . ($a['titre'] ?: $a['activite']), 'app' => true];
+            $res[$c][] = ['lien' => './?p=ateliers', 'texte' => $a['app'] . ' · ' . ($a['titre'] ?: $a['activite']), 'app' => true];
         }
     }
     return $res;

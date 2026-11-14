@@ -47,7 +47,7 @@ function page_passerelle(): void
     $d = $a && $a['descripteur'] !== '' ? json_decode($a['descripteur'], true) : null;
     if (!$a || !is_array($d)) {
         flash('Pas de passerelle lue pour cet atelier.', 'err');
-        rediriger('./?p=ateliers');
+        rediriger('./?p=applications');
     }
     [, $remarques] = verifier_descripteur($d);
     $at = $d['atelier'];
@@ -65,12 +65,12 @@ function page_passerelle(): void
     barre('ateliers');
     ?>
     <main class="passerelle">
-        <p class="fil"><a href="./?p=ateliers">← Ateliers</a></p>
+        <p class="fil"><a href="./?p=applications">← Applications</a></p>
         <div class="titre-section">
             <h1><?= h($a['icone'] ?: ($at['icone'] ?? '')) ?> <?= h($at['nom']) ?> <code><?= h($app) ?></code></h1>
             <div class="boutons">
                 <?= bouton('lire_passerelle', 'Relire', ['atelier_id' => $a['id']], 'secondaire') ?>
-                <a class="btn secondaire" href="./?p=ateliers&modifier=<?= (int) $a['id'] ?>">Modifier la fiche</a>
+                <a class="btn secondaire" href="./?p=applications&modifier=<?= (int) $a['id'] ?>">Modifier la fiche</a>
                 <a class="btn secondaire" href="./?p=suivi&vue=app:<?= rawurlencode($app) ?>">Suivi</a>
             </div>
         </div>
@@ -240,7 +240,7 @@ function carte_enchainement(int $parcours_id): void
         <h3>Enchaînement des étapes</h3>
         <?php if ($rem): ?><ul><?php foreach ($rem as $r): ?><li><?= h($r) ?></li><?php endforeach; ?></ul><?php endif; ?>
         <?php if ($sans): ?><p class="discret">Sans centrale.json lu (vérification impossible) : <?= h(implode(', ', $sans)) ?>.
-            <a href="./?p=ateliers">Lire leur centrale.json</a></p><?php endif; ?>
+            <a href="./?p=applications">Lire leur centrale.json</a></p><?php endif; ?>
     </section>
     <?php
 }

@@ -183,7 +183,7 @@ function action_suivi(string $action): bool
                 foreach ($erreurs as $e) {
                     flash($e, 'err');
                 }
-                rediriger('./?p=ateliers' . ($id ? '&modifier=' . $id : '&nouveau=1'));
+                rediriger('./?p=applications' . ($id ? '&modifier=' . $id : '&nouveau=1'));
             }
             $champs = [$app, $nom, mb_substr(trim((string) ($_POST['description'] ?? '')), 0, 300), $url,
                 mb_substr(trim((string) ($_POST['icone'] ?? '')), 0, 4),
@@ -203,10 +203,10 @@ function action_suivi(string $action): bool
             } catch (PDOException) {
                 $_SESSION['brouillon_atelier'] = $_POST;
                 flash("Un atelier utilise déjà l'identifiant « $app ».", 'err');
-                rediriger('./?p=ateliers' . ($id ? '&modifier=' . $id : '&nouveau=1'));
+                rediriger('./?p=applications' . ($id ? '&modifier=' . $id : '&nouveau=1'));
             }
             flash("Atelier « $nom » enregistré.");
-            rediriger('./?p=ateliers');
+            rediriger('./?p=applications');
 
         case 'emplacements_apps':
             // Où tourne la Centrale, et dans quel ordre essayer les emplacements des applications
@@ -217,7 +217,7 @@ function action_suivi(string $action): bool
                 definir_reglage('ordre_' . $l, $ordre ? implode(',', $ordre) : ORDRE_EMPLACEMENTS[$l]);
             }
             flash('Ordre des emplacements enregistré.');
-            rediriger('./?p=ateliers#emplacements');
+            rediriger('./?p=applications#emplacements');
 
         case 'enregistrer_activation':
             $id = (int) ($_POST['atelier_id'] ?? 0);
@@ -228,7 +228,7 @@ function action_suivi(string $action): bool
             $debut = date_valide((string) ($_POST['debut'] ?? '')) ? (string) $_POST['debut'] : '';
             $fin = date_valide((string) ($_POST['fin'] ?? '')) ? (string) $_POST['fin'] : '';
             $pendant = empty($_POST['pendant_cours']) ? 0 : 1;
-            $retour = './?p=ateliers&modifier=' . $id . '#activation';
+            $retour = './?p=applications&modifier=' . $id . '#activation';
             if ($app === '*' || !$classe_id) {
                 flash("Choisissez une classe pour l'activation.", 'err');
                 rediriger($retour);
@@ -248,7 +248,7 @@ function action_suivi(string $action): bool
             $id = (int) ($_POST['atelier_id'] ?? 0);
             $pdo->prepare('DELETE FROM atelier_activations WHERE id = ?')->execute([(int) ($_POST['activation_id'] ?? 0)]);
             flash("Fenêtre d'activation retirée.");
-            rediriger('./?p=ateliers&modifier=' . $id . '#activation');
+            rediriger('./?p=applications&modifier=' . $id . '#activation');
 
         case 'lire_passerelle':
             $id = (int) ($_POST['atelier_id'] ?? 0);
@@ -262,16 +262,16 @@ function action_suivi(string $action): bool
             [$d, $url_d, $erreur] = lire_passerelle_distante($adresse);
             if (!$d) {
                 flash($erreur, 'err');
-                rediriger('./?p=ateliers' . ($id ? '' : '&nouveau=1'));
+                rediriger('./?p=applications' . ($id ? '' : '&nouveau=1'));
             }
             [$err, $av] = verifier_descripteur($d);
             if ($err) {
                 flash('Ce centrale.json ne suit pas le format passerelle.atelier v1 : ' . implode(' ', array_slice($err, 0, 4)), 'err');
-                rediriger('./?p=ateliers' . ($id ? '' : '&nouveau=1'));
+                rediriger('./?p=applications' . ($id ? '' : '&nouveau=1'));
             }
             if ($id && $a && $a['app'] !== $d['atelier']['app']) {
                 flash("Ce descripteur décrit l'atelier « {$d['atelier']['app']} », pas « {$a['app']} ». Rien n'a été changé.", 'err');
-                rediriger('./?p=ateliers');
+                rediriger('./?p=applications');
             }
             [$app, $cree, $n] = enregistrer_descripteur($d, $url_d);
             flash(($cree ? "Atelier « {$d['atelier']['nom']} » ajouté au portail" : "Passerelle de « {$d['atelier']['nom']} » relue")
@@ -294,12 +294,12 @@ function action_suivi(string $action): bool
             $pdo->prepare("UPDATE ateliers SET descripteur = '', descripteur_url = '', descripteur_lu = 0 WHERE id = ?")
                 ->execute([(int) ($_POST['atelier_id'] ?? 0)]);
             flash('Descripteur oublié (la fiche de l’atelier et ses activités sont gardées).');
-            rediriger('./?p=ateliers');
+            rediriger('./?p=applications');
 
         case 'supprimer_atelier':
             $pdo->prepare('DELETE FROM ateliers WHERE id = ?')->execute([(int) ($_POST['atelier_id'] ?? 0)]);
             flash("Atelier retiré du portail (le travail et la progression des élèves sont conservés).");
-            rediriger('./?p=ateliers');
+            rediriger('./?p=applications');
 
         case 'oublier_catalogue':
             $app = normaliser_app((string) ($_POST['app'] ?? ''));
@@ -913,12 +913,39 @@ function section_fournis(int $parcours_id): void
     <?php
 }
 
-function page_ateliers(): void
+/**
+ * Applications de l'enseignant (pas sur le portail des élèves) : FicheStudio, copié hors de la racine web (prive/miroir/) et servi
+ * par admin/appli.php à la seule session enseignant.
+ */
+function carte_outils_enseignant(): void
 {
-    if (($_GET['vue'] ?? '') === 'catalogue') {
-        page_catalogue_ateliers();
-        return;
-    }
+    $index = __DIR__ . '/../prive/miroir/fichestudio/index.html';
+    $copie = is_file($index) ? (int) filemtime($index) : 0;
+    ?>
+    <section class="carte outils-enseignant" id="outils-enseignant">
+        <h2>Applications de l’enseignant</h2>
+        <p class="aide">Réservées à l’espace enseignant : elles s’ouvrent avec votre connexion et n’apparaissent pas sur le portail des élèves.</p>
+        <div class="outil-enseignant">
+            <span class="outil-icone" aria-hidden="true"><?= function_exists('dash_icone') ? dash_icone('fiche') : '📝' ?></span>
+            <div class="outil-texte">
+                <strong>FicheStudio</strong> <code>fichestudio</code>
+                <p class="discret">Les ateliers sur papier : mise en page des fiches (compatible Affinity), puis présentation et correction en classe,
+                    avec l’avancement de chaque classe. Lien enseignant : <code>admin/appli.php/fichestudio/</code>.</p>
+                <p class="discret"><?= $copie ? 'Copie sur ce serveur : ' . h(date('d/m/Y H:i', $copie)) . '.'
+                    : '<span class="alerte">Pas encore copié sur ce serveur (prive/miroir/fichestudio/).</span>' ?></p>
+            </div>
+            <div class="outil-actions">
+                <a class="btn" href="appli.php/fichestudio/" target="_blank" rel="noopener" title="Ouvre FicheStudio (réservé à l’enseignant connecté)">Ouvrir ↗</a>
+                <a class="btn secondaire" href="appli.php/fichestudio/#nouveau" target="_blank" rel="noopener" title="Ouvre FicheStudio sur un nouveau document, modèles de la charte dépliés">＋ Nouvel atelier</a>
+            </div>
+        </div>
+    </section>
+    <?php
+}
+
+/** Page Applications : les applications du portail des élèves (adresse, icône, classes, activation), le test à la place d'un élève. */
+function page_applications(): void
+{
     $pdo = db();
     $liste = $pdo->query('SELECT * FROM ateliers ORDER BY ordre, nom')->fetchAll();
     $activations = [];
@@ -957,24 +984,26 @@ function page_ateliers(): void
     }
     $afficher_form = !empty($_GET['nouveau']) || $modifier || $brouillon || isset($_GET['app']) || !$liste;
 
-    entete('Ateliers');
-    barre('ateliers');
+    entete('Applications');
+    barre('applications');
     ?>
     <main>
         <div class="titre-section">
-            <h1>Ateliers</h1>
-            <?php if (!$afficher_form): ?><a class="btn" href="./?p=ateliers&nouveau=1">Ajouter un atelier</a><?php endif; ?>
+            <h1>Applications</h1>
+            <div class="titre-actions">
+                <?php if (!$afficher_form): ?><a class="btn" href="./?p=applications&nouveau=1" title="Ajouter une application au portail des élèves (son adresse, son icône, ses classes)">Brancher une application</a><?php endif; ?>
+                <a class="btn secondaire" href="./?p=applications" title="Les ateliers de ces applications : propositions aux classes, parcours, imports">Voir leurs ateliers →</a>
+            </div>
         </div>
-        <p class="sous">Les ateliers apparaissent sur le portail des élèves (<a href="../" target="_blank"><?= h(url_base()) ?>/</a>).
-            L'élève les ouvre d'un clic, déjà connecté, et revient au portail avec le bouton « ← Mes ateliers ».</p>
+        <p class="sous">Les applications du portail des élèves (<a href="../" target="_blank"><?= h(url_base()) ?>/</a>) :
+            l'élève les ouvre d'un clic, déjà connecté, et revient au portail avec le bouton « ← Mes ateliers ».</p>
         <?php messages(); ?>
-        <?php onglets_ateliers('', nombre_ateliers_catalogue()); ?>
-        <?php if (!$modifier && !$brouillon) carte_brancher_passerelle(); ?>
+        <?php if (!$modifier && !$brouillon) { carte_outils_enseignant(); carte_brancher_passerelle(); } ?>
 
         <?php if ($suggestions && !$afficher_form): ?>
             <p class="carte">Applications déjà branchées mais pas encore sur le portail :
                 <?php foreach ($suggestions as $s): ?>
-                    <a class="btn petit secondaire" href="./?p=ateliers&app=<?= rawurlencode($s) ?>">+ <?= h($s) ?></a>
+                    <a class="btn petit secondaire" href="./?p=applications&app=<?= rawurlencode($s) ?>">+ <?= h($s) ?></a>
                 <?php endforeach; ?></p>
         <?php endif; ?>
 
@@ -1015,7 +1044,7 @@ function page_ateliers(): void
                 </div>
                 <div class="ligne-actions">
                     <button>Enregistrer</button>
-                    <?php if ($liste): ?><a href="./?p=ateliers">Annuler</a><?php endif; ?>
+                    <?php if ($liste): ?><a href="./?p=applications">Annuler</a><?php endif; ?>
                 </div>
             </form>
         <?php endif; ?>
@@ -1072,8 +1101,8 @@ function page_ateliers(): void
             </section>
         <?php endif; ?>
 
-        <?php $avec_test = $liste && !$afficher_form ? carte_tester('./?p=ateliers') : false; ?>
-        <?php if ($liste && !$afficher_form) { carte_simulees('./?p=ateliers'); } ?>
+        <?php $avec_test = $liste && !$afficher_form ? carte_tester('./?p=applications') : false; ?>
+        <?php if ($liste && !$afficher_form) { carte_simulees('./?p=applications'); } ?>
         <?php if ($liste): ?>
             <div class="defile" style="margin-top:20px"><table>
                 <thead><tr><th></th><th>Atelier</th><th>Passerelle</th><th>Activités</th><th>Ouvertures (7 j)</th><th>Classes</th><th>État</th><th></th></tr></thead>
@@ -1096,7 +1125,7 @@ function page_ateliers(): void
                             echo $o ? implode('<br>', array_map(fn($k, $n) => h($k) . ' : ' . $n, array_keys($o), $o)) : '—';
                         ?></td>
                         <td><?= $a['classes'] !== '' ? h($a['classes']) : '<span class="discret">toutes</span>' ?>
-                            <?php $nav = count($activations[$a['app']] ?? []); if ($nav): ?><br><a class="discret" href="./?p=ateliers&modifier=<?= (int) $a['id'] ?>#activation" title="Fenêtres d'activation par calendrier">📅 <?= $nav ?> activation<?= $nav > 1 ? 's' : '' ?></a><?php endif; ?></td>
+                            <?php $nav = count($activations[$a['app']] ?? []); if ($nav): ?><br><a class="discret" href="./?p=applications&modifier=<?= (int) $a['id'] ?>#activation" title="Fenêtres d'activation par calendrier">📅 <?= $nav ?> activation<?= $nav > 1 ? 's' : '' ?></a><?php endif; ?></td>
                         <td><?= $a['actif'] ? 'Visible' : 'Masqué' ?></td>
                         <td class="actions">
                             <?= $avec_test ? bouton_tester('app:' . $a['app'], 'Ouvrir cet atelier connecté comme l’élève test choisi au-dessus') : '' ?>
@@ -1105,7 +1134,7 @@ function page_ateliers(): void
                                 <a class="btn petit secondaire" href="../miroir/technostudio/?mode=eleve" target="_blank" rel="noopener" title="Ouvre TechnoStudio comme le voient les élèves : parcours guidé, questions débloquées une à une">Mode élève</a>
                             <?php endif; ?>
                             <a class="btn petit secondaire" href="./?p=suivi&vue=app:<?= rawurlencode($a['app']) ?>">Suivi</a>
-                            <a class="btn petit secondaire" href="./?p=ateliers&modifier=<?= (int) $a['id'] ?>">Modifier</a>
+                            <a class="btn petit secondaire" href="./?p=applications&modifier=<?= (int) $a['id'] ?>">Modifier</a>
                             <?= bouton('supprimer_atelier', 'Retirer', ['atelier_id' => $a['id']], 'danger', 'Retirer cet atelier du portail ?') ?>
                         </td>
                     </tr>

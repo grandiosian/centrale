@@ -114,7 +114,9 @@ Chaque application publie à la racine de son site un fichier `centrale.json` au
 
 La spécification, le schéma JSON et un modèle vierge sont publiés par la Centrale à l'adresse **`/passerelle/`** (dossier `public/passerelle/`).
 
-Dans l'onglet **Ateliers**, la carte « Brancher une application par sa passerelle » prend l'adresse de l'application. La Centrale lit son `centrale.json` côté serveur, puis :
+**Créer un atelier** : en haut de la page **Ateliers**, **＋ Ajouter un atelier** ouvre FicheStudio (dans un nouvel onglet) sur un nouveau document « Nouvel atelier », avec les modèles de la charte déjà dépliés. Un atelier se crée d'abord **sur papier** (FicheStudio, ou Affinity puis ouvert dans FicheStudio), se **convertit ensuite pour TechnoStudio** (atelier numérique, activités, compétences), puis s'**importe ici** (« Importer les ateliers… ») : ces trois étapes sont rappelées sous le titre. Ajouter une application au portail se fait dans la page **Applications** (« Brancher une application »).
+
+Dans la page **Applications** (barre du haut), la carte « Brancher une application par sa passerelle » prend l'adresse de l'application. La Centrale lit son `centrale.json` côté serveur, puis :
 
 - elle crée la fiche de l'atelier, ou complète ses champs vides sans écraser vos réglages ;
 - elle garde une copie du descripteur, mise à jour par le bouton « Relire » ;
@@ -190,13 +192,13 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 
 ### Hébergements multiples et copie de secours
 
-- Chaque atelier a **quatre emplacements**, réglables dans l'onglet Ateliers (bouton « Modifier ») :
+- Chaque atelier a **quatre emplacements**, réglables dans la page Applications (bouton « Modifier ») :
   - **Local** : la copie servie par cette Centrale, `/miroir/<nom>/` (rempli par défaut), ou un dossier local (`http://localhost:8080/…`) ;
   - **GitHub Pages** (ex. `https://grandiosian.github.io/NetSim/`) ;
   - **GitLab Pages**, sur la Forge ÉdNat (ex. `https://lionelcaruana.forge.apps.education.fr/netsim/`) ;
   - **Serveur alwaysdata** (ex. `https://technoversailles.alwaysdata.net/miroir/netsim/`).
   Des « autres adresses » (une par ligne) peuvent s'ajouter ; elles sont essayées après.
-- **Ordre de préférence** (carte « Ordre des emplacements », en bas de l'onglet Ateliers) :
+- **Ordre de préférence** (carte « Ordre des emplacements », en bas de la page Applications) :
   - Centrale **en local** (localhost, 127.0.0.1, adresse 192.168… / 10…, nom en .local) : local → GitHub → GitLab → alwaysdata ;
   - Centrale **en ligne** : alwaysdata (la copie `/miroir/…` de ce serveur) → GitHub → GitLab (le local est ignoré : les élèves ne peuvent pas joindre l'ordinateur du professeur).
   La détection est automatique ; on peut forcer « en local » ou « en ligne », et changer chaque ordre.
@@ -216,9 +218,11 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 - **Onglet Ateliers** : nombre d'ouvertures sur 7 jours par hébergement.
 - **Page Travail d'un élève** : ses 30 dernières connexions, avec l'atelier, l'hébergement, et s'il est passé par le portail ou a tapé son code.
 
-### Bibliothèque des activités
+### Ateliers : les activités des applications
 
-L'onglet **Bibliothèque** de l'espace enseignant réunit toutes les activités de toutes les applications : celles déclarées par les passerelles (`centrale.json`) et celles déclarées à la connexion des élèves.
+**Navigation** : la barre du haut a deux entrées distinctes — **Applications** (les applications du portail des élèves : brancher, emplacements, activation, tester comme élève ; en tête, la carte **Applications de l'enseignant** avec **FicheStudio** — lien enseignant `admin/appli.php/fichestudio/`, « Ouvrir » et « ＋ Nouvel atelier », date de la copie sur le serveur — réservé à l'espace enseignant, jamais sur le portail des élèves) et **Ateliers** (leur contenu). L'ancienne page Bibliothèque et l'ancien onglet « Ateliers des applications » montraient les mêmes ateliers : ils sont réunis dans la page **Ateliers** — les cartes d'activités (ci-dessous) et, dans la section dépliable **Imports et disponibilité**, l'import depuis les applications, les périodes, les classes et les ateliers retirés. Les anciennes adresses (`?p=bibliotheque`, `?p=ateliers&vue=catalogue`) mènent à la nouvelle page.
+
+La page **Ateliers** de l'espace enseignant réunit toutes les activités de toutes les applications : celles déclarées par les passerelles (`centrale.json`) et celles déclarées à la connexion des élèves.
 
 - **Rangement** : par application, puis par groupe.
 - **Filtres** :
@@ -233,7 +237,7 @@ L'onglet **Bibliothèque** de l'espace enseignant réunit toutes les activités 
 - **Ajouter au parcours** : les activités cochées deviennent des étapes, soit d'un nouveau parcours (le formulaire est prérempli), soit à la fin d'un parcours existant.
 - **Côté élève** :
   - en haut du portail, la section **À faire** liste les activités proposées à sa classe ou à son groupe, avec la date (signalée si elle est dépassée), la consigne et un bouton Commencer / Continuer / Revoir ;
-  - dans la carte de chaque atelier, seules les activités proposées et celles déjà commencées apparaissent. Un réglage en bas de la Bibliothèque permet de les montrer toutes ;
+  - dans la carte de chaque atelier, seules les activités proposées et celles déjà commencées apparaissent. Un réglage en bas de la page Ateliers permet de les montrer toutes ;
   - dans l'application elle-même, l'élève peut toujours tout ouvrir.
 
 ### Élèves test : tester à la place d'un élève
@@ -255,7 +259,7 @@ Onglet **Ateliers**, carte « Classes simulées » (`lib/simulation.php`) :
 - **Créer les classes simulées** : 5SIM et 4SIM, 24 élèves fictifs chacune, en GR1 / GR2, qui ont travaillé 8 semaines (une séance par semaine, la dernière avant-hier) sur les ateliers de leur niveau déclarés par les applications (groupes « 5e · … », « 5ᵉ · … », pris à tour de rôle entre applications).
 - Profils : 3 rapides, 9 réguliers, 4 en difficulté (beaucoup d'essais, corrections affichées), 2 retardataires (arrivent en retard, moins de temps de travail), 2 absentéistes (une séance sur trois environ, trous dans le suivi), 2 observateurs (lisent longtemps, regardent les corrections, laissent des activités inachevées), 1 décrocheur (s'arrête au bout de 4 semaines), 1 jamais connecté. Le profil est dans le surnom (`Retardataire1`) et s'affiche à la place du nom (« Retardataire 1 · simulé »).
 - Tout passe par les vraies tables : progression avec mesures (temps actif, essais, premier coup, délai de réponse, détail par question ; certaines activités et questions sont plus difficiles que d'autres), constats de compétences « envoyés par l'application », connexions portail + atelier, dernière connexion. Suivi, page élève, bilan de compétences et page classe s'affichent comme pour une vraie classe.
-- Établissement **Collège SIM** (créé avec les classes, supprimé avec elles ; les classes simulées qui n'y sont pas encore rangées le sont toutes seules à l'ouverture de l'accueil ou de l'onglet Ateliers) : grille horaire M1–S4, salle **SIM1** meublée (6 îlots de 4 places), un cours de Technologie par groupe chaque jour du lundi au samedi (5SIM : GR1 en M2, GR2 en M3 ; 4SIM : GR1 en S1, GR2 en S2) et les élèves placés (par groupe et classe entière). Les classes simulées apparaissent donc dans « Les cours aujourd'hui » et « Voir une classe », avec leur plan en 3D ; elles restent hors du calendrier, des prochains cours et de l'horloge de l'accueil.
+- Établissement **Collège SIM** (créé avec les classes, supprimé avec elles ; les classes simulées qui n'y sont pas encore rangées le sont toutes seules à l'ouverture de l'accueil ou de la page Applications) : grille horaire M1–S4, salle **SIM1** meublée (6 îlots de 4 places), un cours de Technologie par groupe chaque jour du lundi au samedi (5SIM : GR1 en M2, GR2 en M3 ; 4SIM : GR1 en S1, GR2 en S2) et les élèves placés (par groupe et classe entière). Les classes simulées apparaissent donc dans « Les cours aujourd'hui » et « Voir une classe », avec leur plan en 3D ; elles restent hors du calendrier, des prochains cours et de l'horloge de l'accueil.
 - La génération est reproductible (mêmes élèves à chaque fois) ; **Régénérer** la refait à la date du jour, **Supprimer** efface tout. Les classes simulées comptent comme classes de test (« Tester à la place d'un élève ») mais sont écartées des chiffres de connexion du tableau de bord et des compteurs de la bibliothèque.
 
 ### Ateliers du portail
@@ -281,13 +285,13 @@ Centrale.afficherConnexion(element, {
 
 `Centrale.init({ boutonRetour: false })` masque le bouton retour automatique, si l'application préfère le placer elle-même avec `Centrale.retour()`.
 
-### Ateliers des applications (import)
+### Imports et disponibilité des ateliers
 
 Les ateliers sont créés **dans les applications** et publiés avec elles : ils marchent sans serveur. La Centrale les importe pour les ranger.
 
-- Onglet **Ateliers → « Ateliers des applications »** : « Importer les ateliers de toutes les applications », ou « Importer / Mettre à jour » pour une seule.
+- Page **Ateliers**, section dépliable **Imports et disponibilité** : « Importer les ateliers de toutes les applications », ou « Importer / Mettre à jour » pour une seule.
 - La Centrale lit le catalogue `ateliers.json` publié à côté de `centrale.json`. À défaut, elle regroupe les activités de `centrale.json` en ateliers et le signale.
-- Bilan affiché : ajoutés, modifiés, retirés (jamais effacés), inchangés. Les activités rejoignent la bibliothèque, les parcours et le suivi.
+- Bilan affiché : ajoutés, modifiés, retirés (jamais effacés), inchangés. Les activités rejoignent les cartes de la page Ateliers, les parcours et le suivi.
 - Filtres par application, niveau, texte ou code de compétence ; « Ouvrir » lance l'atelier sans connexion.
 - Un fichier exporté d'une application (atelier `.json`, `ateliers.json`, `.technostudio.json`) peut aussi être importé à la main : il reste marqué « pas encore dans l'application » tant qu'elle ne le publie pas.
 - Les autres applications lisent ce catalogue : `GET /api/catalogue.php?app=&niveau=&competence=`.

@@ -693,9 +693,10 @@ match ($page) {
     'eleve'    => page_eleve((int) ($_GET['id'] ?? 0)),
     'suivi'    => page_suivi(),
     'parcours' => page_parcours(),
-    'ateliers' => page_ateliers(),
+    'ateliers' => page_ateliers(),           // ateliers des applications (cartes, imports, disponibilité) : lib/admin_catalogue.php
+    'applications' => page_applications(),   // applications du portail des élèves : lib/admin_suivi.php
     'passerelle' => page_passerelle(),
-    'bibliotheque' => page_bibliotheque(),
+    'bibliotheque' => rediriger('./?' . http_build_query(['p' => 'ateliers'] + array_diff_key($_GET, ['p' => 1]))),   // ancienne page, fusionnée dans Ateliers
     'etablissements' => page_etablissements(),
     'edt'      => page_edt(),
     'salle'    => page_salle((int) ($_GET['id'] ?? 0)),
@@ -1588,7 +1589,7 @@ function messages(): void
 function barre(string $actif = 'classes'): void
 {
     $liens = ['accueil' => ['./', 'Accueil'], 'classes' => ['./?p=classes', 'Classes'], 'edt' => ['./?p=edt', 'Emploi du temps'], 'etablissements' => ['./?p=etablissements', 'Établissements'],
-              'bibliotheque' => ['./?p=bibliotheque', 'Bibliothèque'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'competences' => ['./?p=competences', 'Compétences'], 'suivi' => ['./?p=suivi', 'Suivi'],
+              'applications' => ['./?p=applications', 'Applications'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'competences' => ['./?p=competences', 'Compétences'], 'suivi' => ['./?p=suivi', 'Suivi'],
               'fichiers' => ['./?p=fichiers', 'Fichiers'], 'reglages' => ['./?p=reglages', 'Réglages']];
     ?>
     <header class="barre">

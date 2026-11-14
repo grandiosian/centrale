@@ -16,7 +16,7 @@ function action_bibliotheque(string $action): bool
                 fn($c) => $c[0] > 0 && classe_par_id($c[0])));
             if (!$sel || !$cibles) {
                 flash(!$sel ? 'Cochez au moins une activité.' : 'Choisissez au moins une classe ou un groupe.', 'err');
-                rediriger('./?p=bibliotheque');
+                rediriger('./?p=ateliers');
             }
             $pour = (string) ($_POST['pour_le'] ?? '');
             $pour = date_valide($pour) ? $pour : '';
@@ -33,18 +33,18 @@ function action_bibliotheque(string $action): bool
             $n = count($sel);
             flash($n . ' activité' . ($n > 1 ? 's proposées' : ' proposée') . ' à ' . implode(', ', array_map(fn($c) => nom_cible($c[0], $c[1]), $cibles))
                 . ($pour ? ' pour le ' . rtrim(date_fr($pour), '.') : '') . '. Les élèves ' . ($n > 1 ? 'les' : 'la') . ' voient en haut de leur portail.');
-            rediriger('./?p=bibliotheque' . filtres_retour());
+            rediriger('./?p=ateliers' . filtres_retour());
 
         case 'retirer_proposition':
             $pdo->prepare('DELETE FROM propositions WHERE id = ?')->execute([(int) ($_POST['proposition_id'] ?? 0)]);
             flash('Proposition retirée (le travail déjà fait par les élèves est conservé).');
-            rediriger('./?p=bibliotheque' . filtres_retour());
+            rediriger('./?p=ateliers' . filtres_retour());
 
         case 'ajouter_au_parcours':
             $sel = selection_bibliotheque();
             if (!$sel) {
                 flash('Cochez au moins une activité.', 'err');
-                rediriger('./?p=bibliotheque');
+                rediriger('./?p=ateliers');
             }
             $cat = catalogue_activites();
             $ateliers = [];
@@ -62,7 +62,7 @@ function action_bibliotheque(string $action): bool
                 rediriger('./?p=parcours&nouveau=1');
             }
             if (!parcours_par_id($pid)) {
-                rediriger('./?p=bibliotheque');
+                rediriger('./?p=ateliers');
             }
             $st = $pdo->prepare('SELECT COALESCE(MAX(ordre), -1) + 1 FROM parcours_etapes WHERE parcours_id = ?');
             $st->execute([$pid]);
@@ -81,7 +81,7 @@ function action_bibliotheque(string $action): bool
             $a = $st->fetch();
             if (!$a) {
                 flash("Cet atelier n'est pas sur le portail : ajoutez-le dans l'onglet Ateliers pour l'essayer.", 'err');
-                rediriger('./?p=bibliotheque');
+                rediriger('./?p=ateliers');
             }
             $morceaux = ['centrale=' . rawurlencode(jeton_compte_test()), 'retour=' . rawurlencode(url_base() . '/')];
             $act = activite_propre((string) ($_POST['activite'] ?? ''));
@@ -95,7 +95,7 @@ function action_bibliotheque(string $action): bool
             flash(($_POST['valeur'] ?? '') === 'toutes'
                 ? 'Le portail montre toutes les activités de chaque atelier.'
                 : 'Le portail ne montre que les activités proposées (et celles que l’élève a déjà commencées).');
-            rediriger('./?p=bibliotheque');
+            rediriger('./?p=ateliers');
     }
     return false;
 }
@@ -214,7 +214,8 @@ function ateliers_bibliotheque(array $items, array $props): array
     return [$res, $atelier_de];
 }
 
-function page_bibliotheque(): void
+/** Les ateliers en cartes (ex-Bibliothèque) : filtres, propositions aux classes, ajout aux parcours, essai — dans la page Ateliers. */
+function corps_bibliotheque(): void
 {
     $pdo = db();
     $items = bibliotheque();
@@ -268,21 +269,13 @@ function page_bibliotheque(): void
         $par_app_b[$at['app']][] = $at;
     }
 
-    entete('Bibliothèque');
-    barre('bibliotheque');
     ?>
-    <main class="biblio">
-        <div class="titre-section">
-            <h1>Bibliothèque</h1>
-            <a class="btn secondaire" href="./?p=ateliers">Brancher une application</a>
-        </div>
         <p class="sous">Toutes les activités de vos applications, déclarées par leurs passerelles. Cochez-en puis proposez-les à une classe
             ou à un groupe : les élèves les retrouvent en haut de leur portail, avec la date et votre consigne.</p>
-        <?php messages(); ?>
 
         <?php if (!$items): ?>
-            <div class="carte"><p>Aucune activité connue pour l'instant. Branchez vos applications dans l'onglet
-                <a href="./?p=ateliers">Ateliers</a> (« Lire la passerelle ») : leurs activités apparaîtront ici.</p></div>
+            <div class="carte"><p>Aucune activité connue pour l'instant. Branchez vos applications dans
+                <a href="./?p=applications">Applications</a> (« Lire la passerelle ») : leurs activités apparaîtront ici.</p></div>
         <?php else: ?>
         <div class="carte filtres-biblio" id="filtres-biblio">
             <input type="search" id="b-texte" placeholder="Chercher une activité…" aria-label="Chercher une activité">
@@ -471,8 +464,6 @@ function page_bibliotheque(): void
             <?= bouton('portail_activites', $toutes ? 'Ne montrer que les activités proposées' : 'Montrer toutes les activités', ['valeur' => $toutes ? 'proposees' : 'toutes'], 'secondaire') ?>
         </section>
         <?php endif; ?>
-    </main>
     <script src="bibliotheque.js?v=<?= @filemtime(__DIR__ . '/../public/admin/bibliotheque.js') ?: 1 ?>" defer></script>
     <?php
-    pied();
 }

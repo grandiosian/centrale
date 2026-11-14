@@ -51,7 +51,7 @@ function action_tester(string $action): bool
             }
             if (!$eleve) {
                 flash('Choisissez un élève d’une classe de test.', 'err');
-                rediriger('./?p=ateliers#tester');
+                rediriger('./?p=applications#tester');
             }
             $_SESSION['eleve_teste'] = $eid;   // gardé pour les prochains essais
             $cible = (string) ($_POST['cible'] ?? 'portail');
@@ -63,7 +63,7 @@ function action_tester(string $action): bool
                 $a = $st->fetch();
                 if (!$a) {
                     flash('Atelier introuvable.', 'err');
-                    rediriger('./?p=ateliers');
+                    rediriger('./?p=applications');
                 }
                 $h = 'centrale=' . rawurlencode(jeton_session_eleve($eid)) . '&retour=' . rawurlencode($retour);
                 rediriger(preg_replace('/#.*$/', '', meilleure_adresse($a)) . '#' . $h);
@@ -108,7 +108,7 @@ function action_tester(string $action): bool
             }
             $_SESSION['codes_test'] = $codes;
             flash($codes ? count($codes) . ' élèves test créés (' . implode(', ', array_keys(CLASSES_TEST)) . ').' : 'Les classes de test existent déjà.');
-            rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#tester');
+            rediriger((string) ($_POST['retour'] ?? './?p=applications') . '#tester');
 
         case 'reinitialiser_test':
             $n = 0;
@@ -120,7 +120,7 @@ function action_tester(string $action): bool
             }
             flash("Travail des élèves test effacé ($n classe" . ($n > 1 ? 's' : '') . ') : ils repartent de zéro dans les ateliers et les parcours.'
                 . ' Dans Établi 3D, le projet gardé dans le navigateur reste là : Fichier → Nouveau pour repartir à vide.');
-            rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#tester');
+            rediriger((string) ($_POST['retour'] ?? './?p=applications') . '#tester');
 
         case 'simuler_classes':
             $bilan = [];
@@ -129,7 +129,7 @@ function action_tester(string $action): bool
                 $bilan[] = "$nom : $n élèves, $lignes activités commencées sur un programme de $prog";
             }
             flash('Classes simulées prêtes (8 semaines de travail, jusqu’à avant-hier). ' . implode(' · ', $bilan) . '.');
-            rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#simulees');
+            rediriger((string) ($_POST['retour'] ?? './?p=applications') . '#simulees');
 
         case 'supprimer_simulees':
             $n = 0;
@@ -145,7 +145,7 @@ function action_tester(string $action): bool
                 }
             }
             flash($n ? "Classes simulées supprimées ($n), avec l’établissement " . ETABLISSEMENT_SIMULE . '.' : 'Aucune classe simulée.');
-            rediriger((string) ($_POST['retour'] ?? './?p=ateliers') . '#simulees');
+            rediriger((string) ($_POST['retour'] ?? './?p=applications') . '#simulees');
     }
     return false;
 }

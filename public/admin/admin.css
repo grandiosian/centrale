@@ -2492,3 +2492,20 @@ body.plan-apercu .zone-plan .plan-svg, body.plan-apercu .zone-plan .plan-trois {
 .apercu-version-ligne { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .apercu-version-nom { flex: 1 1 180px; max-width: 280px; }
 .apercu-version-aide { margin: 4px 0 0; font-size: .8rem; }
+
+/* Page Ateliers : « Ajouter un atelier » (FicheStudio) à côté des autres actions, et le chemin de création */
+.titre-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.titre-actions form { margin: 0; }
+.etapes-atelier { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 14px; padding: 0; list-style: none; counter-reset: etape; font-size: .86rem; }
+.etapes-atelier li { counter-increment: etape; flex: 1 1 220px; padding: 8px 10px 8px 38px; position: relative; border: 1px solid var(--bord); border-radius: 10px; background: var(--surface); }
+.etapes-atelier li::before { content: counter(etape); position: absolute; left: 10px; top: 8px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: #2b6cb0; color: #fff; font-weight: 800; font-size: .78rem; }
+
+/* Page Applications : applications de l'enseignant (FicheStudio), hors portail des élèves */
+.outils-enseignant h2 { margin: 0 0 4px; font-size: 1.05rem; }
+.outil-enseignant { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 0 0; border-top: 1px solid var(--bord); margin-top: 8px; }
+.outil-icone { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, #2b6cb0 12%, var(--surface)); color: #2b6cb0; font-size: 1.4rem; }
+.outil-icone svg { width: 26px; height: 26px; }
+.outil-texte { flex: 1 1 260px; min-width: 0; }
+.outil-texte p { margin: 2px 0 0; font-size: .84rem; }
+.outil-actions { display: flex; flex-wrap: wrap; gap: 6px; }

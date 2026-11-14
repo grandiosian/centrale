@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 function action_catalogue(string $action): bool
 {
-    $retour = './?p=ateliers&vue=catalogue';
+    $retour = './?p=ateliers&gestion=1';
     switch ($action) {
         case 'importer_ateliers':
             $app = normaliser_app((string) ($_POST['app'] ?? '*'));
@@ -98,14 +98,64 @@ function action_catalogue(string $action): bool
     return false;
 }
 
-function onglets_ateliers(string $vue, int $n): void
+/**
+ * « Ajouter un atelier » : un atelier se crée d'abord sur papier, dans FicheStudio (ou Affinity), puis se convertit pour
+ * TechnoStudio. Le bouton ouvre FicheStudio sur un nouveau document (lien #nouveau : les modèles de la charte s'ouvrent).
+ */
+function bouton_nouvel_atelier(): string
+{
+    return '<a class="btn" href="appli.php/fichestudio/#nouveau" target="_blank" rel="noopener"'
+        . ' title="Ouvre FicheStudio sur un nouveau document : l’atelier se crée d’abord sur papier, puis se convertit pour TechnoStudio">'
+        . '＋ Ajouter un atelier</a>';
+}
+
+/** Le chemin de création d'un atelier, rappelé en haut des deux onglets. */
+function aide_creation_atelier(): void
 {
     ?>
-    <nav class="onglets-vue" aria-label="Ateliers">
-        <a href="./?p=ateliers" class="<?= $vue === '' ? 'actif' : '' ?>">Applications du portail</a>
-        <a href="./?p=ateliers&vue=catalogue" class="<?= $vue === 'catalogue' ? 'actif' : '' ?>">Ateliers des applications<?= $n ? " ($n)" : '' ?></a>
-    </nav>
+    <ol class="etapes-atelier" aria-label="Créer un atelier">
+        <li><strong>Sur papier</strong> : fiches et présentation dans <a href="appli.php/fichestudio/#nouveau" target="_blank" rel="noopener">FicheStudio</a> (ou Affinity, puis ouvert dans FicheStudio).</li>
+        <li><strong>Converti pour TechnoStudio</strong> : l’atelier numérique, avec ses activités et ses compétences.</li>
+        <li><strong>Importé ici</strong> : « Importer les ateliers… », puis proposé aux classes, mis dans les parcours et suivi.</li>
+    </ol>
     <?php
+}
+
+/**
+ * Page Ateliers : les ateliers des applications, une seule page pour les mêmes données — en cartes (filtres, propositions aux
+ * classes, parcours, essai) et, dans une section dépliable, les imports et la disponibilité (périodes, classes, retraits).
+ * Les applications elles-mêmes (portail) sont dans la page Applications.
+ */
+function page_ateliers(): void
+{
+    if (isset($_GET['telecharger'], $_GET['app'])) {
+        telecharger_contenu_atelier(normaliser_app((string) $_GET['app']), (string) $_GET['telecharger']);
+    }
+    $gestion = !empty($_GET['gestion']) || ($_GET['vue'] ?? '') === 'catalogue';   // ancien lien « Ateliers des applications »
+    if (($_GET['vue'] ?? '') === 'catalogue') unset($_GET['vue']);
+    $apps = db()->query('SELECT COUNT(*) FROM ateliers')->fetchColumn();
+    entete('Ateliers');
+    barre('ateliers');
+    ?>
+    <main class="biblio large">
+        <div class="titre-section">
+            <h1>Ateliers</h1>
+            <div class="titre-actions">
+                <?= bouton_nouvel_atelier() ?>
+                <?= $apps ? bouton('importer_ateliers', 'Importer les ateliers de toutes les applications', ['app' => '*'], 'secondaire') : '' ?>
+            </div>
+        </div>
+        <?php aide_creation_atelier(); ?>
+        <?php messages(); ?>
+        <details class="carte gestion-catalogue" id="gestion"<?= $gestion ? ' open' : '' ?>>
+            <summary><strong>Imports et disponibilité</strong> <span class="discret">— <?= nombre_ateliers_catalogue() ?> ateliers importés ·
+                mise à jour depuis les applications, périodes, classes, ateliers retirés</span></summary>
+            <div id="catalogue-ateliers"><?php corps_catalogue_ateliers(); ?></div>
+        </details>
+        <?php corps_bibliotheque(); ?>
+    </main>
+    <?php
+    pied();
 }
 
 /** Nombre d'ateliers actifs au catalogue (pour l'onglet). */
@@ -130,11 +180,9 @@ function telecharger_contenu_atelier(string $app, string $atelier): never
     exit;
 }
 
-function page_catalogue_ateliers(): void
+/** Imports et disponibilité des ateliers (ex-onglet « Ateliers des applications ») : dans la section dépliable de la page Ateliers. */
+function corps_catalogue_ateliers(): void
 {
-    if (isset($_GET['telecharger'], $_GET['app'])) {
-        telecharger_contenu_atelier(normaliser_app((string) $_GET['app']), (string) $_GET['telecharger']);
-    }
     $apps = db()->query('SELECT * FROM ateliers ORDER BY ordre, nom')->fetchAll();
     $filtre = normaliser_app((string) ($_GET['app'] ?? ''));
     $tous = catalogue_ateliers();
@@ -151,23 +199,13 @@ function page_catalogue_ateliers(): void
     $niveaux = array_values(array_unique(array_filter(array_column($tous, 'niveau'))));
     usort($niveaux, fn($a, $b) => strcmp($b, $a));
 
-    entete('Ateliers des applications');
-    barre('ateliers');
     ?>
-    <main class="large" id="catalogue-ateliers">
-        <div class="titre-section">
-            <h1>Ateliers</h1>
-            <?= $apps ? bouton('importer_ateliers', 'Importer les ateliers de toutes les applications', ['app' => '*']) : '' ?>
-        </div>
-        <p class="sous">Chaque application crée et publie ses ateliers avec elle : ils marchent sans serveur. La Centrale les importe pour
-            les ranger ici, avec leurs compétences, et les utiliser dans les parcours, la bibliothèque et le suivi.
-            Procédure : <a href="../passerelle/?doc=donnees" target="_blank">données et bonnes pratiques</a> ·
+        <p class="aide">Chaque application crée et publie ses ateliers avec elle : ils marchent sans serveur. La Centrale les importe pour
+            les ranger ici, avec leurs compétences. Procédure : <a href="../passerelle/?doc=donnees" target="_blank">données et bonnes pratiques</a> ·
             <a href="../passerelle/?doc=competences" target="_blank">compétences</a>.</p>
-        <?php messages(); ?>
-        <?php onglets_ateliers('catalogue', count(array_filter($tous, fn($r) => $r['etat'] === 'actif'))); ?>
 
         <?php if (!$apps): ?>
-            <p class="vide">Aucune application sur le portail : ajoutez-en une dans l’onglet « Applications du portail ».</p>
+            <p class="vide">Aucune application sur le portail : ajoutez-en une dans <a href="./?p=applications">Applications</a>.</p>
         <?php else: ?>
         <div class="defile"><table class="table-imports">
             <thead><tr><th>Application</th><th>Ateliers</th><th>Dernier import</th><th></th></tr></thead>
@@ -260,7 +298,7 @@ function page_catalogue_ateliers(): void
                             <?php if ($r['source'] === 'fichier'): ?><br><span class="alerte" title="Il ne restera disponible sans serveur qu’une fois publié avec l’application">pas encore dans l’application</span><?php endif; ?></td>
                         <td class="actions">
                             <?php if ($ouvrir !== ''): ?><a class="btn petit secondaire" href="<?= h($ouvrir) ?>" target="_blank" rel="noopener" title="Ouvrir l’atelier dans l’application, sans connexion">Ouvrir</a><?php endif; ?>
-                            <?php if ($r['contenu'] !== ''): ?><a class="btn petit secondaire" href="./?p=ateliers&vue=catalogue&app=<?= rawurlencode($r['app']) ?>&telecharger=<?= rawurlencode($r['atelier']) ?>" title="Fichier à ajouter aux ateliers publiés par l’application">Fichier</a><?php endif; ?>
+                            <?php if ($r['contenu'] !== ''): ?><a class="btn petit secondaire" href="./?p=ateliers&gestion=1&app=<?= rawurlencode($r['app']) ?>&telecharger=<?= rawurlencode($r['atelier']) ?>" title="Fichier à ajouter aux ateliers publiés par l’application">Fichier</a><?php endif; ?>
                             <?php if ($r['etat'] !== 'actif' || $r['source'] === 'fichier'): ?>
                                 <?= bouton('supprimer_atelier_catalogue', 'Enlever', ['app' => $r['app'], 'atelier' => $r['atelier']], 'danger', 'Enlever cet atelier du catalogue ?') ?>
                             <?php endif; ?>
@@ -274,7 +312,5 @@ function page_catalogue_ateliers(): void
             <p class="vide">Pas encore d’atelier importé : cliquez sur « Importer » en face d’une application.</p>
         <?php endif; ?>
         <?php endif; ?>
-    </main>
     <?php
-    pied();
 }
