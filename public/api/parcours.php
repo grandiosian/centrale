@@ -35,7 +35,7 @@ foreach (parcours_pour_classe($eleve['classe']) as $p) {
     foreach ($p['etapes'] as $i => $et) {
         $e = $etats[$i];
         $somme += $e['taux'];
-        $d = disponibilite_activite($dispos, (string) $et['app'], (string) $et['activite']);
+        $d = disponibilite_activite($dispos, (string) $et['app'], (string) $et['activite'], false);
         $hors_periode = $d['etat'] !== 'ouvert' && $e['statut'] === 'a_faire';
         $etapes[] = [
             'ordre'    => $i,

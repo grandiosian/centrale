@@ -31,7 +31,7 @@ foreach (propositions_eleve((int) $eleve['id']) as $app => $liste) {
         $c = $catalogue[$app][$id] ?? null;
         $etat = etat_etape($id, $prog[$app] ?? [], $catalogue[$app] ?? []);
         // Atelier hors de ses périodes de disponibilité : la proposition attend (ou disparaît), sauf si l'élève a commencé
-        if (disponibilite_activite($dispos, $app, (string) $id)['etat'] !== 'ouvert' && $etat['statut'] === 'a_faire') {
+        if (disponibilite_activite($dispos, $app, (string) $id, false)['etat'] !== 'ouvert' && $etat['statut'] === 'a_faire') {
             continue;
         }
         $res[] = ['app' => $app, 'atelier' => $a['nom'], 'icone' => $a['icone'], 'url' => meilleure_adresse($a),

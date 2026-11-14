@@ -22,6 +22,7 @@ require __DIR__ . '/../../lib/simulation.php';
 require __DIR__ . '/../../lib/reperes.php';
 require __DIR__ . '/../../lib/admin_competences.php';
 require __DIR__ . '/../../lib/admin_catalogue.php';
+require __DIR__ . '/../../lib/admin_progression.php';
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
@@ -266,6 +267,7 @@ if ($action !== null) {
     action_tester($action);       // élèves test : tester à leur place
     action_competences($action);  // progression par séquence
     action_catalogue($action);    // ateliers importés depuis les applications
+    action_progression($action);  // progression des ateliers d'une classe (dates d'ouverture)
 
     switch ($action) {
         case 'deconnexion':
@@ -695,6 +697,7 @@ match ($page) {
     'parcours' => page_parcours(),
     'ateliers' => page_ateliers(),           // ateliers des applications (cartes, imports, disponibilité) : lib/admin_catalogue.php
     'applications' => page_applications(),   // applications du portail des élèves : lib/admin_suivi.php
+    'calendrier' => page_calendrier_ateliers(),   // progression des ateliers d'une classe, avec leurs dates : lib/admin_progression.php
     'passerelle' => page_passerelle(),
     'bibliotheque' => rediriger('./?' . http_build_query(['p' => 'ateliers'] + array_diff_key($_GET, ['p' => 1]))),   // ancienne page, fusionnée dans Ateliers
     'etablissements' => page_etablissements(),
@@ -1589,7 +1592,7 @@ function messages(): void
 function barre(string $actif = 'classes'): void
 {
     $liens = ['accueil' => ['./', 'Accueil'], 'classes' => ['./?p=classes', 'Classes'], 'edt' => ['./?p=edt', 'Emploi du temps'], 'etablissements' => ['./?p=etablissements', 'Établissements'],
-              'applications' => ['./?p=applications', 'Applications'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'parcours' => ['./?p=parcours', 'Parcours'], 'competences' => ['./?p=competences', 'Compétences'], 'suivi' => ['./?p=suivi', 'Suivi'],
+              'applications' => ['./?p=applications', 'Applications'], 'ateliers' => ['./?p=ateliers', 'Ateliers'], 'calendrier' => ['./?p=calendrier', 'Calendrier'], 'parcours' => ['./?p=parcours', 'Parcours'], 'competences' => ['./?p=competences', 'Compétences'], 'suivi' => ['./?p=suivi', 'Suivi'],
               'fichiers' => ['./?p=fichiers', 'Fichiers'], 'reglages' => ['./?p=reglages', 'Réglages']];
     ?>
     <header class="barre">

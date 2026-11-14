@@ -46,14 +46,90 @@ body {
     background-size: 40px 40px, 40px 40px, 8px 8px, 8px 8px;
     min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
 }
-footer.pied-portail { display: flex; justify-content: space-between; align-items: center; gap: 4px 20px; flex-wrap: wrap;
-         padding: 8px 20px; margin-top: 0; flex: none; background: var(--surface); border-top: 1px solid var(--bord); font-size: .75rem; line-height: 1.3; color: var(--doux); }
+footer.pied-portail { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px 24px; flex: none;
+         padding: 12px 22px; margin-top: 24px; background: var(--surface); border-top: 1px solid var(--bord); font-size: .76rem; line-height: 1.4; color: var(--doux); }
 footer.pied-portail strong { color: var(--encre); }
+.pied-marque { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.pied-marque img { display: block; opacity: .85; }
+.pied-rgpd { display: flex; align-items: flex-start; gap: 8px; max-width: 720px; justify-self: center; }
+.pied-rgpd svg { width: 15px; height: 15px; flex: none; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.pied-version { justify-self: end; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--bord); font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 760px) {
+  footer.pied-portail { grid-template-columns: 1fr auto; padding: 10px 14px; }
+  .pied-rgpd { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+}
 header { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
          padding: 24px 20px; min-height: 84px; background: var(--surface); border-bottom: 1px solid var(--bord); }
 .marque { font-weight: 800; font-size: 1.05rem; letter-spacing: -.01em; color: var(--encre); }
-#qui { display: flex; align-items: center; gap: 10px; font-size: .95rem; }
-#qui code { font: 600 .9rem ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; }
+/* Barre du haut commune aux applications élèves (référence : NetSim) : logo | widget de l'élève | atelier en cours | réglages */
+/* mêmes mesures que les applications : 52 px de haut, logo 28 px et nom 19 px, pilules de 34 px, atelier au milieu de la page */
+header.topbar { position: sticky; top: 0; z-index: 20; box-sizing: border-box; display: grid; grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
+  align-items: center; gap: 12px; padding: 8px 16px; min-height: 52px; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--bord); box-shadow: 0 1px 8px rgba(0, 0, 0, .04); }
+.tb-gauche { grid-column: 1; justify-self: start; display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 19px; letter-spacing: -.01em; color: var(--encre); text-decoration: none;
+  margin-right: 6px; white-space: nowrap; }
+.brand img { display: block; }
+body:not(.connecte) .brand span { display: none; }
+body.connecte .marque-bandeau { display: none; }
+.tbid { display: inline-flex; align-items: center; box-sizing: border-box; height: 34px; border: 1px solid var(--bord); border-radius: 999px; background: var(--code-fond, var(--surface)); font-size: .9rem; }
+.tbid[hidden] { display: none; }
+.tbid-moi { display: inline-flex; align-items: center; gap: 7px; padding: 0 14px 0 11px; font-weight: 600; white-space: nowrap; color: var(--texte); }
+.tbid-nom { font: 600 .86rem ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; }
+.tbid { position: relative; }
+button.tbid-moi { height: 100%; border: 0; background: none; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 600; }
+button.tbid-moi:hover, button.tbid-moi[aria-expanded="true"] { color: var(--encre); }
+.tbid-fleche { font-size: .7rem; color: var(--doux); margin-left: -2px; }
+.menu-eleve { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: min(290px, calc(100vw - 20px)); padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, .16); }
+.menu-eleve[hidden] { display: none; }
+.menu-eleve-titre { margin: 0 0 4px; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ok, #2e8b57); }
+/* identifiant et « Changer mon surnom » (rendus par le module), en version compacte */
+.menu-eleve .menu-eleve-identite { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: .78rem; color: var(--doux); }
+.menu-eleve .menu-eleve-identite code { flex-basis: 100%; font: 700 .9rem ui-monospace, Menlo, Consolas, monospace; padding: 3px 8px; border-radius: 6px;
+  background: var(--code-fond); color: var(--texte); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-eleve .menu-eleve-identite > button { padding: 0; border: 0; background: none; color: var(--encre); font-size: .8rem; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.menu-eleve .menu-eleve-identite form { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 5px; flex-basis: 100%; margin-top: 2px; }
+.menu-eleve .menu-eleve-identite form > span { font: 600 .82rem ui-monospace, Menlo, Consolas, monospace; color: var(--doux); }
+.menu-eleve .menu-eleve-identite form input { width: 100%; min-width: 0; font: 600 .85rem ui-monospace, Menlo, Consolas, monospace; padding: 4px 7px; }
+.menu-eleve .menu-eleve-identite form button { padding: 3px 10px; font-size: .78rem; border-radius: 999px; }
+.menu-eleve .menu-eleve-identite form button[type="submit"] { grid-column: 2; grid-row: 2; justify-self: start; background: var(--encre); color: var(--encre-texte); border-color: var(--encre); }
+.menu-eleve .menu-eleve-identite form button[type="button"] { grid-column: 2; grid-row: 2; justify-self: end; border: 0; background: none; color: var(--doux); text-decoration: underline; }
+.menu-eleve .menu-eleve-identite .centrale-aide { grid-column: 1 / -1; font-size: .7rem; line-height: 1.35; opacity: .8; margin: 0; }
+.menu-eleve .menu-eleve-identite .centrale-erreur { grid-column: 1 / -1; font-size: .72rem; margin: 0; }
+.menu-eleve .menu-eleve-identite .centrale-erreur:empty { display: none; }
+.menu-eleve-aide { margin: 8px 0 0; padding-top: 6px; border-top: 1px solid var(--bord); font-size: .7rem; color: var(--doux); }
+body.barre-serree .brand span { display: none; }
+body.barre-serree .brand { margin-right: 0; }
+.topbar .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex: none; }
+.tb-centre { grid-column: 2; justify-self: center; display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box; height: 34px; max-width: min(560px, 100%); min-width: 0; padding: 0 4px 0 6px;
+  border: 1px solid var(--bord); border-radius: 999px; background: var(--code-fond, var(--surface)); color: var(--texte);
+  font-weight: 600; font-size: 13px; cursor: pointer; transition: border-color .15s; }
+.tb-centre:hover { border-color: var(--encre); }
+.tb-centre[hidden] { display: none; }
+.tb-icone { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); font-size: .85rem; flex: none; }
+.tb-titre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tb-barres { display: inline-flex; gap: 2px; align-items: flex-end; flex: none; }
+.tb-barres i { width: 5px; height: 14px; border-radius: 2px; background: var(--bord); }
+.tb-barres i.encours { background: color-mix(in srgb, #2e8b57 45%, var(--bord)); }
+.tb-barres i.fait { background: #2e8b57; }
+.tb-compte { font: 600 12px ui-monospace, Menlo, Consolas, monospace; color: var(--doux); flex: none; }
+.tb-reprendre { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 12px; border-radius: 999px; background: var(--encre); color: var(--encre-texte); font-weight: 700; font-size: .85rem; flex: none; }
+.tb-droite { grid-column: 3; justify-self: end; display: inline-flex; align-items: center; gap: 6px; }
+.tb-droite[hidden] { display: none; }
+.tb-bouton { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; background: transparent; color: var(--doux); border: 1px solid transparent; font-size: .86rem; font-weight: 600; }
+.tb-bouton:hover { color: var(--encre); border-color: var(--bord); }
+@media (max-width: 760px) {
+  header.topbar { padding: 6px 10px; gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tb-gauche { gap: 6px; }
+  .brand { margin-right: 0; }
+  .tbid-txt, .brand span, .tb-barres { display: none; }
+  .tb-centre { justify-self: stretch; }
+}
+@media (max-width: 480px) {
+  .tbid-nom, .tb-compte { display: none; }
+  .tbid-moi { padding: 0 10px; }
+}
 main { flex: 1; width: 100%; max-width: 900px; margin: 0 auto; padding: 12px 16px 12px; }
 h1 { margin: 0 0 6px; font-size: 1.75rem; line-height: 1.2; letter-spacing: -.015em; }
 h2.section { font-size: 1.25rem; margin: 32px 0 12px; }
@@ -146,17 +222,30 @@ button[disabled] { opacity: .45; cursor: default; }
 .atelier-tete { display: flex; gap: 12px; align-items: center; }
 .icone { width: 46px; height: 46px; border-radius: 10px; display: grid; place-items: center; font-size: 1.6rem; flex: none; background: var(--code-fond); }
 .atelier h3 { margin: 0; font-size: 1.1rem; }
+.atelier .appli { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--doux); }
 .atelier .desc { color: var(--doux); font-size: .92rem; margin: 6px 0 0; }
 .atelier .compte { font-size: .85rem; color: var(--doux); }
 .atelier .pied { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: auto; padding-top: 10px; }
 .atelier .pied > button:last-child { margin-left: auto; }
-/* Onglets des ateliers + cartes « bientôt » */
-.onglets-ateliers { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
-.onglets-ateliers .onglet { background: var(--surface); color: var(--texte); border: 1px solid var(--bord); border-radius: 999px; padding: 7px 16px; font: inherit; font-weight: 700; cursor: pointer; }
-.onglets-ateliers .onglet small { color: var(--doux); font-weight: 600; margin-left: 2px; }
-.onglets-ateliers .onglet.actif { background: var(--encre); color: var(--encre-texte); border-color: var(--encre); }
-.onglets-ateliers .onglet.actif small { color: inherit; opacity: .85; }
-.atelier.bientot { opacity: .72; filter: grayscale(.45); }
+.atelier.bientot { opacity: .62; filter: grayscale(1); background: color-mix(in srgb, var(--bord) 18%, var(--surface)); }
+/* Mes ateliers : l'atelier en cours en avant, puis À faire, Prochainement (gris), Déjà fait (replié) */
+h2.section .nb { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--code-fond); color: var(--doux); font-size: .78rem; vertical-align: middle; }
+.atelier.courant { border: 2px solid var(--encre); box-shadow: 0 10px 30px color-mix(in srgb, var(--encre) 16%, transparent); padding: 20px 22px; }
+.atelier.courant .icone { width: 60px; height: 60px; font-size: 2rem; }
+.atelier.courant h3 { font-size: 1.35rem; }
+.courant-suite { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 12px; padding: 12px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--encre) 8%, var(--surface)); }
+.courant-etiquette { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--encre); flex-basis: 100%; }
+.courant-suite strong { font-size: 1.05rem; flex: 1 1 200px; }
+.courant-go { font-size: 1rem; padding: 10px 20px; border-radius: 999px; }
+.atelier.courant .pied > button:last-child { display: none; }   /* le grand bouton « Continuer » suffit */
+details.bloc-ateliers > summary { list-style: none; cursor: pointer; }
+details.bloc-ateliers > summary::-webkit-details-marker { display: none; }
+details.bloc-ateliers > summary h2::before { content: '▸ '; color: var(--doux); }
+details.bloc-ateliers[open] > summary h2::before { content: '▾ '; }
+details.fait .atelier { opacity: .85; }
+.bloc-ateliers { margin: 0; padding: 0; border: 0; background: none; }
+@media (max-width: 980px) { .tb-bouton .tbid-txt { display: none; } .tb-bouton { padding: 0 10px; } }
 .atelier.bientot .pied { justify-content: space-between; align-items: center; }
 .rebours-bientot { font-weight: 700; color: var(--doux); font-variant-numeric: tabular-nums; }
 .activites { list-style: none; margin: 10px 0 0; padding: 0; max-height: 320px; overflow: auto; border-top: 1px solid var(--bord); }
@@ -169,6 +258,8 @@ button[disabled] { opacity: .45; cursor: default; }
 .act .etat { font-size: .8rem; color: var(--doux); }
 .act.commence .etat { color: var(--encours); }
 .act.hors-periode { opacity: .65; }
+.act.verrou { opacity: .6; }
+.act.verrou .puce { background: none; border: 0; }
 .afaire { padding: 4px 16px; margin-bottom: 14px; }
 .afaire ol { list-style: none; margin: 0; padding: 0; }
 .afaire li { display: grid; grid-template-columns: 46px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--bord); }
@@ -229,9 +320,14 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
 </style>
 </head>
 <body>
-<header>
+<header class="topbar">
+    <div class="tb-gauche">
+      <a class="brand" href="./" title="Mes ateliers"><img src="logo.svg" alt="" width="28" height="28"><span>TechnoVersailles</span></a>
+      <div class="tbid" id="qui" hidden></div>
+    </div>
     <span class="marque-bandeau">TechnoVersailles</span>
-    <div id="qui" hidden></div>
+    <button type="button" class="tb-centre" id="en-cours" hidden></button>
+    <div class="tb-droite" id="tb-droite" hidden></div>
 </header>
 
 <main>
@@ -284,23 +380,21 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     <section id="ecran-eleve" hidden>
         <h1>Mes ateliers</h1>
         <p class="sous">Choisis un atelier. Ton travail y est enregistré automatiquement ; reviens ici avec « ← Mes ateliers ».</p>
-        <div class="carte identite" id="identite"></div>
+        <div id="bloc-courant" hidden></div>
         <div id="bloc-afaire" hidden>
-            <h2 class="section">À faire</h2>
+            <h2 class="section">Demandé par ton professeur</h2>
             <div class="carte afaire"><ol id="liste-afaire"></ol></div>
         </div>
         <div id="bloc-parcours" hidden>
             <h2 class="section">Mes parcours</h2>
             <div id="liste-parcours"></div>
         </div>
-        <h2 class="section" id="titre-ateliers" hidden>Tous les ateliers</h2>
-        <nav class="onglets-ateliers" id="onglets-ateliers" hidden aria-label="Filtrer les ateliers"></nav>
-        <div class="grille" id="liste-ateliers"></div>
+        <div id="liste-ateliers"></div>
     </section>
 </main>
 
 <footer class="pied-portail">
-    <span><strong>Technologie</strong> · site éducatif</span>
+    <span class="pied-marque"><img src="logo.svg" alt="" width="18" height="18"><span><strong>Technologie</strong> · site éducatif</span></span>
     <?php
     // version de la Centrale, lue dans lib/commun.php (sans charger la bibliothèque)
     $version_centrale = '';
@@ -308,9 +402,10 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
         $version_centrale = $m[1];
     }
     ?>
-    <?php if ($version_centrale !== ''): ?><span>Version <?= htmlspecialchars($version_centrale) ?></span><?php endif; ?>
-    <span>Respect du RGPD : aucune donnée nominative n’est envoyée au serveur, les noms restent sur le poste de l’élève et de l’enseignant.</span>
-    <span>Accès réservé aux élèves et enseignants de l’établissement.</span>
+    <span class="pied-rgpd"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <span><strong>RGPD</strong> : aucune donnée nominative n’est envoyée au serveur — les noms restent sur le poste de l’élève et de l’enseignant.
+        Accès réservé aux élèves et enseignants de l’établissement.</span></span>
+    <?php if ($version_centrale !== ''): ?><span class="pied-version">Version <?= htmlspecialchars($version_centrale) ?></span><?php endif; ?>
 </footer>
 <div id="chargement" hidden>Ouverture de l'atelier…</div>
 
@@ -353,14 +448,35 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
   function demarrer(infos) {
     $('ecran-connexion').hidden = true;
     $('ecran-eleve').hidden = false;
-    $('qui').hidden = false;
-    $('qui').replaceChildren(el('code', {}, Centrale.identifiant() || `${infos.classe} · ${infos.eleve}`), ' ');
-    Centrale.afficherIdentifiant($('identite'), {
-      onChange: (id) => { $('qui').firstChild.textContent = id; },
+    document.body.classList.add('connecte');
+    // Widget de l'élève (comme dans NetSim, TechnoStudio, Établi 3D) : son identifiant
+    const nomEleve = el('span', { class: 'tbid-nom' }, Centrale.identifiant() || `${infos.classe} · ${infos.eleve}`);
+    const moi = el('button', { type: 'button', class: 'tbid-moi', 'aria-haspopup': 'true', 'aria-expanded': 'false',
+      title: 'Ton compte : ton identifiant, changer ton surnom' }, iconeEleve(), nomEleve, el('span', { class: 'tbid-fleche', 'aria-hidden': 'true' }, '▾'));
+    // Menu du widget : l'identifiant et « Changer mon surnom » (reprendre : c'est le widget du centre)
+    const identite = el('div', { class: 'menu-eleve-identite' });
+    const menu = el('div', { class: 'menu-eleve', role: 'dialog', 'aria-label': 'Ton compte' },
+      el('p', { class: 'menu-eleve-titre' }, 'Connecté'), identite,
+      el('p', { class: 'menu-eleve-aide' }, 'Ton travail est enregistré automatiquement sur le serveur de la classe.'));
+    menu.hidden = true;
+    const ouvrirMenu = (oui) => { menu.hidden = !oui; moi.setAttribute('aria-expanded', String(oui)); };
+    moi.onclick = (ev) => { ev.stopPropagation(); ouvrirMenu(menu.hidden); };
+    document.addEventListener('click', (ev) => {   // chemin du clic : un bouton du menu retiré au clic (« Changer mon surnom ») compte encore
+      const chemin = ev.composedPath();
+      if (!menu.hidden && !chemin.includes(menu) && !chemin.includes(moi)) ouvrirMenu(false);
     });
-    const sortir = el('button', { class: 'petit secondaire' }, 'Se déconnecter');
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !menu.hidden) { ouvrirMenu(false); moi.focus(); } });
+    $('qui').hidden = false;
+    $('qui').replaceChildren(moi, menu);
+    Centrale.afficherIdentifiant(identite, {
+      libelle: 'Ton identifiant',
+      onChange: (id) => { nomEleve.textContent = id; ajusterBarre(); },
+    });
+    const sortir = el('button', { type: 'button', class: 'tb-bouton', title: 'Se déconnecter de la Centrale' },
+      el('span', { 'aria-hidden': 'true' }, '⎋'), el('span', { class: 'tbid-txt' }, 'Se déconnecter'));
     sortir.onclick = () => { Centrale.deconnexion(); location.reload(); };
-    $('qui').append(sortir);
+    $('tb-droite').hidden = false;
+    $('tb-droite').replaceChildren(sortir);
     rafraichir();
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Centrale.connecte()) rafraichir(); });
   }
@@ -372,7 +488,11 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     return e;
   }
 
-  function ouvrir(url, activite, parcours, etape) {
+  /* Ce que l'élève a ouvert en dernier depuis ce portail : le bouton « ← Reprendre » du widget le rouvre. */
+  // (déclarations de fonctions : utilisables dès le démarrage, avant cette ligne)
+  function lireDernier() { try { return JSON.parse(localStorage.getItem('portail-dernier') || 'null'); } catch (e) { return null; } }
+  function ouvrir(url, activite, parcours, etape, titre) {
+    try { localStorage.setItem('portail-dernier', JSON.stringify({ url, activite: activite || '', parcours: parcours || 0, etape, titre: titre || '' })); } catch (e) { /* rien */ }
     $('chargement').hidden = false;
     Centrale.ouvrir(url, { activite: activite || undefined, retour: PORTAIL, parcours: parcours || undefined, etape: etape });
   }
@@ -386,10 +506,110 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
       $('liste-ateliers').replaceChildren(el('p', { class: 'vide' }, e.message));
       return;
     }
+    ateliers = parAtelier(ateliers);
     afficherAFaire(propositions);
+    afficherEnCours(parcours, ateliers);
+    ajusterBarre();
     afficherParcours(parcours, ateliers);
     afficherAteliers(ateliers);
-    $('titre-ateliers').hidden = !propositions.length && !parcours.length;
+  }
+
+  /**
+   * Classe avec un calendrier : les activités portent leur atelier → une carte par atelier (et non par application),
+   * pour qu'un atelier fait aille dans « Déjà fait » et le suivant dans « Prochainement », même dans la même application.
+   */
+  function parAtelier(ateliers) {
+    const res = [];
+    ateliers.forEach((a) => {
+      if (!(a.activites || []).some((x) => x.atelier)) { res.push(a); return; }
+      const groupes = new Map();
+      a.activites.forEach((x) => {
+        const k = x.atelier || '';
+        if (!groupes.has(k)) groupes.set(k, []);
+        groupes.get(k).push(x);
+      });
+      groupes.forEach((liste, k) => {
+        const compte = liste.filter((x) => x.disponible !== false || x.verrou);
+        const faites = compte.filter((x) => x.statut === 'termine').length;
+        const avant = liste.every((x) => x.disponible === false && !x.verrou);
+        const dates = liste.map((x) => x.ouvre_le).filter(Boolean).sort();
+        res.push(Object.assign({}, a, {
+          cle: a.app + '|' + k, nom: (liste[0].atelier_titre || a.nom), appli: a.nom, activites: liste,
+          total: compte.length, terminees: faites, taux: compte.length ? faites / compte.length : 0,
+          disponible: !(avant && dates.length), disponible_le: avant && dates.length ? Math.floor(new Date(dates[0] + 'T00:00').getTime() / 1000) : null,
+          description: '',
+        }));
+      });
+    });
+    return res;
+  }
+
+  /* ---------- Barre du haut, au centre : le parcours en cours (ou la dernière activité ouverte) ---------- */
+  function iconeEleve() {
+    const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('class', 'i'); svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>';
+    return svg;
+  }
+  /**
+   * L'atelier courant : celui de la dernière activité ouverte depuis le portail (s'il n'est pas fini), sinon le plus avancé
+   * des ateliers commencés, sinon le premier à faire. null s'il n'y a rien d'ouvert à faire.
+   */
+  function atelierCourant(ateliers) {
+    const ouverts = ateliers.filter((a) => ['encours', 'afaire'].includes(statutAtelier(a)));
+    const dernier = lireDernier();
+    const meme = dernier && (ouverts.find((a) => dernier.activite && (a.activites || []).some((x) => x.id === dernier.activite && x.disponible !== false))
+      || ouverts.find((a) => a.url && dernier.url && a.url.split('#')[0] === String(dernier.url).split('#')[0]));
+    if (meme) return meme;
+    const commences = ouverts.filter((a) => statutAtelier(a) === 'encours').sort((u, v) => (v.taux || 0) - (u.taux || 0));
+    return commences[0] || ouverts[0] || null;
+  }
+  /** Prochaine activité d'un atelier : la première pas encore terminée et ouverte (null s'il n'y en a pas). */
+  function prochaineActivite(a) {
+    return (a.activites || []).find((x) => x.statut === 'commence' && x.disponible !== false)
+      || (a.activites || []).find((x) => x.statut !== 'termine' && x.disponible !== false) || null;
+  }
+  /** Reprendre l'atelier courant : sa prochaine activité, ou l'atelier lui-même. */
+  function reprendreAtelier(a) {
+    // carte d'un atelier (calendrier) tout terminé : « Revoir » rouvre sa première étape, pas toute l'application
+    const x = prochaineActivite(a) || (a.appli ? (a.activites || []).find((y) => y.disponible !== false) : null);
+    if (x) ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom);
+    else ouvrir(a.url, undefined, undefined, undefined, a.nom);
+  }
+
+  /* ---------- Barre du haut trop étroite : le logo seul, sans « TechnoVersailles » ---------- */
+  function ajusterBarre() {
+    const h = document.querySelector('header.topbar'), t = document.querySelector('.tb-titre');
+    if (!h) return;
+    document.body.classList.remove('barre-serree');
+    const deborde = h.scrollWidth > h.clientWidth + 1 || (t && t.offsetParent && t.scrollWidth > t.clientWidth + 1);
+    document.body.classList.toggle('barre-serree', deborde);
+  }
+  window.addEventListener('resize', () => { clearTimeout(ajusterBarre.t); ajusterBarre.t = setTimeout(ajusterBarre, 80); });
+
+  /* ---------- Barre du haut, au centre : l'atelier en cours — un clic le reprend ---------- */
+  function afficherEnCours(parcours, ateliers) {
+    const w = $('en-cours');
+    w.replaceChildren();
+    const a = atelierCourant(ateliers || []);
+    const dernier = lireDernier();
+    if (a) {
+      const x = prochaineActivite(a), n = a.total || 0, faites = a.terminees || 0;
+      const barres = n && n <= 12 ? el('span', { class: 'tb-barres', 'aria-hidden': 'true' },
+        ...(a.activites || []).map((y) => el('i', { class: y.statut === 'termine' ? 'fait' : y.statut === 'commence' ? 'encours' : '' }))) : null;
+      w.append(...[el('span', { class: 'tb-icone' }, a.icone || '🧩'), el('strong', { class: 'tb-titre' }, a.nom),
+        barres, n ? el('span', { class: 'tb-compte' }, faites + '/' + n) : null,
+        el('span', { class: 'tb-reprendre' }, el('span', { class: 'tbid-txt' }, faites ? 'Continuer' : 'Commencer'), ' →')].filter(Boolean));
+      w.title = (faites ? 'Continuer ' : 'Commencer ') + a.nom + (x ? ' : ' + (x.titre || x.id) : '');
+      w.onclick = () => reprendreAtelier(a);
+      w.hidden = false;
+    } else if (dernier && dernier.titre) {
+      w.append(el('span', { class: 'tb-icone' }, '🧩'), el('strong', { class: 'tb-titre' }, dernier.titre),
+        el('span', { class: 'tb-reprendre' }, el('span', { class: 'tbid-txt' }, 'Reprendre'), ' →'));
+      w.title = 'Reprendre : ' + dernier.titre;
+      w.onclick = () => ouvrir(dernier.url, dernier.activite, dernier.parcours, dernier.etape, dernier.titre);
+      w.hidden = false;
+    } else w.hidden = true;
   }
 
   /* ---------- À faire : activités proposées par le professeur ---------- */
@@ -404,7 +624,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     $('liste-afaire').replaceChildren(...tri.map((p) => {
       const fini = p.statut === 'termine';
       const b = el('button', { class: fini ? 'secondaire' : '' }, fini ? 'Revoir' : p.statut === 'commence' ? 'Continuer' : 'Commencer');
-      b.onclick = () => ouvrir(p.url, p.activite);
+      b.onclick = () => ouvrir(p.url, p.activite, undefined, undefined, p.titre || p.activite || '');
       const retard = !fini && p.pour_le && p.pour_le < aujourdhui;
       return el('li', { class: p.statut },
         el('div', { class: 'icone' }, p.icone || '🧩'),
@@ -419,7 +639,6 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
   }
 
   /* ---------- Ateliers (onglets : Complété · À faire · En cours · Bientôt) ---------- */
-  const ONGLETS_ATELIERS = [['complete', 'Complété'], ['afaire', 'À faire'], ['encours', 'En cours'], ['bientot', 'Bientôt']];
   let minuterieBientot = null;
 
   function statutAtelier(a) {
@@ -453,7 +672,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     if (statut === 'bientot') {
       const node = el('div', { class: 'carte atelier bientot' },
         el('div', { class: 'atelier-tete' }, el('div', { class: 'icone' }, a.icone || '🧩'),
-          el('div', {}, el('h3', {}, a.nom), el('div', { class: 'compte' }, 'Pas encore ouvert'))),
+          el('div', {}, a.appli ? el('div', { class: 'appli' }, a.appli) : null, el('h3', {}, a.nom), el('div', { class: 'compte' }, 'Pas encore ouvert'))),
         a.description ? el('p', { class: 'desc' }, a.description) : null,
         el('div', { class: 'pied' },
           el('span', { class: 'rebours-bientot', 'data-ts': String(a.disponible_le || 0) }, '…'),
@@ -463,30 +682,37 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     const pct = Math.round(a.taux * 100);
     const libelle = a.terminees === a.total && a.total ? 'Revoir' : pct > 0 ? 'Continuer' : 'Ouvrir';
     const bouton = el('button', {}, libelle);
-    bouton.onclick = () => ouvrir(a.url);
-    const liste = el('ul', { class: 'activites', 'data-app': a.app });
-    liste.hidden = !ouverts.has(a.app);
+    // progression de la classe (étapes une à une) : le bouton ouvre la prochaine étape, pas toute l'application
+    const pasAPas = (a.activites || []).some((x) => x.verrou);
+    bouton.onclick = () => (pasAPas || a.appli ? reprendreAtelier(a) : ouvrir(a.url, undefined, undefined, undefined, a.nom));
+    const liste = el('ul', { class: 'activites', 'data-app': a.cle || a.app });
+    liste.hidden = !ouverts.has(a.cle || a.app);
     let groupe = null;
     a.activites.forEach((x) => {
       if (x.groupe && x.groupe !== groupe) { groupe = x.groupe; liste.append(el('li', { class: 'groupe' }, groupe)); }
       // Périodes de disponibilité de l'atelier : pas encore ouvert (date) ou fermé
+      // étape verrouillée (progression de la classe) : elle s'ouvre quand la précédente est terminée
       const ferme = x.disponible === false;
-      const b = el('button', { class: 'petit secondaire' }, ferme ? (x.ouvre_le ? 'Bientôt' : 'Fermé')
+      const b = el('button', { class: 'petit secondaire' }, x.verrou ? '🔒' : ferme ? (x.ouvre_le ? 'Bientôt' : 'Fermé')
         : x.statut === 'termine' ? 'Revoir' : x.statut === 'commence' ? 'Continuer' : 'Ouvrir');
-      if (ferme) b.disabled = true; else b.onclick = () => ouvrir(a.url, x.id);
-      const etat = ferme ? (x.ouvre_le ? 'S’ouvre le ' + dateCourte(x.ouvre_le) : 'Fermé par ton professeur')
+      if (ferme) { b.disabled = true; if (x.verrou) b.title = 'Termine d’abord « ' + (x.apres || 'l’étape précédente') + ' »'; }
+      else b.onclick = () => ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom);
+      const etat = x.verrou ? 'S’ouvre quand tu as terminé « ' + (x.apres || 'l’étape précédente') + ' »'
+        : ferme ? (x.ouvre_le ? 'S’ouvre le ' + dateCourte(x.ouvre_le) : 'Fermé par ton professeur')
         : (x.statut === 'termine' ? 'Terminé' : x.statut === 'commence' ? 'En cours' + (x.texte ? ' · ' + x.texte : '') : 'À faire')
           + (x.jusqu_au ? ' · ouvert jusqu’au ' + dateCourte(x.jusqu_au) : '');
-      liste.append(el('li', { class: 'act ' + x.statut + (ferme ? ' hors-periode' : '') },
+      liste.append(el('li', { class: 'act ' + x.statut + (x.verrou ? ' verrou' : ferme ? ' hors-periode' : '') },
         el('span', { class: 'puce' }, ferme ? '🔒' : x.statut === 'termine' ? '✓' : ''),
         el('div', {}, el('div', {}, x.titre), el('div', { class: 'etat' }, etat)),
         b));
     });
-    const voir = el('button', { class: 'lien' }, liste.hidden ? `Voir les activités (${a.total})` : 'Masquer les activités');
-    voir.onclick = () => { liste.hidden = !liste.hidden; voir.textContent = liste.hidden ? `Voir les activités (${a.total})` : 'Masquer les activités'; };
+    const mot = a.appli ? 'les étapes' : 'les activités';
+    const voir = el('button', { class: 'lien' }, liste.hidden ? `Voir ${mot} (${a.total})` : `Masquer ${mot}`);
+    voir.onclick = () => { liste.hidden = !liste.hidden; voir.textContent = liste.hidden ? `Voir ${mot} (${a.total})` : `Masquer ${mot}`; };
     const node = el('div', { class: 'carte atelier' },
       el('div', { class: 'atelier-tete' }, el('div', { class: 'icone' }, a.icone || '🧩'),
-        el('div', {}, el('h3', {}, a.nom), a.total ? el('div', { class: 'compte' }, `${a.terminees}/${a.total} ${a.total > 1 ? 'activités terminées' : 'activité terminée'}`) : null)),
+        el('div', {}, a.appli ? el('div', { class: 'appli' }, a.appli) : null, el('h3', {}, a.nom),
+          a.total ? el('div', { class: 'compte' }, `${a.terminees}/${a.total} ${a.appli ? (a.total > 1 ? 'étapes terminées' : 'étape terminée') : a.total > 1 ? 'activités terminées' : 'activité terminée'}`) : null)),
       a.description ? el('p', { class: 'desc' }, a.description) : null,
       a.total ? el('div', { class: 'barre-prog' }, el('i', { style: `width:${pct}%` })) : null,
       a.total ? liste : null,
@@ -494,37 +720,54 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     return { statut, node };
   }
 
+  /**
+   * Mes ateliers : l'atelier courant mis en avant (en haut de la page), puis À faire (commencés d'abord), Prochainement
+   * (en gris, avec le compte à rebours) et Déjà fait (replié).
+   */
   function afficherAteliers(ateliers) {
-    const grille = $('liste-ateliers');
-    const barre = $('onglets-ateliers');
+    const zone = $('liste-ateliers'), haut = $('bloc-courant');
     if (!ateliers.length) {
-      barre.hidden = true;
-      grille.replaceChildren(el('div', { class: 'carte' }, el('p', { class: 'vide', style: 'margin:0' },
+      haut.hidden = true;
+      zone.replaceChildren(el('h2', { class: 'section' }, 'Mes ateliers'), el('div', { class: 'carte' }, el('p', { class: 'vide', style: 'margin:0' },
         "Ton professeur n'a pas encore ouvert d'atelier pour ta classe.")));
       return;
     }
-    const ouverts = new Set([...grille.querySelectorAll('.activites:not([hidden])')].map((x) => x.dataset.app));
-    const cartes = ateliers.map((a) => carteAtelier(a, ouverts));
-    const comptes = {};
-    cartes.forEach((c) => { comptes[c.statut] = (comptes[c.statut] || 0) + 1; });
-    const dispo = ONGLETS_ATELIERS.filter(([k]) => comptes[k]);
-    const actif = (barre.dataset.actif && comptes[barre.dataset.actif]) ? barre.dataset.actif
-      : (['afaire', 'encours', 'bientot', 'complete'].find((k) => comptes[k]) || 'afaire');
-    grille.replaceChildren(...cartes.map((c) => c.node));
-    function filtrer(tab) {
-      cartes.forEach((c) => { c.node.hidden = c.statut !== tab; });
-      barre.querySelectorAll('.onglet').forEach((x) => x.classList.toggle('actif', x.dataset.tab === tab));
-      barre.dataset.actif = tab;
-      lancerReboursBientot();
-    }
-    barre.hidden = dispo.length < 2;   // un seul groupe : pas d'onglets
-    barre.replaceChildren(...dispo.map(([k, lib]) => {
-      const b = el('button', { class: 'onglet' + (k === actif ? ' actif' : ''), 'data-tab': k, type: 'button' },
-        lib, ' ', el('small', {}, String(comptes[k])));
-      b.onclick = () => filtrer(k);
-      return b;
-    }));
-    filtrer(actif);
+    const ouverts = new Set([...document.querySelectorAll('.activites:not([hidden])')].map((x) => x.dataset.app));
+    const courant = atelierCourant(ateliers);
+    // l'atelier courant, en grand
+    if (courant) {
+      const c = carteAtelier(courant, ouverts).node, x = prochaineActivite(courant);
+      c.classList.add('courant');
+      const suite = el('div', { class: 'courant-suite' },
+        el('span', { class: 'courant-etiquette' }, statutAtelier(courant) === 'encours' ? 'Tu en es là' : 'Pour commencer'),
+        el('strong', {}, x ? (x.titre || x.id) : 'Toutes les activités'));
+      const go = el('button', { class: 'courant-go' }, (courant.terminees ? 'Continuer' : 'Commencer') + ' →');
+      go.onclick = () => reprendreAtelier(courant);
+      suite.append(go);
+      c.querySelector('.atelier-tete').after(suite);
+      haut.replaceChildren(el('h2', { class: 'section' }, 'Mon atelier en cours'), c);
+      haut.hidden = false;
+    } else haut.hidden = true;
+    // les autres, rangés
+    const reste = ateliers.filter((a) => a !== courant);
+    const groupes = [
+      ['afaire', 'À faire', reste.filter((a) => ['encours', 'afaire'].includes(statutAtelier(a)))
+        .sort((u, v) => (statutAtelier(u) === 'encours' ? 0 : 1) - (statutAtelier(v) === 'encours' ? 0 : 1) || (v.taux || 0) - (u.taux || 0))],
+      ['bientot', 'Prochainement', reste.filter((a) => statutAtelier(a) === 'bientot')
+        .sort((u, v) => (u.disponible_le || 0) - (v.disponible_le || 0))],
+      ['complete', 'Déjà fait', reste.filter((a) => statutAtelier(a) === 'complete')],
+    ];
+    const blocs = groupes.filter((g) => g[2].length).map(([k, titre, liste]) => {
+      const grille = el('div', { class: 'grille' }, ...liste.map((a) => carteAtelier(a, ouverts).node));
+      const tete = el('h2', { class: 'section' }, titre, ' ', el('small', { class: 'nb' }, String(liste.length)));
+      if (k === 'complete') {   // déjà fait : replié, pour laisser la place à ce qui reste à faire
+        const d = el('details', { class: 'bloc-ateliers fait' }, el('summary', {}, tete), grille);
+        return d;
+      }
+      return el('section', { class: 'bloc-ateliers groupe-' + k }, tete, grille);
+    });
+    zone.replaceChildren(...blocs);
+    lancerReboursBientot();
   }
 
   /* ---------- Parcours (ateliers transversaux, individuels ou en équipe) ---------- */
@@ -542,7 +785,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
         const b = el('button', { class: e.statut === 'termine' ? 'secondaire' : '' },
           verrou ? 'Pas encore' : e.statut === 'termine' ? 'Revoir' : e.statut === 'commence' ? 'Continuer' : 'Commencer');
         if (verrou) b.disabled = true;
-        else if (e.url) b.onclick = () => ouvrir(e.url, e.activite, p.id, e.ordre);
+        else if (e.url) b.onclick = () => ouvrir(e.url, e.activite, p.id, e.ordre, e.titre + ' · ' + p.nom);
         else { b.disabled = true; b.title = "Pas d'adresse pour cette étape"; }
         const fichiers = (e.entrees.length || e.sorties.length) ? el('div', { class: 'fichiers-etape' },
           ...e.entrees.map((n) => el('span', { class: 'puce-fichier', title: 'Cette étape utilise ce fichier de ton dossier' }, '↘ ' + n)),

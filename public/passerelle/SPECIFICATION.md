@@ -164,6 +164,44 @@ Ce que l'application doit faire pour que cela marche bien :
 3. **Signaler la fin de l'étape** (`Centrale.progression(id, { statut: 'termine' })` ou dépôt des fichiers `produit`) : c'est ce qui ouvre l'étape suivante en mode « dans l'ordre ».
 4. **Accepter d'être rouvert sur la même page** avec une autre étape : le module recharge la page quand deux étapes de suite sont dans la même application ; `Centrale.etape()` donne alors la nouvelle étape.
 
+**Revenir en arrière : le bouton « ← » du widget de l'élève.** Les applications élèves (NetSim, TechnoStudio, Établi 3D) et le portail ont la même barre du haut : logo et menu à gauche, **widget de l'élève** (« Visiteur » ou son identifiant), l'**atelier en cours** au centre, les réglages à droite. Le widget commence par un bouton « ← » fourni par le module :
+
+```js
+Centrale.init({ app: 'netsim', boutonRetour: false });            // pas de bouton flottant « ← Mes ateliers »
+const prec = Centrale.boutonPrecedent({ classe: 'tbid-ret' });     // { bouton, maj }
+widget.prepend(prec.bouton);                                       // avant le nom de l'élève
+```
+
+- dans un parcours, à partir de la 2ᵉ étape : **« ← Étape précédente »** — enregistre tout (`avantDeQuitter`), puis rouvre l'étape précédente, dans son application (même dossier de projet) ;
+- sinon : **« ← Mes ateliers »** (retour au portail) ; caché si l'application n'a pas été ouverte depuis la Centrale ;
+- il se met à jour tout seul (connexion, retour sur l'onglet) ; `maj()` le force. Sans interface : `await Centrale.precedent()` (`{ parcours, libelle, court, titre }` ou `null`) et `await Centrale.allerPrecedent()`.
+- Le portail élève a la même barre ; son widget du centre (l'atelier en cours, « Continuer → ») sert à reprendre.
+
+**Le menu de l'élève.** Un clic sur l'identifiant de l'élève connecté ouvre le même petit menu dans toutes les applications, fourni par le module : « Connecté », classe et numéro, identifiant et « Changer mon surnom », une ligne d'aide, les liens propres à l'application, puis « Se déconnecter ». Ce clic ne doit pas changer de page.
+
+```js
+bouton.onclick = (e) => {
+  e.stopPropagation();
+  if (!Centrale.connecte()) return seConnecter();                 // visiteur : la connexion de l'application
+  if (!Centrale.menuEleve || !Centrale.menuEleve(bouton, {
+        liens: [{ texte: 'Mon compte et mes réglages…', action: () => ouvrirCompte() }],   // facultatif
+        onDeconnexion: () => majWidget(),                         // après « Se déconnecter »
+        onChange: () => majWidget(),                              // après un changement de surnom
+      })) ancienComportement();                                  // module plus ancien
+};
+```
+
+**Mesures communes de la barre du haut** (NetSim sert de référence ; chaque application garde ses couleurs et sa police) :
+
+| Élément | Règle |
+|---|---|
+| Barre | 52 px de haut, fond clair de l'application (blanc), un filet de 1 px en bas, marges de 16 px |
+| À gauche | logo 28 px et nom de l'application en 19 px gras ; si l'application a un menu (Fichier…), c'est le logo qui l'ouvre (▾) ; puis **annuler ↶ / rétablir ↷** (boutons-icônes, mêmes dessins partout, Ctrl+Z / Ctrl+Y, grisés quand il n'y a rien) ; puis le widget de l'élève |
+| Widget de l'élève | pilule de 34 px : « ← Mes ateliers » (ou « ← Étape précédente ») en gras, un trait, puis l'icône et l'identifiant en police à chasse fixe de 12 px |
+| Au centre | **seulement** l'atelier en cours, pilule de 34 px, explicite : pastille de niveau, « Atelier » + titre en gras (coupé par « … »), la feuille ou l'étape, petites barres d'avancement, « faites/total » ; placée au milieu de la page, ou au plus près si elle toucherait un côté. Les outils de la feuille (choix de la feuille, Ressources) vont dans une petite barre juste en dessous, pas dans la barre du haut |
+| À droite | les outils propres à l'application (démarche, guide…), puis les boutons-icônes thème / apparence et, tout à droite, la **roue des réglages** : son menu regroupe le niveau, l'aide et les options d'affichage. Boutons-icônes 36 × 34 px, coins de 9 px, sans fond |
+| Fenêtre étroite | on retire dans l'ordre : le nom de l'application (logo seul), le texte des outils (icône seule), le texte « Mes ateliers », les libellés puis le titre de l'atelier ; annuler / rétablir et les réglages restent toujours visibles |
+
 Le descripteur le déclare dans `centrale.parcours` :
 
 ```json

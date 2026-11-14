@@ -2509,3 +2509,41 @@ body.plan-apercu .zone-plan .plan-svg, body.plan-apercu .zone-plan .plan-trois {
 .outil-texte { flex: 1 1 260px; min-width: 0; }
 .outil-texte p { margin: 2px 0 0; font-size: .84rem; }
 .outil-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- Progression des ateliers d'une classe (?p=progression) ---------- */
+.progression-classes { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.pc-classe { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--bord); border-radius: 999px;
+  background: var(--surface); color: var(--texte); text-decoration: none; font-weight: 600; font-size: .9rem; }
+.pc-classe:hover { border-color: var(--accent); }
+.pc-classe.actif { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pc-nb { min-width: 20px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); font-size: .78rem; text-align: center; }
+.pc-classe.actif .pc-nb { background: rgba(255, 255, 255, .25); color: #fff; }
+.table-progression { margin-top: 6px; }
+.table-progression th { text-align: left; font-size: .8rem; color: var(--doux); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--bord); }
+.table-progression td { padding: 7px 8px; border-bottom: 1px solid var(--bord); vertical-align: middle; }
+.table-progression .pg-n { width: 32px; }
+.pg-num { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--code-fond); font-weight: 700; font-size: .82rem; }
+.table-progression .pg-s { width: 80px; }
+.table-progression .pg-s input { width: 64px; }
+.table-progression .pg-d { width: 190px; }
+.table-progression .pg-a { width: 120px; white-space: nowrap; text-align: right; }
+.table-progression .pg-a button { padding: 2px 8px; }
+.pg-icone { margin-right: 4px; }
+.table-progression td .discret { display: block; color: var(--doux); font-size: .8rem; }
+.pg-alerte { display: block; color: #b26a00; font-size: .78rem; font-weight: 600; }
+.pg-actions { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; margin-top: 12px; }
+.pg-calcul { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pg-calcul label { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; font-size: .9rem; }
+#form-progression.modifie .pg-actions > button:first-child { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.pg-ajout select { width: 100%; max-width: 640px; margin-bottom: 8px; }
+.pg-ajout option.autre-niveau, .pg-cibles .autre-niveau { color: var(--doux); }
+.pg-cibles { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 10px; }
+.pg-copie > label { display: block; margin-bottom: 8px; font-size: .9rem; }
+.pg-vider { margin-top: 14px; text-align: right; }
+@media (max-width: 760px) {
+  .table-progression thead { display: none; }
+  .table-progression tr { display: grid; grid-template-columns: 32px 1fr; gap: 4px 8px; padding: 8px 0; border-bottom: 1px solid var(--bord); }
+  .table-progression td { border: 0; padding: 2px 0; width: auto !important; }
+  .table-progression td:not(.pg-n) { grid-column: 2; }
+  .table-progression .pg-a { text-align: left; }
+}

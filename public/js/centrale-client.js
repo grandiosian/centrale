@@ -166,6 +166,85 @@
     return true;
   }
 
+  /* ---------- Revenir en arrière : l'étape précédente du parcours (n'importe quelle application), sinon le portail ---------- */
+
+  /**
+   * Où mène le bouton « ← » du widget de l'élève (barre du haut de chaque application) :
+   *   { parcours: true, numero, etape, parcoursId, libelle, court, titre } — l'étape précédente du parcours ouvert ;
+   *   { parcours: false, libelle, court, titre } — le portail (« Mes ateliers ») ;
+   *   null — application ouverte hors de la Centrale (pas d'adresse de retour) : pas de bouton.
+   */
+  async function precedent() {
+    var c = contexteAtelier();
+    if (c && (c.etape || 0) > 0 && connecte()) {
+      try {
+        var d = await etape();
+        var e = d && d.etapes[d.numero - 1];
+        if (e && e.url) {
+          return { parcours: true, numero: d.numero - 1, etape: e, parcoursId: d.parcours.id,
+                   libelle: 'Étape ' + d.numero + ' : ' + e.titre, court: 'Étape précédente',
+                   titre: 'Revenir à l’étape ' + d.numero + ' du parcours : ' + e.titre + ' (ton travail est enregistré)' };
+        }
+      } catch (err) { /* hors ligne : le portail */ }
+    }
+    if (!adresseRetour()) return null;
+    return { parcours: false, libelle: 'Mes ateliers', court: 'Mes ateliers', titre: 'Revenir à tous tes ateliers (ton travail est enregistré)' };
+  }
+
+  /** Va à l'étape précédente (après avoir tout enregistré), ou au portail. false s'il n'y a nulle part où revenir. */
+  async function allerPrecedent() {
+    var p = await precedent();
+    if (!p) return false;
+    if (!p.parcours) return retour();
+    await avantDeQuitter();
+    toutEnvoyer();
+    await viderFileProgression();
+    var e = p.etape;
+    var cible = lien(e.url, { activite: e.activite || undefined, parcours: p.parcoursId, etape: p.numero });
+    var sansHash = function (u) { return u.replace(/#.*$/, ''); };
+    var memePage = sansHash(new URL(cible, location.href).href) === sansHash(location.href);
+    location.href = cible;
+    if (memePage) location.reload();   // même application : le changement de # ne recharge pas la page
+    return true;
+  }
+
+  /**
+   * Bouton « ← » prêt à poser dans le widget de l'élève (barre du haut) : « ← Étape précédente » dans un parcours,
+   * « ← Mes ateliers » sinon, caché hors de la Centrale. Se met à jour tout seul (connexion, retour sur l'onglet).
+   *   options.classe : classe CSS de l'application (défaut « centrale-precedent ») ; options.texte : false pour la flèche seule.
+   * Renvoie { bouton, maj }. L'application le place où elle veut (en général avant le nom de l'élève).
+   */
+  function boutonPrecedent(options) {
+    options = options || {};
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = options.classe || 'centrale-precedent';
+    b.hidden = true;
+    b.innerHTML = '<span aria-hidden="true">←</span>' + (options.texte === false ? '' : '<span class="centrale-precedent-txt"></span>');
+    b.addEventListener('click', async function (ev) {
+      ev.stopPropagation();
+      b.disabled = true;
+      var parti = await allerPrecedent().catch(function () { return false; });
+      if (!parti) b.disabled = false;
+    });
+    var enCours = 0;
+    async function maj() {
+      var n = ++enCours, p = await precedent().catch(function () { return null; });
+      if (n !== enCours) return;
+      b.hidden = !p;
+      if (!p) return;
+      var t = b.querySelector('.centrale-precedent-txt');
+      if (t) t.textContent = p.court;
+      b.title = p.titre;
+      b.setAttribute('aria-label', p.parcours ? p.libelle : 'Mes ateliers');
+      b.dataset.cible = p.parcours ? 'etape' : 'portail';
+    }
+    ecouteursEtat.push(function () { maj(); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') maj(); });
+    maj();
+    return { bouton: b, maj: maj };
+  }
+
   /**
    * Étape suivante verrouillée seulement parce que l'étape en cours n'est pas finie (mode « dans l'ordre »),
    * alors que l'application dépose ses fichiers en partant (avantDeQuitter) et que l'étape attend des fichiers :
@@ -1124,6 +1203,130 @@
     dessiner();
   }
 
+  /* ---------- Menu de l'élève (clic sur son identifiant dans la barre du haut) ---------- */
+
+  var STYLE_MENU = [
+    '.centrale-menu-eleve{position:fixed;z-index:2147483000;width:min(290px,calc(100vw - 20px));box-sizing:border-box;padding:10px 12px;',
+    'background:#fff;color:#1c2333;border:1px solid #d5dbe8;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.16);',
+    'font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:left}',
+    '.centrale-menu-eleve[hidden]{display:none}',
+    '.centrale-menu-eleve .cme-titre{margin:0 0 4px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#2e8b57}',
+    '.centrale-menu-eleve .cme-classe{margin:0 0 6px;font-size:.78rem;opacity:.7}',
+    '.centrale-menu-eleve .centrale-identite{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:.78rem;opacity:1}',
+    '.centrale-menu-eleve .centrale-identite code{flex-basis:100%;box-sizing:border-box;font:700 .9rem ui-monospace,Menlo,Consolas,monospace;padding:3px 8px;border-radius:6px;',
+    'background:rgba(127,127,127,.14);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.centrale-menu-eleve .centrale-identite>button{padding:0;border:0;background:none;color:#1f5f8b;font-size:.8rem;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}',
+    '.centrale-menu-eleve .centrale-identite form{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:5px;flex-basis:100%;margin-top:2px}',
+    '.centrale-menu-eleve .centrale-identite form>span{font:600 .82rem ui-monospace,Menlo,Consolas,monospace;opacity:.7}',
+    '.centrale-menu-eleve .centrale-identite form input{width:100%;min-width:0;box-sizing:border-box;font:600 .85rem ui-monospace,Menlo,Consolas,monospace;padding:4px 7px}',
+    '.centrale-menu-eleve .centrale-identite form button{font-size:.78rem;padding:3px 10px;border-radius:999px;cursor:pointer}',
+    '.centrale-menu-eleve .centrale-identite form button[type=submit]{grid-column:2;grid-row:2;justify-self:start;background:#1f5f8b;border:1px solid #1f5f8b;color:#fff}',
+    '.centrale-menu-eleve .centrale-identite form button[type=button]{grid-column:2;grid-row:2;justify-self:end;border:0;background:none;color:inherit;opacity:.7;text-decoration:underline}',
+    '.centrale-menu-eleve .centrale-identite .centrale-aide{grid-column:1/-1;font-size:.7rem;margin:0;opacity:.8}',
+    '.centrale-menu-eleve .centrale-identite .centrale-erreur{grid-column:1/-1;font-size:.72rem;margin:0}',
+    '.centrale-menu-eleve .centrale-identite .centrale-erreur:empty{display:none}',
+    '.centrale-menu-eleve .cme-aide{margin:8px 0 0;padding-top:6px;border-top:1px solid rgba(127,127,127,.25);font-size:.7rem;opacity:.75}',
+    '.centrale-menu-eleve .cme-actions{display:flex;flex-direction:column;gap:2px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(127,127,127,.25)}',
+    '.centrale-menu-eleve .cme-actions button{display:block;width:100%;text-align:left;padding:6px 8px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;font-size:.86rem;cursor:pointer}',
+    '.centrale-menu-eleve .cme-actions button:hover,.centrale-menu-eleve .cme-actions button:focus-visible{background:rgba(127,127,127,.14)}',
+    '.centrale-menu-eleve .cme-actions .cme-sortir{color:#b3261e}',
+    ':root[data-theme=dark] .centrale-menu-eleve,.centrale-menu-eleve.sombre{background:#2a2e37;color:#e8ebf2;border-color:#3a3f4b}',
+    ':root[data-theme=dark] .centrale-menu-eleve .centrale-identite>button,.centrale-menu-eleve.sombre .centrale-identite>button{color:#8cb8e6}',
+    '@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .centrale-menu-eleve:not(.clair){background:#2a2e37;color:#e8ebf2;border-color:#3a3f4b}',
+    ':root:not([data-theme=light]) .centrale-menu-eleve:not(.clair) .centrale-identite>button{color:#8cb8e6}}',
+  ].join('');
+
+  var menuOuvert = null;
+  function fermerMenuEleve() {
+    if (!menuOuvert) return;
+    var m = menuOuvert; menuOuvert = null;
+    m.el.remove();
+    document.removeEventListener('pointerdown', m.dehors, true);
+    document.removeEventListener('keydown', m.echap, true);
+    global.removeEventListener('resize', m.placer);
+    if (m.ancre.setAttribute) m.ancre.setAttribute('aria-expanded', 'false');
+  }
+
+  /**
+   * Menu de l'élève connecté, ouvert sous `ancre` (son identifiant dans la barre du haut) ; un 2e appel le ferme.
+   * Le même dans toutes les applications : « Connecté », classe et numéro, identifiant et « Changer mon surnom »,
+   * une ligne d'aide, puis les liens propres à l'application et « Se déconnecter ».
+   * options : { liens: [{ texte, action }], deconnexion: true, onDeconnexion(), onChange(identifiant), theme: 'clair'|'sombre' }
+   * Sans connexion, ne fait rien et renvoie false (l'application propose alors sa connexion).
+   */
+  function menuEleve(ancre, options) {
+    options = options || {};
+    if (menuOuvert) { var meme = menuOuvert.ancre === ancre; fermerMenuEleve(); if (meme) return true; }
+    var s = session();
+    if (!s) return false;
+    ajouterStyle();
+    if (!document.getElementById('centrale-style-menu')) {
+      var st = document.createElement('style');
+      st.id = 'centrale-style-menu';
+      st.textContent = STYLE_MENU;
+      document.head.appendChild(st);
+    }
+    var m = document.createElement('div');
+    m.className = 'centrale-menu-eleve' + (options.theme === 'sombre' ? ' sombre' : options.theme === 'clair' ? ' clair' : '');
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-label', 'Mon compte');
+    var titre = document.createElement('p');
+    titre.className = 'cme-titre';
+    titre.textContent = 'Connecté';
+    m.appendChild(titre);
+    if (s.classe) {
+      var cl = document.createElement('p');
+      cl.className = 'cme-classe';
+      cl.textContent = 'Classe ' + s.classe + (s.eleve ? ' · élève ' + s.eleve : '');
+      m.appendChild(cl);
+    }
+    var id = document.createElement('div');
+    m.appendChild(id);
+    afficherIdentifiant(id, { libelle: 'Ton identifiant', onChange: options.onChange });
+    var aide = document.createElement('p');
+    aide.className = 'cme-aide';
+    aide.textContent = 'Ton travail est enregistré automatiquement sur le serveur de la classe.';
+    m.appendChild(aide);
+    var liens = (options.liens || []).slice();
+    if (options.deconnexion !== false) {
+      liens.push({ texte: 'Se déconnecter', classe: 'cme-sortir', action: function () {
+        deconnexion();
+        if (options.onDeconnexion) options.onDeconnexion();
+      } });
+    }
+    if (liens.length) {
+      var act = document.createElement('div');
+      act.className = 'cme-actions';
+      liens.forEach(function (l) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = l.texte;
+        if (l.classe) b.className = l.classe;
+        b.onclick = function () { fermerMenuEleve(); l.action(); };
+        act.appendChild(b);
+      });
+      m.appendChild(act);
+    }
+    document.body.appendChild(m);
+    var placer = function () {
+      var r = ancre.getBoundingClientRect(), l = Math.min(r.left, global.innerWidth - m.offsetWidth - 10);
+      m.style.left = Math.max(10, l) + 'px';
+      m.style.top = (r.bottom + 6) + 'px';
+    };
+    placer();
+    var dehors = function (ev) {
+      var chemin = ev.composedPath ? ev.composedPath() : [ev.target];
+      if (chemin.indexOf(m) < 0 && chemin.indexOf(ancre) < 0) fermerMenuEleve();
+    };
+    var echap = function (ev) { if (ev.key === 'Escape') { fermerMenuEleve(); if (ancre.focus) ancre.focus(); } };
+    document.addEventListener('pointerdown', dehors, true);
+    document.addEventListener('keydown', echap, true);
+    global.addEventListener('resize', placer);
+    if (ancre.setAttribute) ancre.setAttribute('aria-expanded', 'true');
+    menuOuvert = { el: m, ancre: ancre, dehors: dehors, echap: echap, placer: placer };
+    return true;
+  }
+
   /* ---------- Événements du navigateur ---------- */
 
   global.addEventListener('online', function () {
@@ -1165,6 +1368,9 @@
     activiteDemandee: activiteDemandee,
     etapeSuivante: etapeSuivante,
     allerEtapeSuivante: allerEtapeSuivante,
+    precedent: precedent,
+    allerPrecedent: allerPrecedent,
+    boutonPrecedent: boutonPrecedent,
     reprendreSession: reprendreSession,
     afficherConnexion: afficherConnexion,
     identifiant: identifiant,
@@ -1173,6 +1379,8 @@
     projet: projet,
     changerSurnom: changerSurnom,
     afficherIdentifiant: afficherIdentifiant,
+    menuEleve: menuEleve,
+    fermerMenuEleve: fermerMenuEleve,
     nomFichier: nomFichier,
     telecharger: telecharger,
     ouvrirDepot: ouvrirDepot,

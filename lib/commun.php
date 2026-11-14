@@ -409,6 +409,7 @@ function creer_tables(PDO $pdo): void
     )");
     creer_tables_competences($pdo);   // évaluations des compétences, compétences des étapes de parcours
     creer_tables_catalogue($pdo);     // ateliers importés depuis les applications
+    creer_tables_progression($pdo);   // progression des ateliers par classe (dates, étapes une à une)
     // Mesures envoyées avec la progression (monitoring) : cumuls de l'application, remplacés à chaque envoi
     foreach (['temps_actif', 'essais', 'questions', 'premier_coup', 'revelees', 'delai_median'] as $c) {
         ajouter_colonne($pdo, 'progression', $c, 'INTEGER');
@@ -1766,4 +1767,5 @@ require_once __DIR__ . '/passerelles.php';
 require_once __DIR__ . '/bibliotheque.php';
 require_once __DIR__ . '/competences.php';
 require_once __DIR__ . '/catalogue_ateliers.php';
+require_once __DIR__ . '/progression.php';    // progression des ateliers d'une classe
 require_once __DIR__ . '/organisation.php';   // emploi du temps : utilisé par l'activation calendaire des ateliers (portail)

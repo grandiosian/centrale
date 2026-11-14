@@ -7,7 +7,7 @@ Serveur unique pour toutes les applications de technologie :
 - **Pseudonymisation** : le serveur ne connaît que « 5A · élève 07 ». Les noms restent sur l'ordinateur de l'enseignant.
 - **Progression et suivi** : chaque application signale l'avancement de l'élève ; tableau élèves × activités pour toute la classe.
 - **Parcours** : enchaînement d'étapes dans plusieurs logiciels (simulation → modélisation → programmation → questionnaire).
-- **Portail élève** (page d'accueil) : l'élève tape son code une fois, voit ses **ateliers** et ses parcours, ouvre un atelier (ou directement une activité) déjà connecté, puis revient au portail avec « ← Mes ateliers ».
+- **Portail élève** (page d'accueil) : l'élève tape son code une fois, voit ses **ateliers** et ses parcours, ouvre un atelier (ou directement une activité) déjà connecté, puis revient au portail avec « ← Mes ateliers ». Sa barre du haut est celle des applications élèves (référence NetSim) : logo à gauche (le nom « TechnoVersailles » s'efface quand la barre manque de place), **widget de l'élève** (son identifiant ; un clic ouvre son menu : identifiant et « Changer mon surnom »), au centre l'**atelier en cours** (activités faites / total) avec « Continuer → » qui le reprend à la prochaine activité, à droite « Se déconnecter ». Dessous, ses ateliers rangés : **Mon atelier en cours** en grand (la dernière activité ouverte depuis le portail, sinon l'atelier le plus avancé, avec « Tu en es là » et la prochaine activité), puis **À faire** (commencés d'abord), **Prochainement** (en gris, compte à rebours) et **Déjà fait** (replié). Les activités proposées par le professeur sont dans « Demandé par ton professeur ». Pied de page : la marque à gauche, la mention RGPD au centre, la version à droite.
 - **Espace enseignant** : codes, suivi, parcours, travail de chaque élève, historique, export ZIP, ressources par atelier, quotas.
 
 ```
@@ -163,6 +163,8 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 | `Centrale.retour()` | Revient au portail (bouton « ← Mes ateliers » ajouté automatiquement) |
 | `await Centrale.etapeSuivante()` | Dans un parcours : `{ numero, etape, fin, raison }` de l'étape suivante (`raison` si elle est verrouillée), `null` hors parcours |
 | `await Centrale.allerEtapeSuivante()` | Enregistre tout et ouvre l'étape suivante (bouton « Étape suivante → » ajouté automatiquement) ; `false` si elle est verrouillée |
+| `Centrale.boutonPrecedent({ classe })` | Bouton « ← » du widget de l'élève (barre du haut) : « ← Étape précédente » dans un parcours (rouvre l'étape d'avant, dans son application), « ← Mes ateliers » sinon, caché hors Centrale ; renvoie `{ bouton, maj }`. Aussi `await Centrale.precedent()` et `await Centrale.allerPrecedent()` |
+| `Centrale.menuEleve(ancre, { liens, deconnexion, onDeconnexion, onChange })` | Menu de l'élève connecté, ouvert sous son identifiant (barre du haut), le même dans toutes les applications : « Connecté », classe et numéro, identifiant et « Changer mon surnom », aide, liens propres à l'application (`[{ texte, action }]`) puis « Se déconnecter ». Un 2e appel le ferme (aussi : clic dehors, Échap). Renvoie `false` sans connexion |
 | `await Centrale.ateliers()` | Ateliers proposés à la classe, avec l'avancement |
 | `await Centrale.propositions()` | Activités proposées par le professeur à l'élève (classe ou groupe) : date, consigne, avancement |
 
@@ -299,6 +301,23 @@ Les ateliers sont créés **dans les applications** et publiés avec elles : ils
   - Avant sa période, ses activités apparaissent sur le portail en « Bientôt » avec la date d'ouverture. Après, elles disparaissent, sauf pour l'élève qui les a commencées : il les voit marquées « Fermé ».
   - Les étapes de parcours et les propositions de cet atelier suivent les mêmes périodes. `api/catalogue.php` publie les périodes communes à toutes les classes (champ `disponibilite`).
   - Les applications restent ouvrables sans la Centrale : ces périodes règlent ce que la Centrale montre aux élèves.
+
+### Calendrier des ateliers (progression d'une classe, pas à pas)
+
+Onglet **Calendrier** (`?p=calendrier`, code : `lib/progression.php` et `lib/admin_progression.php`, table `progression_ateliers`). Pour chaque classe, l'enseignant range les ateliers du catalogue dans l'ordre où elle les fera, avec pour chacun un **nombre de séances** et une **date d'ouverture**.
+
+- **Dates calculées** : « Calculer les dates d'après l'emploi du temps » part du « Premier atelier le … » et ouvre chaque atelier à la séance qui suit la fin du précédent. Le calcul suit les cours de la classe, les semaines A/B, les vacances et les séances annulées, déplacées ou ajoutées. Il ne compte que les cours en classe entière, ou à défaut ceux du premier groupe. Chaque date reste modifiable à la main ; un atelier qui s'ouvre avant le précédent est signalé (⚠).
+- **Ajout** : un atelier ajouté se place à la fin, daté à la séance qui suit le dernier atelier daté. Le nombre de séances vient de sa durée annoncée (« 3 séances », « 2 h »), 1 sinon.
+- **Copier vers d'autres classes** : la même suite d'ateliers, avec les dates recalculées d'après l'emploi du temps de chaque classe, si on le coche.
+- **Ce que voit l'élève** dès que sa classe a un calendrier :
+  - seulement les ateliers du calendrier, dans leur ordre ;
+  - ouverts à partir de leur date, en « Prochainement » avant (gris, compte à rebours) ;
+  - un atelier hors calendrier ou sans date n'est pas montré, même commencé. Le travail reste enregistré et revient si l'atelier est remis au calendrier.
+- **Une carte par atelier** sur le portail (et non par application) : un atelier fait va dans « Déjà fait » pendant que le suivant de la même application est en « Prochainement ». Le nom de l'application est écrit au-dessus du titre, et « Revoir » rouvre l'atelier, pas toute l'application.
+- **Étapes une à une** : dans un atelier ouvert, une étape s'ouvre quand la précédente est terminée. Les suivantes sont affichées 🔒 avec « S'ouvre quand tu as terminé « … » ». Le bouton de la carte ouvre la prochaine étape, pas toute l'application.
+- **Restent toujours ouverts** : les parcours et ce que l'enseignant demande à un élève (propositions), car ce sont des demandes explicites. Ils ne suivent que les périodes de disponibilité.
+- **Sans calendrier**, une classe garde le fonctionnement d'avant : périodes de disponibilité et réglage « activités proposées ». « Supprimer la progression » y ramène la classe.
+- **Limite** : une application reste ouvrable seule, et sa propre bibliothèque n'est pas filtrée par la Centrale. Le calendrier règle ce que montrent le portail et `api/ateliers.php`, qui renvoie `verrou` et `apres` pour une étape verrouillée.
 
 Règles communes : [`public/passerelle/DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md`](public/passerelle/DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md) et [`public/passerelle/COMPETENCES.md`](public/passerelle/COMPETENCES.md), lisibles en ligne sur `/passerelle/?doc=donnees` et `/passerelle/?doc=competences`.
 

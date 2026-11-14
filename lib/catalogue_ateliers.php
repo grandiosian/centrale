@@ -591,7 +591,11 @@ function disponibilite_atelier(array $periodes, ?int $classe_id, ?string $date =
     return ['etat' => $prochain !== null ? 'bientot' : 'ferme', 'ouvre_le' => $prochain, 'jusqu_au' => null, 'limite' => true];
 }
 
-/** États des ateliers qui ont des périodes, pour une classe : [app][atelier] => disponibilite_atelier(). */
+/**
+ * États des ateliers qui ont des périodes, pour une classe : [app][atelier] => disponibilite_atelier().
+ * Si la classe a une progression (lib/progression.php), elle est rangée sous la clé '*progression' :
+ * disponibilite_activite() s'en sert d'abord (un atelier hors progression y est fermé).
+ */
 function disponibilites_classe(?int $classe_id): array
 {
     $res = [];
@@ -599,6 +603,9 @@ function disponibilites_classe(?int $classe_id): array
         foreach ($liste as $atelier => $periodes) {
             $res[$app][$atelier] = disponibilite_atelier($periodes, $classe_id);
         }
+    }
+    if ($classe_id !== null && ($p = disponibilites_progression($classe_id)) !== null) {
+        $res['*progression'] = $p;
     }
     return $res;
 }
@@ -628,10 +635,18 @@ function atelier_de_activite(string $app, string $activite): ?string
     return isset($carte[$app][$avant]) ? $carte[$app][$avant] : null;
 }
 
-/** État de l'atelier d'une activité pour une classe (ouvert sans limite si l'activité n'est rattachée à aucun atelier). */
-function disponibilite_activite(array $dispos, string $app, string $activite): array
+/**
+ * État de l'atelier d'une activité pour une classe (ouvert sans limite si l'activité n'est rattachée à aucun atelier).
+ * Classe avec une progression : c'est elle qui décide (hors progression = fermé), sauf $avec_progression = false
+ * (parcours et propositions : demandes explicites de l'enseignant, réglées par les seules périodes).
+ */
+function disponibilite_activite(array $dispos, string $app, string $activite, bool $avec_progression = true): array
 {
     $at = atelier_de_activite($app, $activite);
+    if ($avec_progression && isset($dispos['*progression'])) {
+        return ($at !== null ? ($dispos['*progression'][$app][$at] ?? null) : null)
+            ?? ['etat' => 'ferme', 'ouvre_le' => null, 'jusqu_au' => null, 'limite' => true, 'source' => 'progression'];
+    }
     return ($at !== null ? ($dispos[$app][$at] ?? null) : null) ?? ['etat' => 'ouvert', 'ouvre_le' => null, 'jusqu_au' => null, 'limite' => false];
 }
 
