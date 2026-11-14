@@ -13,6 +13,9 @@
   var CLE_STATUTS = 'centrale-statuts';     // { "4F": { "07": { exclu: "2026-10-15", changement: "2026-10-20" } } } — la sortie reste dans centrale-sorties
   var CLE_CARTONS = 'centrale-cartons';     // { "4F": { "07": [ { type: "observation" | "recompense", texte, date } ] } } — gardés ici, comme les noms
   var CLE_PRESENCES = 'centrale-presences'; // { "4F": { "07": { "2026-11-13 08:45": "absent" | "retard" } } } — l'appel, séance par séance
+  var CLE_OBSERVATIONS = 'centrale-observations'; // { "4F": { "07": { "2026-11-13 08:45": { "participation": 2, "comportement": -1, "_c": { "comportement": "bavarde avec X" } } } } }
+  var CLE_INCIDENTS = 'centrale-incidents';       // { "4F": [ { id, membres: ["05", "07", "12"], type: "dissipation" | "altercation", seance, texte } ] } — à ne pas placer ensemble
+  var CLE_CRITERES = 'centrale-criteres';         // critères observés à chaque séance : ["participation", "comportement", "cahier"]
   var CLE_BESOINS = 'centrale-besoins';     // { "5A": { "07": ["PAP", "PAI"], … } } — PPS, PAP, PAI, PPRE
   var TYPES_BESOINS = ['PPS', 'PAP', 'PAI', 'PPRE'];
   var CLE_CODES = 'centrale-codes';         // { "5A": { "07": "5A-abcdefg-hjkm-npqrs" } } — copie locale pour réimprimer
@@ -76,7 +79,240 @@
     try { return JSON.parse(localStorage.getItem(cle)) || {}; } catch (e) { return {}; }
   }
   function ecrireCle(cle, carte) {
+    // suivi de classe : on repère ce qui a changé (élève et séance, incident…) pour l'envoyer à la Centrale
+    var def = SUIVI[cle], avant = def && !appliquantServeur ? unitesSuivi(def, lireCle(cle)) : null;
     try { localStorage.setItem(cle, JSON.stringify(carte)); } catch (e) { /* stockage bloqué */ }
+    if (avant) {
+      var apres = unitesSuivi(def, carte), changements = {};
+      Object.keys(apres).forEach(function (k) { if (apres[k] !== avant[k]) changements[k] = apres[k]; });
+      Object.keys(avant).forEach(function (k) { if (!(k in apres)) changements[k] = null; });
+      enfilerSuivi(def.type, changements);
+    }
+  }
+
+  /* ---------- Suivi de classe sur la Centrale ----------
+     Appel, observations de séance, incidents, cartons et statuts sont gardés ici (pour un affichage immédiat) ET envoyés
+     à la Centrale, rangés par classe et NUMÉRO d'élève : on les retrouve sur tous les ordinateurs de l'enseignant. Les noms,
+     photos, codes et PAP/PPS/PAI ne partent jamais ; les noms écrits dans les commentaires sont remplacés par le numéro
+     (sansNoms). Une file d'attente garde ce qui n'a pas pu partir (hors ligne) et le renvoie. api/suivi.php. */
+  var SUIVI = {
+    'centrale-presences':    { type: 'presences', niveaux: 3 },   // classe → élève → séance
+    'centrale-observations': { type: 'observations', niveaux: 3 },
+    'centrale-incidents':    { type: 'incidents', niveaux: 'liste' },   // classe → [ { id, … } ]
+    'centrale-cartons':      { type: 'cartons', niveaux: 2 },     // classe → élève
+    'centrale-statuts':      { type: 'statuts', niveaux: 2 },
+    'centrale-sorties':      { type: 'sorties', niveaux: 2 },
+  };
+  var CLE_PAR_TYPE = {};
+  Object.keys(SUIVI).forEach(function (k) { CLE_PAR_TYPE[SUIVI[k].type] = k; });
+  var SEP = '\u0001';
+  var CLE_SUIVI_ATTENTE = 'centrale-suivi-attente', CLE_SUIVI_DEPUIS = 'centrale-suivi-depuis', CLE_SUIVI_INITIAL = 'centrale-suivi-initial';
+  var API_SUIVI = location.pathname.replace(/\/admin\/.*$/, '').replace(/\/$/, '') + '/api/suivi.php';
+  var appliquantServeur = false, etatSuivi = 'ok', minuteurSuivi = null, envoiSuivi = null;
+
+  /** Les unités d'une carte : « classe␁élève|séance », « classe␁élève » ou « classe␁id » → JSON. */
+  function unitesSuivi(def, carte) {
+    var res = {};
+    Object.keys(carte || {}).forEach(function (cl) {
+      var c = carte[cl];
+      if (def.niveaux === 'liste') { (Array.isArray(c) ? c : []).forEach(function (x) { if (x && x.id) res[cl + SEP + x.id] = JSON.stringify(x); }); return; }
+      Object.keys(c || {}).forEach(function (num) {
+        if (def.niveaux === 2) { res[cl + SEP + num] = JSON.stringify(c[num]); return; }
+        Object.keys(c[num] || {}).forEach(function (se) { res[cl + SEP + num + '|' + se] = JSON.stringify(c[num][se]); });
+      });
+    });
+    return res;
+  }
+  function lireAttente() { try { return JSON.parse(localStorage.getItem(CLE_SUIVI_ATTENTE)) || {}; } catch (e) { return {}; } }
+  function ecrireAttente(a) { try { localStorage.setItem(CLE_SUIVI_ATTENTE, JSON.stringify(a)); } catch (e) { /* stockage bloqué */ } }
+  function enfilerSuivi(type, changements) {
+    var cles = Object.keys(changements);
+    if (!cles.length) return;
+    var a = lireAttente();
+    cles.forEach(function (k) { a[type + SEP + k] = changements[k]; });
+    ecrireAttente(a);
+    changerEtatSuivi('attente');
+    clearTimeout(minuteurSuivi);
+    minuteurSuivi = setTimeout(envoyerSuivi, 800);
+  }
+  function lignesDe(a) {
+    return Object.keys(a).map(function (k) {
+      var m = k.split(SEP);
+      return { type: m[0], classe: m[1], cle: m.slice(2).join(SEP), valeur: a[k] };
+    });
+  }
+  function posterSuivi(corps, keepalive) {
+    return fetch(API_SUIVI, { method: 'POST', credentials: 'same-origin', keepalive: !!keepalive, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) })
+      .then(lireReponseSuivi);
+  }
+  /** Réponse de api/suivi.php ; 401 (pas connecté, page de connexion) : erreur « session », sans alerte. */
+  function lireReponseSuivi(r) {
+    return r.json().catch(function () { return null; }).then(function (d) {
+      if (r.ok && d && d.ok) return d;
+      var e = new Error((d && d.erreur) || ('Centrale : ' + r.status));
+      e.session = r.status === 401;
+      throw e;
+    });
+  }
+  /** Envoie la file d'attente ; ce qui change pendant l'envoi reste dans la file pour le prochain. */
+  function envoyerSuivi(keepalive) {
+    clearTimeout(minuteurSuivi);
+    if (envoiSuivi) return envoiSuivi;
+    var a = lireAttente(), cles = Object.keys(a);
+    if (!cles.length) { changerEtatSuivi('ok'); return Promise.resolve(); }
+    envoiSuivi = posterSuivi({ lignes: lignesDe(a) }, keepalive).then(function () {
+      var maintenant = lireAttente();
+      cles.forEach(function (k) { if (k in maintenant && maintenant[k] === a[k]) delete maintenant[k]; });
+      ecrireAttente(maintenant);
+      envoiSuivi = null;
+      changerEtatSuivi(Object.keys(maintenant).length ? 'attente' : 'ok');
+      if (Object.keys(maintenant).length) minuteurSuivi = setTimeout(envoyerSuivi, 800);
+    }, function (err) {
+      envoiSuivi = null;
+      if (err && err.session) { changerEtatSuivi('session'); return; }   // reprendra après connexion
+      changerEtatSuivi('erreur');
+      minuteurSuivi = setTimeout(envoyerSuivi, 15000);   // hors ligne… : nouvel essai
+    });
+    return envoiSuivi;
+  }
+  /** Écrit ici une ligne venue de la Centrale (sans la renvoyer). */
+  function appliquerLigneSuivi(l) {
+    var v = l.valeur == null ? null : JSON.parse(l.valeur);
+    if (l.type === 'criteres') {
+      try { if (Array.isArray(v) && v.length) localStorage.setItem(CLE_CRITERES, JSON.stringify(v)); } catch (e) { /* rien */ }
+      return;
+    }
+    var cle = CLE_PAR_TYPE[l.type], def = SUIVI[cle];
+    if (!def || !l.classe) return;
+    var carte = lireCle(cle), cl = l.classe;
+    if (def.niveaux === 'liste') {
+      var liste = (carte[cl] || []).filter(function (x) { return x && x.id !== l.cle; });
+      if (v) liste.push(v);
+      if (liste.length) carte[cl] = liste; else delete carte[cl];
+    } else if (def.niveaux === 2) {
+      carte[cl] = carte[cl] || {};
+      if (v != null) carte[cl][l.cle] = v; else delete carte[cl][l.cle];
+      if (!Object.keys(carte[cl]).length) delete carte[cl];
+    } else {
+      var i = l.cle.indexOf('|'), num = l.cle.slice(0, i), se = l.cle.slice(i + 1);
+      carte[cl] = carte[cl] || {};
+      carte[cl][num] = carte[cl][num] || {};
+      if (v != null) carte[cl][num][se] = v; else delete carte[cl][num][se];
+      if (!Object.keys(carte[cl][num]).length) delete carte[cl][num];
+      if (!Object.keys(carte[cl]).length) delete carte[cl];
+    }
+    appliquantServeur = true;
+    try { ecrireCle(cle, carte); } finally { appliquantServeur = false; }
+  }
+  /** Récupère ce qui a changé sur la Centrale (autres ordinateurs) ; ce qui attend d'être envoyé d'ici reste prioritaire. */
+  function recupererSuivi() {
+    var depuis = +(localStorage.getItem(CLE_SUIVI_DEPUIS) || 0);
+    return fetch(API_SUIVI + '?depuis=' + depuis, { credentials: 'same-origin', cache: 'no-store' })
+      .then(lireReponseSuivi)
+      .then(function (d) {
+        var attente = lireAttente(), change = false, max = depuis;
+        d.lignes.forEach(function (l) {
+          max = Math.max(max, l.maj);
+          if ((l.type + SEP + l.classe + SEP + l.cle) in attente) return;
+          try { appliquerLigneSuivi(l); change = true; } catch (e) { /* ligne illisible : ignorée */ }
+        });
+        try { localStorage.setItem(CLE_SUIVI_DEPUIS, String(max)); } catch (e) { /* rien */ }
+        if (change) afficherNoms();   // plans, fiches et feuille se redessinent
+        return change;
+      });
+  }
+  /** Première fois sur cet ordinateur : tout ce qui est déjà noté ici part sur la Centrale, sans écraser ce qu'elle a. */
+  function premierEnvoiSuivi() {
+    if (localStorage.getItem(CLE_SUIVI_INITIAL)) return Promise.resolve();
+    var lignes = [];
+    Object.keys(SUIVI).forEach(function (cle) {
+      var u = unitesSuivi(SUIVI[cle], lireCle(cle));
+      Object.keys(u).forEach(function (k) { var m = k.split(SEP); lignes.push({ type: SUIVI[cle].type, classe: m[0], cle: m.slice(1).join(SEP), valeur: u[k] }); });
+    });
+    try { var cr = localStorage.getItem(CLE_CRITERES); if (cr) lignes.push({ type: 'criteres', classe: '', cle: '', valeur: cr }); } catch (e) { /* rien */ }
+    var paquets = [];
+    for (var i = 0; i < lignes.length; i += 5000) paquets.push(lignes.slice(i, i + 5000));
+    return paquets.reduce(function (p, paquet) { return p.then(function () { return posterSuivi({ lignes: paquet, initial: true }); }); }, Promise.resolve())
+      .then(function () { try { localStorage.setItem(CLE_SUIVI_INITIAL, String(Date.now())); } catch (e) { /* rien */ } });
+  }
+  var synchroEnCours = null;
+  function synchroniserSuivi() {
+    if (synchroEnCours) return synchroEnCours;
+    synchroEnCours = premierEnvoiSuivi().then(recupererSuivi).then(function () { return envoyerSuivi(); })
+      .catch(function (err) { changerEtatSuivi(err && err.session ? 'session' : 'erreur'); })
+      .then(function () { synchroEnCours = null; });
+    return synchroEnCours;
+  }
+  /** État de l'envoi : discret quand tout va bien ; un bandeau si la Centrale ne répond pas. */
+  function changerEtatSuivi(etat) {
+    etatSuivi = etat;
+    document.querySelectorAll('.etat-suivi').forEach(function (el) { majEtatSuivi(el); });
+    var b = document.getElementById('suivi-alerte');
+    if (etat === 'erreur') {
+      if (!b) {
+        b = document.createElement('div');
+        b.id = 'suivi-alerte';
+        b.className = 'suivi-alerte';
+        b.setAttribute('role', 'status');
+        document.body.appendChild(b);
+      }
+      b.textContent = '⚠ Suivi de classe pas encore enregistré sur la Centrale (hors ligne ?) : il reste sur cet ordinateur et repart tout seul.';
+      b.hidden = false;
+    } else if (b) b.hidden = true;
+    document.dispatchEvent(new Event('centrale-suivi'));
+  }
+  function majEtatSuivi(el) {
+    el.textContent = etatSuivi === 'session' ? '☁ suivi de classe : envoyé après connexion'
+      : etatSuivi === 'erreur' ? '⚠ suivi de classe non envoyé (nouvel essai automatique)'
+      : etatSuivi === 'attente' ? '☁ suivi de classe : envoi…' : '☁ suivi de classe enregistré sur la Centrale';
+    el.className = 'etat-suivi ' + etatSuivi;
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') synchroniserSuivi(); else envoyerSuivi(true); });
+  window.addEventListener('online', synchroniserSuivi);
+  window.addEventListener('pagehide', function () { if (Object.keys(lireAttente()).length) envoyerSuivi(true); });
+  setInterval(function () { if (document.visibilityState === 'visible') synchroniserSuivi(); }, 60000);
+
+  /**
+   * Les noms d'élèves écrits dans un commentaire (connus sur cet ordinateur, toutes classes) sont remplacés par leur
+   * numéro avant d'être gardés et envoyés : « bavarde avec Léa » → « bavarde avec n° 07 ». Prévient l'enseignant.
+   */
+  function sansNoms(texte, classe) {
+    var t = String(texte || '');
+    if (!t.trim()) return t;
+    var carte = lire(), index = {}, remplaces = [];
+    Object.keys(carte).forEach(function (cl) {
+      Object.keys(carte[cl] || {}).forEach(function (num) {
+        sansAccents(carte[cl][num]).split(/[^a-z0-9]+/).forEach(function (m) {
+          if (m.length >= 3 && !/^\d+$/.test(m)) (index[m] = index[m] || []).push({ classe: cl, numero: num });
+        });
+      });
+    });
+    t = t.replace(/\p{L}+/gu, function (mot) {
+      var qui = index[sansAccents(mot)];
+      if (!qui) return mot;
+      var ici = qui.filter(function (x) { return x.classe === classe; }), liste = ici.length ? ici : qui;
+      var etiquette = 'n° ' + liste.map(function (x) { return x.numero; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join('/')
+        + (ici.length ? '' : ' (' + liste[0].classe + ')');
+      remplaces.push(mot + ' → ' + etiquette);
+      return etiquette;
+    });
+    t = t.replace(/(n° [\d\/]+(?: \([^)]+\))?)(?:[\s-]+\1)+/g, '$1');   // « Hugo Martin » → un seul « n° 07 »
+    if (remplaces.length) prevenir('Nom remplacé par le numéro (rien de nominatif ne part sur la Centrale) : ' + remplaces.join(', '));
+    return t;
+  }
+  function prevenir(message) {
+    var b = document.getElementById('centrale-toast');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'centrale-toast';
+      b.className = 'centrale-toast';
+      b.setAttribute('role', 'status');
+      document.body.appendChild(b);
+    }
+    b.textContent = message;
+    b.hidden = false;
+    clearTimeout(b._minuteur);
+    b._minuteur = setTimeout(function () { b.hidden = true; }, 6000);
   }
   function ajouterCodes(classe, paires) {
     var carte = lireCle(CLE_CODES);
@@ -222,7 +458,7 @@
     if (!bloc) return;
     var liste = [];
     try { liste = JSON.parse(bloc.textContent) || []; } catch (e) { return; }
-    [CLE_NOMS, CLE_BESOINS, CLE_CODES, CLE_SORTIES, CLE_STATUTS, CLE_CARTONS, CLE_PRESENCES].forEach(function (cle) {
+    [CLE_NOMS, CLE_BESOINS, CLE_CODES, CLE_SORTIES, CLE_STATUTS, CLE_CARTONS, CLE_PRESENCES, CLE_OBSERVATIONS, CLE_INCIDENTS].forEach(function (cle) {
       var carte = lireCle(cle), change = false;
       liste.forEach(function (r) {
         if (!carte[r.ancien] || r.ancien === r.nouveau) return;
@@ -238,7 +474,7 @@
     return Object.keys(carte).reduce(function (n, c) { return n + Object.keys(carte[c]).length; }, 0);
   }
 
-  /* Cartons : observations et récompenses de l'enseignant, gardés sur cet ordinateur */
+  /* Cartons : observations et récompenses de l'enseignant, synchronisés avec la Centrale */
   var TYPES_CARTONS = { observation: 'Observation', recompense: 'Récompense' };   // observation (jaune), récompense (vert)
   var AUTRE_MOTIF = 'Autre (précisez)';
   var MOTIFS_RECOMPENSES = ['Travail sérieux', 'Calme et sérieux', 'Fait des efforts sur son atelier', AUTRE_MOTIF];
@@ -259,7 +495,7 @@
   }
   function ajouterCarton(classe, numero, type, texte) {
     var liste = cartonsLocaux(classe, numero);
-    liste.push({ type: type, texte: texte, date: aujourdhui() });
+    liste.push({ type: type, texte: sansNoms(texte, classe), date: aujourdhui() });
     ecrireCartons(classe, numero, liste);
   }
   function supprimerCarton(classe, numero, index) {
@@ -268,7 +504,7 @@
     ecrireCartons(classe, numero, liste);
   }
 
-  /* Appel : absences et retards par séance (« 2026-11-13 08:45 », ou la date seule hors cours), gardés sur cet ordinateur */
+  /* Appel : absences et retards par séance (« 2026-11-13 08:45 », ou la date seule hors cours), synchronisés avec la Centrale */
   var ETATS_PRESENCE = { absent: 'Absent', retard: 'En retard' };
   function presencesLocales(classe, numero) { return Object.assign({}, (lireCle(CLE_PRESENCES)[classe] || {})[numero] || {}); }
   function presence(classe, numero, seance) { return presencesLocales(classe, numero)[seance] || ''; }
@@ -288,6 +524,93 @@
       return { seance: k, date: k.slice(0, 10), heure: k.slice(11), etat: p[k] };
     });
   }
+  /* Observations de séance : pour chaque critère, de −− (-2) à ++ (2) ; rien = comme d'habitude ; un commentaire
+     facultatif par critère (clé « _c »). Synchronisées avec la Centrale (SUIVI). */
+  var CRITERES_DEFAUT = ['participation', 'comportement', 'cahier'];
+  function criteresChoisis() {
+    try { var l = JSON.parse(localStorage.getItem(CLE_CRITERES)); if (Array.isArray(l) && l.length) return l; } catch (e) { /* rien */ }
+    return CRITERES_DEFAUT.slice();
+  }
+  function definirCriteres(liste) {
+    try { localStorage.setItem(CLE_CRITERES, JSON.stringify(liste)); } catch (e) { /* stockage bloqué */ }
+    enfilerSuivi('criteres', (function () { var c = {}; c[SEP] = JSON.stringify(liste); return c; })());   // « criteres␁␁ » : classe et clé vides
+  }
+  function observationsEleve(classe, numero) { return Object.assign({}, (lireCle(CLE_OBSERVATIONS)[classe] || {})[numero] || {}); }
+  function observation(classe, numero, seance) { return Object.assign({}, observationsEleve(classe, numero)[seance] || {}); }
+  function definirObservation(classe, numero, seance, critere, valeur) {
+    var carte = lireCle(CLE_OBSERVATIONS);
+    carte[classe] = carte[classe] || {};
+    var e = carte[classe][numero] = carte[classe][numero] || {};
+    var x = e[seance] = e[seance] || {};
+    // « note » : la note de séance corrigée à la main (0 compris) ; null l'efface (on revient à la note calculée)
+    if ([-2, -1, 1, 2].indexOf(valeur) >= 0 || (critere === 'note' && valeur === 0)) x[critere] = valeur; else delete x[critere];
+    if (!Object.keys(x).length) delete e[seance];
+    if (!Object.keys(e).length) delete carte[classe][numero];
+    if (!Object.keys(carte[classe]).length) delete carte[classe];
+    ecrireCle(CLE_OBSERVATIONS, carte);
+  }
+  function definirCommentaire(classe, numero, seance, critere, texte) {
+    var carte = lireCle(CLE_OBSERVATIONS);
+    carte[classe] = carte[classe] || {};
+    var e = carte[classe][numero] = carte[classe][numero] || {};
+    var x = e[seance] = e[seance] || {};
+    var c = x._c = x._c || {};
+    texte = sansNoms(String(texte || '').trim(), classe).slice(0, 300);
+    if (texte) c[critere] = texte; else delete c[critere];
+    if (!Object.keys(c).length) delete x._c;
+    if (!Object.keys(x).length) delete e[seance];
+    if (!Object.keys(e).length) delete carte[classe][numero];
+    if (!Object.keys(carte[classe]).length) delete carte[classe];
+    ecrireCle(CLE_OBSERVATIONS, carte);
+    return texte;
+  }
+
+  /* Incidents : des élèves (deux ou plus) qui se dissipent ensemble ou se sont disputés, à ne pas placer ensemble
+     (synchronisé avec la Centrale). On peut ajouter des élèves à un incident déjà noté. */
+  function normaliserIncident(x) {
+    var m = Array.isArray(x.membres) ? x.membres : [x.a, x.b];
+    m = m.filter(function (v) { return v != null && v !== ''; }).map(String).filter(function (v, i, t) { return t.indexOf(v) === i; });
+    return { id: x.id, membres: m, type: x.type === 'altercation' ? 'altercation' : 'dissipation', seance: x.seance || '', texte: x.texte || '' };
+  }
+  function incidentsLocaux(classe) { return (lireCle(CLE_INCIDENTS)[classe] || []).map(normaliserIncident).filter(function (x) { return x.membres.length >= 2; }); }
+  function modifierIncidents(classe, f) {
+    var carte = lireCle(CLE_INCIDENTS);
+    var liste = f((carte[classe] || []).map(normaliserIncident)).filter(function (x) { return x.membres.length >= 2; });
+    if (liste.length) carte[classe] = liste; else delete carte[classe];
+    ecrireCle(CLE_INCIDENTS, carte);
+  }
+  function ajouterIncident(classe, membres, type, seance, texte) {
+    var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    modifierIncidents(classe, function (l) {
+      return l.concat([normaliserIncident({ id: id, membres: membres, type: type, seance: seance, texte: sansNoms(String(texte || '').trim(), classe).slice(0, 200) })]);
+    });
+    return id;
+  }
+  function modifierIncident(classe, id, champs) {   // { ajouter: [...], retirer: "07", type, texte }
+    modifierIncidents(classe, function (l) {
+      return l.map(function (x) {
+        if (x.id !== id) return x;
+        if (champs.ajouter) x.membres = x.membres.concat(champs.ajouter.map(String)).filter(function (v, i, t) { return t.indexOf(v) === i; });
+        if (champs.retirer != null) x.membres = x.membres.filter(function (v) { return v !== String(champs.retirer); });
+        if (champs.type) x.type = champs.type === 'altercation' ? 'altercation' : 'dissipation';
+        if (champs.texte != null) x.texte = sansNoms(String(champs.texte).trim(), classe).slice(0, 200);
+        return x;
+      });
+    });
+  }
+  function supprimerIncident(classe, id) { modifierIncidents(classe, function (l) { return l.filter(function (x) { return x.id !== id; }); }); }
+
+  /** Ce qui est noté pour une séance (statut de la feuille de séance) : élèves notés, feuille marquée terminée. */
+  function etatSeance(classe, seance) {
+    var pr = lireCle(CLE_PRESENCES)[classe] || {}, ob = lireCle(CLE_OBSERVATIONS)[classe] || {}, notes = {};
+    Object.keys(pr).forEach(function (n) { if (pr[n][seance]) notes[n] = true; });
+    Object.keys(ob).forEach(function (n) { if (n !== '_classe' && ob[n][seance]) notes[n] = true; });
+    var c = (ob._classe || {})[seance] || {};
+    return { eleves: Object.keys(notes).length, terminee: c.terminee === 1, interruption: !!c.interruption,
+      incidents: incidentsLocaux(classe).filter(function (x) { return x.seance === seance; }).length,
+      classe: Object.keys(c).some(function (k) { return k !== 'terminee'; }) };
+  }
+
   /** Date du jour en heure locale (AAAA-MM-JJ). */
   function dateLocale() {
     var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -313,6 +636,11 @@
         : 'Noms non chargés sur cet ordinateur';
     });
     document.querySelectorAll('.oublier-liste').forEach(function (el) { el.hidden = !n; });
+    document.querySelectorAll('.etat-liste').forEach(function (el) {   // à côté : où est gardé le suivi de classe
+      var s = el.parentNode.querySelector('.etat-suivi');
+      if (!s) { s = document.createElement('span'); el.after(' ', s); }
+      majEtatSuivi(s);
+    });
     // Surnom choisi par l'élève qui ressemble à son vrai nom : on prévient l'enseignant (comparaison faite ici, en local)
     document.querySelectorAll('.surnom[data-surnom]').forEach(function (el) {
       var nom = nomLocal(el.dataset.classe, el.dataset.numero);
@@ -450,6 +778,20 @@
     etatsPresence: ETATS_PRESENCE,
     definirPresence: function (c, n, s, e) { definirPresence(c, n, s, e); afficherNoms(); },
     absences: absencesLocales,
+    incidents: incidentsLocaux,
+    etatSeance: etatSeance,
+    ajouterIncident: function (c, m, t, s, x) { var id = ajouterIncident(c, m, t, s, x); afficherNoms(); return id; },
+    modifierIncident: function (c, id, ch) { modifierIncident(c, id, ch); afficherNoms(); },
+    supprimerIncident: function (c, id) { supprimerIncident(c, id); afficherNoms(); },
+    criteres: criteresChoisis,
+    definirCriteres: function (l) { definirCriteres(l); afficherNoms(); },
+    observation: observation,
+    observationsEleve: observationsEleve,
+    definirObservation: function (c, n, s, k, v) { definirObservation(c, n, s, k, v); afficherNoms(); },
+    definirCommentaire: function (c, n, s, k, t) { var r = definirCommentaire(c, n, s, k, t); afficherNoms(); return r; },   // renvoie le texte gardé (noms remplacés)
+    sansNoms: sansNoms,
+    etatSuivi: function () { return etatSuivi; },
+    synchroniserSuivi: synchroniserSuivi,
     dateLocale: dateLocale,
     raison: raisonSansPhoto,
     styleVisage: styleVisage,
@@ -658,7 +1000,8 @@
   document.querySelectorAll('.oublier-liste').forEach(function (b) {
     b.addEventListener('click', function () {
       if (!confirmerEnLigne(b, "Effacer les noms, PAP… , codes et photos de ce navigateur ? Gardez bien votre fichier CSV (et celui des photos) : ce sont les seules copies.", b.parentNode)) return;
-      try { [CLE_NOMS, CLE_BESOINS, CLE_CODES, CLE_SORTIES, CLE_STATUTS, CLE_CARTONS, CLE_PRESENCES, CLE_FEUILLES, 'centrale-trombi', 'centrale-photos'].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) { /* rien */ }
+      try { [CLE_NOMS, CLE_BESOINS, CLE_CODES, CLE_SORTIES, CLE_STATUTS, CLE_CARTONS, CLE_PRESENCES, CLE_OBSERVATIONS, CLE_INCIDENTS, CLE_FEUILLES, 'centrale-trombi', 'centrale-photos',
+        CLE_SUIVI_DEPUIS, CLE_SUIVI_INITIAL].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) { /* rien */ }   // le suivi reste sur la Centrale
       try { indexedDB.deleteDatabase('centrale-trombi'); } catch (e) { /* rien */ }
       afficherNoms();
     });
@@ -1050,6 +1393,8 @@
       var cartons = lireCle(CLE_CARTONS); delete cartons[classeR]; ecrireCle(CLE_CARTONS, cartons);
       var statuts = lireCle(CLE_STATUTS); delete statuts[classeR]; ecrireCle(CLE_STATUTS, statuts);
       var presences = lireCle(CLE_PRESENCES); delete presences[classeR]; ecrireCle(CLE_PRESENCES, presences);
+      var observations = lireCle(CLE_OBSERVATIONS); delete observations[classeR]; ecrireCle(CLE_OBSERVATIONS, observations);
+      var incR = lireCle(CLE_INCIDENTS); delete incR[classeR]; ecrireCle(CLE_INCIDENTS, incR);
       try { sessionStorage.setItem('centrale-reinit', JSON.stringify({ classe: classeR, noms: listeR })); } catch (e) { /* stockage bloqué */ }
     });
   }
@@ -1208,12 +1553,20 @@
     var appel = Object.keys(d.presences || {}).reduce(function (n, c) {
       return n + Object.keys(d.presences[c] || {}).reduce(function (m, k) { return m + Object.keys(d.presences[c][k] || {}).length; }, 0);
     }, 0);
+    var nbObs = Object.keys(d.observations || {}).reduce(function (n, c) {
+      return n + Object.keys(d.observations[c] || {}).reduce(function (m, k) {
+        var e = d.observations[c][k] || {};
+        return m + Object.keys(e).reduce(function (q, x) { return q + Object.keys(e[x] || {}).filter(function (k) { return k !== '_c'; }).length; }, 0);
+      }, 0);
+    }, 0);
     var lignes = [
       classes.length + ' classe(s) désanonymisée(s) : ' + elevesAvecNom + ' élève(s) avec leur nom'
         + (classes.length ? ' (' + classes.slice(0, 8).join(', ') + (classes.length > 8 ? '…' : '') + ')' : ''),
       nbImages + ' trombinoscope(s) de photos',
       cartons + ' carton(s) : observations et récompenses',
       appel + ' absence(s) ou retard(s) notés à l’appel',
+      nbObs + ' observation(s) de séance (+ / −)',
+      Object.keys(d.incidents || {}).reduce(function (n, c) { return n + (d.incidents[c] || []).length; }, 0) + ' dissipation(s) ou altercation(s) entre élèves',
       codes + ' code(s) de connexion',
     ];
     return lignes;
@@ -1241,7 +1594,7 @@
       var donnees = {
         format: 'centrale-deanonim', version: 2, exporte_le: aujourdhui(),
         noms: lire(), besoins: lireBesoins(), codes: lireCle(CLE_CODES), sorties: lireSorties(), statuts: lireCle(CLE_STATUTS), cartons: lireCle(CLE_CARTONS),
-        presences: lireCle(CLE_PRESENCES), feuilles: feuilles, images: images,
+        presences: lireCle(CLE_PRESENCES), observations: lireCle(CLE_OBSERVATIONS), criteres: criteresChoisis(), incidents: lireCle(CLE_INCIDENTS), feuilles: feuilles, images: images,
       };
       telechargerFichier('centrale_' + aujourdhui() + '.desanonim', JSON.stringify(donnees, null, 1), 'application/json');
       confirmerSucces('Sauvegarde créée : centrale_' + aujourdhui() + '.desanonim', bilanSauvegarde(donnees, Object.keys(images).length).concat(['Rangez ce fichier dans votre Nuage.']));
@@ -1281,6 +1634,9 @@
       var cartons = lireCle(CLE_CARTONS); Object.assign(cartons, d.cartons || {}); ecrireCle(CLE_CARTONS, cartons);
       var statuts = lireCle(CLE_STATUTS); Object.assign(statuts, d.statuts || {}); ecrireCle(CLE_STATUTS, statuts);
       var presences = lireCle(CLE_PRESENCES); Object.assign(presences, d.presences || {}); ecrireCle(CLE_PRESENCES, presences);
+      var observations = lireCle(CLE_OBSERVATIONS); Object.assign(observations, d.observations || {}); ecrireCle(CLE_OBSERVATIONS, observations);
+      if (Array.isArray(d.criteres) && d.criteres.length) definirCriteres(d.criteres);
+      var incI = lireCle(CLE_INCIDENTS); Object.assign(incI, d.incidents || {}); ecrireCle(CLE_INCIDENTS, incI);
       var feuilles = lireFeuilles(); Object.assign(feuilles, d.feuilles || {}); ecrireFeuilles(feuilles);
       return Promise.all(x.images.map(function (im) {
         return ecrireImage(im.nom, im.blob).then(function () {
@@ -1604,6 +1960,7 @@
   }
 
   afficherNoms();
+  synchroniserSuivi();
 })();
 
 /* ---------- Export CSV du tableau de suivi (avec les noms gardés localement) ---------- */

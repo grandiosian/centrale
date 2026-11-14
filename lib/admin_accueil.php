@@ -159,6 +159,7 @@ function donnees_plan_seance(array $s, bool $exiger_placement = true): ?array
         'classe'    => classe_par_id($classe_id)['nom'] ?? '',
         'eleves'    => array_map(fn($e) => ['id' => (int) $e['id'], 'numero' => $e['etiquette'], 'actif' => (bool) $e['actif'],
                                         'reperes' => reperes_classe($classe_id)[(int) $e['id']] ?? [],
+                                        'stats' => statistiques_classe($classe_id)[(int) $e['id']] ?? null,   // feuille de séance : colonnes de la plateforme
                                         // classe simulée : le profil tient lieu de nom (« Retardataire 1 »)
                                         'simule' => ($pr = profil_simule((string) (classe_par_id($classe_id)['nom'] ?? ''), $e['etiquette'])) !== null ? str_replace(' · simulé', '', $pr) : null], $eleves),
         'placement' => (object) $placement,
@@ -166,10 +167,48 @@ function donnees_plan_seance(array $s, bool $exiger_placement = true): ?array
         'salle_id'  => $salle_id,
         'classe_id' => $classe_id,
         'groupe_id' => $groupe_id,
+        'stats_classe' => statistiques_classe($classe_id)['classe'] ?? null,
+        'fiche'     => fiche_en_cours($classe_id, $groupe_id),   // atelier papier (FicheStudio) : présentation et correction
         // séance de l'appel (absences, retards) : le cours, s'il est connu ; sinon la journée (choisi dans le navigateur)
         'seance'    => isset($s['date'], $s['debut']) ? ['cle' => $s['date'] . ' ' . $s['debut'],
             'libelle' => 'cours de ' . $s['debut'] . ($s['date'] !== aujourd_hui() ? ' le ' . date('d/m', (int) strtotime($s['date'])) : '')] : null,
     ];
+}
+
+/**
+ * Atelier papier en cours d'une classe : le document FicheStudio présenté le plus récemment à cette classe (ou à ce
+ * demi-groupe), d'après l'avancement de la correction enregistré par FicheStudio (table fichestudio_avancement).
+ * La cible FicheStudio (« c5 », « c5g2 ») est toujours celle du cours : si le document n'a été présenté qu'à l'autre
+ * demi-groupe (ou à la classe entière), on le propose quand même, sans position (la présentation part du début).
+ */
+function fiche_en_cours(int $classe_id, int $groupe_id): array
+{
+    $cible = 'c' . $classe_id . ($groupe_id ? 'g' . $groupe_id : '');
+    $res = ['cible' => $cible, 'doc' => null];
+    try {
+        // le demi-groupe d'abord, puis la classe entière, puis n'importe quel groupe de la classe
+        $st = db()->prepare("SELECT cible, doc, valeur, maj FROM fichestudio_avancement WHERE cible = ? OR cible = ? OR cible LIKE ?
+            ORDER BY CASE WHEN cible = ? THEN 0 WHEN cible = ? THEN 1 ELSE 2 END, maj DESC LIMIT 1");
+        $st->execute([$cible, 'c' . $classe_id, 'c' . $classe_id . 'g%', $cible, 'c' . $classe_id]);
+        $r = $st->fetch();
+    } catch (Throwable $e) {
+        $r = false;
+    }
+    if (!$r) {
+        return $res;
+    }
+    $v = json_decode((string) $r['valeur'], true) ?: [];
+    $pos = $v['mark'] ?? $v['last'] ?? null;   // fin du dernier cours (🏁), sinon dernière position vue
+    // nom du fichier rangé sur la Centrale (même règle que FicheStudio : nomDocumentCentrale)
+    $fichier = mb_substr(ltrim(preg_replace('/[^\p{L}\p{N} _.()\'-]+/u', '_', preg_replace('/\.fstudio$/i', '', (string) $r['doc'])) ?? '', ". \t"), 0, 120) ?: 'Document';
+    $autre = (string) $r['cible'] !== $cible;
+    if ($autre) {
+        $pos = null;   // la position est celle d'un autre groupe : pas pour ce cours
+    }
+    return ['cible' => $cible, 'autre' => $autre ? (string) $r['cible'] : null, 'doc' => (string) $r['doc'], 'fichier' => $fichier,
+        'present' => is_file(DOSSIER_DATA . '/fichestudio/' . $fichier . '.fstudio'), 'maj' => (int) $r['maj'],
+        'position' => is_array($pos) ? ['feuille' => (string) ($pos['page'] ?? ''), 'etape' => (int) ($pos['shown'] ?? 0), 'total' => (int) ($pos['total'] ?? 0),
+            'fin_cours' => isset($v['mark']), 'quand' => isset($pos['at']) ? (int) round($pos['at'] / 1000) : null] : null];
 }
 
 /** Icône de trait pour les widgets du tableau de bord (couleur héritée du bouton). */
@@ -389,12 +428,14 @@ function page_tableau_de_bord(): void
                 $plan['atelier'] = $s['intitule'] ?: 'Cours';
             }
             $classe = classe_par_id((int) $s['classe_id']);
-            $cours_jour[$k] = ['classe' => $s['classe'], 'debut' => $s['debut'], 'fin' => $s['fin'], 'salle' => $s['salle'],
+            $cours_jour[$k] = ['classe' => $s['classe'], 'debut' => $s['debut'], 'fin' => $s['fin'], 'salle' => $s['salle'], 'cle' => $s['date'] . ' ' . $s['debut'],
+                'classe_id' => (int) $s['classe_id'], 'groupe_id' => (int) ($s['groupe_id'] ?? 0),   // retour de FicheStudio (#feuille=c<classe>g<groupe>)
                 'intitule' => $s['intitule'], 'annule' => $s['statut'] === 'annule', 'plan' => $plan,
                 'places' => $plan ? count((array) $plan['placement']) : 0,
                 'ouvrir' => $s['salle_id'] ? './?p=placement&classe=' . (int) $s['classe_id'] . '&salle=' . (int) $s['salle_id']
                     . ($s['groupe_id'] ? '&groupe=' . (int) $s['groupe_id'] : '') : './?p=classe&id=' . (int) $s['classe_id'],
-                'pastille' => $classe ? pastille_classe($classe, groupe_seance($s)) : h($s['classe'])];
+                'pastille' => $classe ? pastille_classe($classe, groupe_seance($s)) : h($s['classe']),
+                'classe_nom' => $classe ? (string) $classe['nom'] : (string) $s['classe']];   // les notes de la feuille sont rangées sous le nom de la classe
             $eid = (int) $s['etablissement_id'];
             $grilles_jour[$eid] ??= ['nom' => $s['etablissement'], 'creneaux' => creneaux_de($eid), 'seances' => []];
             $grilles_jour[$eid]['seances'][] = ['k' => $k, 'creneau_id' => (int) $s['creneau_id'], 'duree' => (int) $s['duree']];
@@ -431,9 +472,9 @@ function page_tableau_de_bord(): void
                             <span><strong>Session non désanonymisée</strong><small>Charger les noms des classes</small></span>
                         </button>
                         <?php if ($a_valider): ?>
-                            <button type="button" class="dash-widget dash-valider" data-panneau="a-valider" data-titre="Élèves à valider">
+                            <button type="button" class="dash-widget dash-valider" data-panneau="a-valider" data-titre="À valider sur la plateforme">
                                 <?= dash_icone('valider') ?>
-                                <span>À valider <b class="compte-pastille"><?= (int) $total_av ?></b></span>
+                                <span>À valider sur la plateforme</span><b class="compte-pastille"><?= (int) $total_av ?></b>
                             </button>
                         <?php endif; ?>
                         <?php if ($plans_classes): ?>
@@ -486,6 +527,7 @@ function page_tableau_de_bord(): void
                                                             <?= $cj['pastille'] ?>
                                                             <span class="cj-infos"><?= h($cj['salle'] !== '' ? $cj['salle'] : 'sans salle') ?><?= $cj['intitule'] !== '' ? ' · ' . h($cj['intitule']) : '' ?></span>
                                                             <span class="cj-fin"><?= $cj['annule'] ? 'annulé' : '→ ' . h($cj['fin']) ?></span>
+                                                            <?php if (!$cj['annule']): ?><span class="cj-statut" data-cours="<?= (int) $x['k'] ?>" hidden></span><?php endif; ?>
                                                         </button>
                                                     <?php endforeach; elseif ($i <= $couvert && $i > 0): ?>
                                                         <span class="cj-suite" aria-hidden="true"></span>
@@ -502,9 +544,9 @@ function page_tableau_de_bord(): void
                             <script type="application/json" id="json-cours-jour"><?= json_encode($cours_jour, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
                         <?php endif; ?>
                         <?php if ($plans_classes || $cours_jour || $en_cours_maintenant): ?>
-                            <button type="button" class="dash-widget appel-bouton" id="appel-bouton" aria-pressed="false"
-                                    title="Faire l’appel sur le plan affiché : chaque clic sur un élève le marque absent, puis en retard, puis présent. Gardé sur cet ordinateur seulement.">
-                                <?= dash_icone('valider') ?><span><strong id="appel-titre">Faire l’appel</strong><small id="appel-compte"></small></span>
+                            <button type="button" class="dash-widget feuille-bouton" id="feuille-bouton"
+                                    title="Tous les élèves d'un coup, comme une feuille d'appel : absent, retard, critères de −− à ++, oubli de matériel, commentaire">
+                                <?= dash_icone('calendrier') ?><span><strong>Feuille de séance</strong><small id="feuille-statut">appel, observations, oublis : tout d’un coup</small></span>
                             </button>
                             <div class="reperes-widget" id="reperes-widget">
                                 <button type="button" class="dash-widget reperes-tete" id="reperes-tete" aria-expanded="false" aria-controls="reperes-panneau"
@@ -514,12 +556,12 @@ function page_tableau_de_bord(): void
                                 <div class="reperes-panneau" id="reperes-panneau" hidden>
                                     <div class="reperes-source">
                                         <label class="reperes-afficher"><input type="checkbox" id="classe-afficher" checked> <strong>Observé en classe</strong></label>
-                                        <p class="discret reperes-aide">Ce que vous notez : appel, cartons. Gardé sur cet ordinateur. Ronds et cartons, à gauche du trait.</p>
+                                        <p class="discret reperes-aide">Ce que vous notez : appel, notes de séance, cartons. Enregistré sur la Centrale, par numéro. Ronds et cartons, sous le nom.</p>
                                         <ul class="reperes-legende" id="classe-legende"></ul>
                                     </div>
                                     <div class="reperes-source">
                                         <label class="reperes-afficher"><input type="checkbox" id="reperes-afficher" checked> <strong>Sur la plateforme</strong></label>
-                                        <p class="discret reperes-aide">Calculé d’après l’activité dans les ateliers, en comparant l’élève à sa classe. Carrés, à droite du trait.</p>
+                                        <p class="discret reperes-aide">Calculé d’après l’activité dans les ateliers, en comparant l’élève à sa classe. ☁ puis carrés, au-dessus de la photo.</p>
                                         <ul class="reperes-legende" id="reperes-legende"></ul>
                                     </div>
                                     <p class="discret reperes-aide">Le détail chiffré est dans la fiche de l’élève (clic sur l’élève).</p>
@@ -1193,6 +1235,8 @@ function page_tableau_de_bord(): void
                     valeurCourante = valeur;
                     montrerChoix(valeur, p.donnees || !p.versions.length ? 'live' : String(p.versions.length - 1));
                 }
+                window.dashPlansClasses = plansClasses;
+                window.dashChoisirClasse = choisir;
                 choixBouton.addEventListener('click', function () {
                     var ouvrir = choixListe.hidden;
                     choixListe.hidden = !ouvrir;
@@ -1241,7 +1285,34 @@ function page_tableau_de_bord(): void
                     if (window.PlanSalle) PlanSalle.apercu(svg, c.plan);
                     return (cjBlocs[k] = bloc);
                 }
+                /* Statut de la feuille de séance de chaque cours (d'après ce qui est noté, synchronisé avec la Centrale) ; un clic sur le
+                   statut affiche le plan du cours et ouvre sa feuille. */
+                function cjStatuts() {
+                    if (!window.PlanSalle || !PlanSalle.statutFeuille) return;
+                    document.querySelectorAll('.cj-statut').forEach(function (el) {
+                        var c = coursJour[el.dataset.cours], st = PlanSalle.statutFeuille(c.classe_nom, c.cle, c.debut, c.fin);
+                        el.hidden = !st;
+                        if (!st) return;
+                        el.className = 'cj-statut statut-' + st.code;
+                        el.textContent = st.court;
+                        el.title = 'Feuille de séance : ' + st.libelle + (c.plan ? ' · clic pour l’ouvrir' : '');
+                    });
+                }
+                cjStatuts();
+                window.dashCoursJour = coursJour;
+                ['centrale-noms', 'centrale-appel'].forEach(function (n) { document.addEventListener(n, cjStatuts); });
+                setInterval(cjStatuts, 60000);
                 document.getElementById('cours-jour').addEventListener('click', function (ev) {
+                    var st = ev.target.closest('.cj-statut');
+                    if (st) {   // le statut : ouvre la feuille de ce cours
+                        var bc = st.closest('.cj-cours'), cs = coursJour[bc.dataset.cours];
+                        if (cs.plan) {
+                            if (bc.getAttribute('aria-pressed') !== 'true') bc.click();
+                            setTimeout(function () { if (window.PlanSalle) PlanSalle.feuilleSeance(cs.plan); }, 0);
+                        }
+                        ev.stopPropagation();
+                        return;
+                    }
                     var b = ev.target.closest('.cj-cours');
                     if (!b) return;
                     document.querySelectorAll('.cj-cours[aria-pressed="true"]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
@@ -1253,19 +1324,6 @@ function page_tableau_de_bord(): void
                     if (c.plan) { montrerPlan(cjBloc(cjChoisi)); return; }
                     montrerPlan(null);
                     cjTitre.textContent = c.classe + ' (' + c.debut + '–' + c.fin + ') : pas de salle dans l’emploi du temps, donc pas de plan de classe.';
-                });
-            }
-
-            /* Faire l'appel : en mode appel, un clic sur un élève du plan affiché le marque absent → en retard → présent
-               (plan.js) ; sinon il ouvre sa fiche. Les absences restent dans ce navigateur, comme les noms et les cartons. */
-            var appelBouton = document.getElementById('appel-bouton');
-            if (appelBouton) {
-                appelBouton.addEventListener('click', function () {
-                    var on = !document.documentElement.classList.contains('mode-appel');
-                    document.documentElement.classList.toggle('mode-appel', on);
-                    appelBouton.setAttribute('aria-pressed', String(on));
-                    document.getElementById('appel-titre').textContent = on ? 'Appel en cours · cliquez les élèves' : 'Faire l’appel';
-                    document.dispatchEvent(new Event('centrale-appel'));
                 });
             }
 
@@ -1300,6 +1358,10 @@ function page_tableau_de_bord(): void
                 });
             }
 
+            // Feuille de séance : tableau de tous les élèves (appel, observations, oubli de matériel, chiffres de la plateforme) — plan.js
+            var feuilleBouton = document.getElementById('feuille-bouton');
+            if (feuilleBouton) feuilleBouton.addEventListener('click', function () { if (window.PlanSalle) PlanSalle.feuilleSeance(); });
+
             /* Sur grand écran, la colonne de l'horloge se place juste sous le compte à rebours (dz-bas-centre), sans le recouvrir. */
             var colonneHorloge = document.querySelector('.dz-haut-droite'), blocCompte = document.querySelector('.dz-bas-centre');
             function placerHorloge() {
@@ -1313,6 +1375,32 @@ function page_tableau_de_bord(): void
             window.addEventListener('load', placerHorloge);
 
             montrerPlan(planParDefaut());
+
+            /* Retour de FicheStudio (bouton « Feuille d'appel ») : #feuille=c<classe>[g<groupe>][&seance=AAAA-MM-JJ HH:MM]
+               rouvre la feuille de séance de ce cours (sinon du cours du jour de cette classe, sinon de la classe). */
+            function feuilleDepuisAdresse() {
+                var m = location.hash.match(/^#feuille=c(\d+)(?:g(\d+))?(?:&seance=([^&]*))?/);
+                if (!m || !window.PlanSalle) return;
+                history.replaceState(null, '', location.pathname + location.search);
+                var cid = +m[1], gid = +(m[2] || 0), seance = m[3] ? decodeURIComponent(m[3]) : '';
+                var cj = window.dashCoursJour || {}, ks = Object.keys(cj).filter(function (k) { return cj[k].plan && cj[k].classe_id === cid && cj[k].groupe_id === gid; });
+                if (!ks.length) ks = Object.keys(cj).filter(function (k) { return cj[k].plan && cj[k].classe_id === cid; });
+                var heure = new Date().toTimeString().slice(0, 5);
+                var k = ks.filter(function (x) { return cj[x].cle === seance; })[0]
+                    || ks.filter(function (x) { return cj[x].debut <= heure && heure <= cj[x].fin; })[0] || ks[ks.length - 1];
+                if (k !== undefined) {
+                    var bc = document.querySelector('.cj-cours[data-cours="' + k + '"]');
+                    if (bc && bc.getAttribute('aria-pressed') !== 'true') bc.click();
+                    PlanSalle.feuilleSeance(cj[k].plan);
+                    return;
+                }
+                var pc = window.dashPlansClasses || [], v = -1;
+                pc.forEach(function (p, i) { if (v < 0 && p.donnees && p.donnees.classe_id === cid && (p.donnees.groupe_id || 0) === gid) v = i; });
+                pc.forEach(function (p, i) { if (v < 0 && p.donnees && p.donnees.classe_id === cid) v = i; });
+                if (v >= 0 && window.dashChoisirClasse) { window.dashChoisirClasse(String(v)); PlanSalle.feuilleSeance(pc[v].donnees); }
+            }
+            feuilleDepuisAdresse();
+            window.addEventListener('hashchange', feuilleDepuisAdresse);
         })();
         </script>
     </main>

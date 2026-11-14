@@ -343,6 +343,19 @@ function creer_tables(PDO $pdo): void
         maj    INTEGER NOT NULL,
         PRIMARY KEY (cible, doc)
     )');
+    // Suivi de classe noté par l'enseignant (feuille de séance, appel, cartons, statuts…), synchronisé entre ses
+    // ordinateurs : une ligne par unité (élève et séance, incident, élève…), rangée par numéro d'élève — jamais de nom
+    // (les noms et photos restent dans le navigateur). valeur = JSON tel que l'enregistre admin.js ; NULL = effacé
+    // (gardé pour que les autres ordinateurs l'effacent aussi). classe_id 0 : réglages communs (critères).
+    $pdo->exec('CREATE TABLE IF NOT EXISTS suivi_classe (
+        classe_id INTEGER NOT NULL,
+        type      TEXT NOT NULL,
+        cle       TEXT NOT NULL,
+        valeur    TEXT,
+        maj       INTEGER NOT NULL,
+        PRIMARY KEY (classe_id, type, cle)
+    )');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_suivi_maj ON suivi_classe (maj)');
     // Ateliers transversaux : parcours individuel ou en équipe, étapes qui reçoivent / produisent des fichiers
     ajouter_colonne($pdo, 'parcours', 'mode', "TEXT NOT NULL DEFAULT 'individuel'");      // individuel | equipe
     ajouter_colonne($pdo, 'parcours', 'deblocage', "TEXT NOT NULL DEFAULT 'libre'");      // libre | ordre | validation

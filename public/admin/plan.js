@@ -448,7 +448,7 @@ window.PlanSalle = (function () {
       groupes[o.id] = g;
       if (options.surObjet) options.surObjet(o, g, r.w * U, r.h * U, {
         lab: lab,
-        nom: function (texte) { placerNom(nomSurPlace(g, r.w * U, r.h * U, texte, largeurNom(o.id, r)), o.id, r); },
+        nom: function (texte) { var bloc = nomSurPlace(g, r.w * U, r.h * U, texte, largeurNom(o.id, r)); placerNom(bloc, o.id, r); return bloc; },
         bulle: function (u, v) {
           var out = el('g', { transform: 'translate(' + (r.x * U + u) + ',' + (r.y * U + v) + ')' }, survol);
           return el('g', { class: 'bulle' }, out);
@@ -494,7 +494,7 @@ window.PlanSalle = (function () {
         return tr.rect(o.x + fx * lw, o.y + fy * lh, fw * lw, fh * lh);
       },
     }, { surClic: infos.surClic || null, surGlisser: infos.surGlisser || null, peutGlisser: infos.peutGlisser || null, libelle: infos.libelle || null,
-         surLacherAilleurs: infos.surLacherAilleurs || null,
+         surLacherAilleurs: infos.surLacherAilleurs || null, immediat: infos.immediat || null,
          quand: function () { document.dispatchEvent(new Event('centrale-vue')); } });
     return {};
   }
@@ -929,6 +929,58 @@ window.PlanSalle = (function () {
      ====================================================================== */
 
   /** Bulle sans photo : le nom de l'élève, dans un disque, apparaît au survol. */
+  /**
+   * Vue à plat : les pastilles d'un élève, comme en 3D — la plateforme (☁ puis les repères) au-dessus de la photo,
+   * ce qui est noté en classe sous le nom (sous la photo si le nom a dû passer au-dessus).
+   */
+  function pastilles2D(g, w, h, blocNom, jetons) {
+    var plat = jetons.filter(function (t) { return t.indexOf('rep-') === 0; });
+    var enClasse = jetons.filter(function (t) { return t !== '|' && t.indexOf('rep-') !== 0; });
+    if (!plat.length && !enClasse.length) return;
+    // boîte du nom (repère de la place), décalage compris s'il est passé au-dessus de la photo
+    var boite = null;
+    if (blocNom && blocNom.getBBox) {
+      try {
+        var bb = blocNom.getBBox(), m = /translate\(0,\s*(-?[\d.]+)\)/.exec(blocNom.getAttribute('transform') || ''), dy = m ? +m[1] : 0;
+        boite = { haut: bb.y + dy, bas: bb.y + dy + bb.height };
+      } catch (err) { boite = null; }
+    }
+    var nomAuDessus = boite && boite.bas <= 2;
+    var D = 11, PAS = 12;   // diamètre d'une pastille, pas entre deux
+    function rangee(liste, yCentre, cls) {
+      var montres = liste.slice(0, 8), n = montres.length + (liste.length > 8 ? 1 : 0), x0 = w / 2 - (n * PAS - (PAS - D)) / 2 + D / 2;
+      var grp = el('g', { class: 'pastilles-2d ' + cls }, g);
+      montres.forEach(function (t, i) { pastille2D(grp, t, x0 + i * PAS, yCentre, D); });
+      if (liste.length > 8) {
+        el('rect', { x: x0 + 8 * PAS - D / 2, y: yCentre - D / 2, width: D, height: D, rx: 2, fill: '#ffffff', stroke: '#1d1f24', 'stroke-width': .6 }, grp);
+        var tp = el('text', { x: x0 + 8 * PAS, y: yCentre + 2.6, 'text-anchor': 'middle', 'font-size': 6.5, 'font-weight': 800, fill: '#1d1f24' }, grp);
+        tp.textContent = '+' + (liste.length - 8);
+      }
+    }
+    if (plat.length) rangee(['nuage'].concat(plat), Math.min(0, nomAuDessus ? boite.haut : 0) - D / 2 - 2, 'plateforme');
+    if (enClasse.length) rangee(enClasse, (boite && !nomAuDessus ? Math.max(h, boite.bas) : h) + D / 2 + 2, 'en-classe');
+  }
+  /** Une pastille de la vue à plat (mêmes formes et couleurs qu'en 3D : plan3d.js, carteCartons). */
+  function pastille2D(grp, t, cx, cy, D) {
+    var r = D / 2, fond, texte = '', couleurTexte = '#ffffff', carre = false, def;
+    if (t === 'nuage') { fond = '#2b6cb0'; texte = '☁'; carre = true; }
+    else if (t.indexOf('rep-') === 0 && (def = REPERES[t.slice(4)])) { fond = def.couleur; texte = def.glyphe; carre = true; }
+    else if ((def = CLASSE[t])) { fond = def.couleur; texte = def.glyphe; couleurTexte = def.texte || '#ffffff'; }
+    else if (t.indexOf('ob:') === 0) {
+      var mo = t.split(':'), niv = +mo[2], gv = GRAVITE[mo[3]] || GRAVITE.orange;
+      fond = niv > 1 ? '#1e6b42' : niv > 0 ? '#2e8b57' : niv < -1 ? gv.fort : gv.couleur;
+      couleurTexte = niv > 0 ? '#ffffff' : niv < -1 ? gv.texteFort : gv.texte;
+      texte = mo[1];
+    } else if (t === 'recompense') { fond = '#2e8b57'; }
+    else { el('rect', { x: cx - 3.5, y: cy - r, width: 7, height: D, fill: '#f2b705', stroke: '#ffffff', 'stroke-width': .8 }, grp); return; }   // carton jaune
+    if (carre) el('rect', { x: cx - r, y: cy - r, width: D, height: D, rx: 2.5, fill: fond, stroke: '#ffffff', 'stroke-width': .8 }, grp);
+    else el('circle', { cx: cx, cy: cy, r: r, fill: fond, stroke: '#ffffff', 'stroke-width': .8 }, grp);
+    if (texte) {
+      var tx = el('text', { x: cx, y: cy + 2.4, 'text-anchor': 'middle', 'font-size': texte.length > 1 ? 5.5 : 7, 'font-weight': 800, fill: couleurTexte }, grp);
+      tx.textContent = texte;
+    }
+  }
+
   function bulleNom(g, ctx, texte, u, v, z) {
     var bulle = ctx.bulle(u, v, z);
     var inter = el('g', {}, bulle);
@@ -1007,7 +1059,11 @@ window.PlanSalle = (function () {
       cartonsPlace: function (o) {
         var id = carte[o.id], e = id && eleve(id);
         if (!e || !window.CentraleNoms || !window.CentraleNoms.cartons) return [];
-        return (dehors(d.classe, e.numero) ? ['cl-dehors'] : []).concat(window.CentraleNoms.cartons(d.classe, e.numero).map(function (c) { return c.type; }));
+        // en classe (hors de la classe, absences et retards répétés, cartons) | plateforme (repères)
+        var classe = classeVisible() ? observationsClasse(d, e).map(function (r) { return r.code; })
+          .concat(window.CentraleNoms.cartons(d.classe, e.numero).map(function (c) { return c.type; })) : [];
+        var plateforme = reperesVisibles() ? reperesEleve(d, e).filter(function (r) { return REPERES[r.code]; }).map(function (r) { return 'rep-' + r.code; }) : [];
+        return classe.concat(classe.length && plateforme.length ? ['|'] : [], plateforme);
       },
       surClic: function (idPlace) { clicPlace(idPlace); },
       surGlisser: glisser,
@@ -1026,7 +1082,7 @@ window.PlanSalle = (function () {
       return false;
     }
     var dialogueDehors = null;
-    /** Demande le motif, puis met l'élève dehors (statut gardé sur cet ordinateur, comme les noms). */
+    /** Demande le motif, puis met l'élève dehors (statut enregistré sur la Centrale, par numéro). */
     function sortir(idEleve) {
       var e = eleve(idEleve), cn = window.CentraleNoms;
       if (!e || !cn || !cn.definirStatut) return;
@@ -1035,7 +1091,7 @@ window.PlanSalle = (function () {
         document.body.appendChild(dialogueDehors);
       }
       dialogueDehors.replaceChildren();
-      dialogueDehors.append(creer('h3', '', nom(e) + ' : hors de la classe'), creer('p', 'discret', 'Motif (gardé sur cet ordinateur, avec la date du jour) :'));
+      dialogueDehors.append(creer('h3', '', nom(e) + ' : hors de la classe'), creer('p', 'discret', 'Motif (avec la date du jour) :'));
       var choix = creer('div', 'dehors-choix');
       [['exclu_cours', 'Exclu du cours aujourd’hui', 'garde sa place pour les prochains cours'],
        ['exclu', 'Exclu de l’établissement', 'n’est plus placé'],
@@ -1133,6 +1189,66 @@ window.PlanSalle = (function () {
       document.addEventListener('pointerup', lache);
     }
 
+    /* ---------- Élèves à séparer (dissipations, altercations de la feuille de séance, par paires) : voisins = côte à côte, en face ou en diagonale ; proches = juste à côté ---------- */
+    var VOISINS = 1.9, PROCHES = 2.6;   // distance entre les centres des places, en carreaux (≈ 50 cm) : même table ≈ 1 à 1,8
+    var centresPlaces = {};
+    plan.objets.filter(estPlace).forEach(function (o) { centresPlaces[o.id] = { x: o.x + largeurVue(o) / 2, y: o.y + hauteurVue(o) / 2 }; });
+    var idParNumero = {};
+    d.eleves.forEach(function (e) { idParNumero[String(e.numero)] = e.id; });
+    /** Les duos assis trop près dans une répartition : [{ paire, pa, pb, distance, voisins }]. */
+    function duosTropPres(rep) {
+      var placeDeId = {};
+      Object.keys(rep).forEach(function (pl) { placeDeId[rep[pl]] = pl; });
+      var res = [];
+      pairesDuos(d.classe).forEach(function (paire) {
+        var pa = placeDeId[idParNumero[paire.a]], pb = placeDeId[idParNumero[paire.b]];
+        if (!pa || !pb || !centresPlaces[pa] || !centresPlaces[pb]) return;
+        var dist = Math.hypot(centresPlaces[pa].x - centresPlaces[pb].x, centresPlaces[pa].y - centresPlaces[pb].y);
+        if (dist <= PROCHES) res.push({ paire: paire, pa: pa, pb: pb, distance: dist, voisins: dist <= VOISINS });
+      });
+      return res;
+    }
+    function coutDuos(rep) { return duosTropPres(rep).reduce(function (t, c) { return t + c.paire.poids * (c.voisins ? 4 : 1); }, 0); }
+    var boiteDuos = creer('div', 'duos-plan');
+    boiteDuos.hidden = true;
+    liste.before(boiteDuos);   // au-dessus de la liste des élèves : visible sans faire défiler
+    function rendreDuos() {
+      var paires = pairesDuos(d.classe), trop = duosTropPres(carte);
+      boiteDuos.hidden = !paires.length;
+      boiteDuos.replaceChildren();
+      if (!paires.length) return;
+      boiteDuos.className = 'duos-plan' + (trop.some(function (c) { return c.voisins; }) ? ' alerte' : trop.length ? ' attention' : ' ok');
+      boiteDuos.appendChild(creer('p', 'duos-titre', trop.length ? '⚠ À séparer, assis trop près (' + trop.length + ')' : '✓ Élèves à séparer : bien séparés'));
+      if (!trop.length) {
+        boiteDuos.appendChild(creer('p', 'discret', paires.length + ' paire' + (paires.length > 1 ? 's' : '') + ' d’élèves notée' + (paires.length > 1 ? 's' : '') + ' (dissipation, altercation) dans la feuille de séance : aucune n’est assise ensemble.'));
+        return;
+      }
+      var ul = creer('ul');
+      trop.forEach(function (c) {
+        var ea = eleve(idParNumero[c.paire.a]), eb = eleve(idParNumero[c.paire.b]), li = creer('li', c.voisins ? 'voisins' : 'proches');
+        li.append(creer('strong', '', (ea ? nom(ea) : c.paire.a) + ' ↔ ' + (eb ? nom(eb) : c.paire.b)), creer('br'),
+          creer('span', 'discret', (c.voisins ? 'côte à côte' : 'tout proches') + ' · ' + resumePaire(c.paire)));
+        ul.appendChild(li);
+      });
+      boiteDuos.append(ul, creer('p', 'discret', 'Glissez l’un des deux ailleurs, ou « Placement aléatoire » : il les éloigne.'));
+    }
+    /** Vue à plat : un trait entre deux élèves d'un duo trop près (rouge : voisins, orange : tout proches). */
+    function tracerDuos() {
+      var p = affichage(plan);
+      if ((p.vue || {}).iso || svg.style.display === 'none') return;
+      var trop = duosTropPres(carte);
+      if (!trop.length) return;
+      var tr = transformation(p), calque = el('g', { class: 'calque-duos' }, svg);
+      trop.forEach(function (c) {
+        var oa = plan.objets.find(function (o) { return o.id === c.pa; }), ob = plan.objets.find(function (o) { return o.id === c.pb; });
+        if (!oa || !ob) return;
+        var ra = tr.rect(oa.x, oa.y, largeurVue(oa), hauteurVue(oa)), rb = tr.rect(ob.x, ob.y, largeurVue(ob), hauteurVue(ob));
+        var ln = el('line', { x1: (ra.x + ra.w / 2) * U, y1: (ra.y + ra.h / 2) * U, x2: (rb.x + rb.w / 2) * U, y2: (rb.y + rb.h / 2) * U,
+          class: 'ligne-duo ' + (c.voisins ? 'voisins' : 'proches') }, calque);
+        el('title', {}, ln).textContent = 'À séparer · ' + resumePaire(c.paire);
+      });
+    }
+
     function rendre() {
       orientationPage(affichage(plan));
       var nums = numeros(plan);
@@ -1149,7 +1265,8 @@ window.PlanSalle = (function () {
             if (e && dehors(d.classe, e.numero)) g.classList.add('dehors');   // exclu du cours aujourd'hui : place gardée, grisée
             var visage = e ? photo(d.classe, e.numero) : null;
             if (visage) photoPlace(g, w, h, visage);
-            if (ctx.nom) ctx.nom(e ? nom(e) : '?'); else ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? nom(e) : '?');
+            var blocNomPlace = ctx.nom ? ctx.nom(e ? nom(e) : '?') : ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? nom(e) : '?');
+            if (ctx.nom) pastilles2D(g, w, h, blocNomPlace, infosPlaces.cartonsPlace(o));
             var bes = e && window.CentraleNoms && window.CentraleNoms.besoins ? window.CentraleNoms.besoins(d.classe, e.numero) : [];
             if (bes.length) {   // petit repère sur la place (masqué à l'impression)
               var m = el('circle', { cx: w - 5, cy: 5, r: 4.5, class: 'marque-besoin' }, g);
@@ -1201,6 +1318,8 @@ window.PlanSalle = (function () {
         liste.appendChild(li);
       });
       rendreDehors();
+      tracerDuos();
+      rendreDuos();
       var nbPlaces = plan.objets.filter(estPlace).length;
       var nbPlaces2 = Object.keys(carte).length;
       document.getElementById('compte-places').textContent = nbPlaces2 + ' élève' + (nbPlaces2 > 1 ? 's' : '') + ' placé' + (nbPlaces2 > 1 ? 's' : '')
@@ -1215,9 +1334,16 @@ window.PlanSalle = (function () {
     document.getElementById('p-aleatoire').onclick = function () {
       var places = plan.objets.filter(estPlace).map(function (o) { return o.id; });
       var eleves = d.eleves.filter(function (e) { return e.actif && !sorti(d.classe, e.numero); }).map(function (e) { return e.id; });
-      for (var i = places.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = places[i]; places[i] = places[j]; places[j] = t; }
-      carte = {};
-      eleves.forEach(function (id, i) { if (places[i]) carte[places[i]] = id; });
+      // plusieurs tirages : on garde celui où les duos (dissipation, altercation) sont le plus éloignés
+      var meilleur = null, coutMin = Infinity, avecDuos = pairesDuos(d.classe).length > 0;
+      for (var essai = 0; essai < (avecDuos ? 600 : 1) && coutMin > 0; essai++) {
+        for (var i = places.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = places[i]; places[i] = places[j]; places[j] = t; }
+        var rep = {};
+        eleves.forEach(function (id, k) { if (places[k]) rep[places[k]] = id; });
+        var cout = avecDuos ? coutDuos(rep) : 0;
+        if (cout < coutMin) { coutMin = cout; meilleur = rep; }
+      }
+      carte = meilleur || {};
       modifie();
       if (eleves.length > places.length) {
         document.getElementById('compte-places').dataset.alerte = 'Il manque ' + (eleves.length - places.length) + ' place(s) dans la salle.';
@@ -1338,14 +1464,70 @@ window.PlanSalle = (function () {
       return dd;
     }
     rang('En classe', puces((pres ? [pres] : []).concat(obs.map(function (r) { return r.code; }), cartons.map(function (c) { return c.type; })), CLASSE, 'rien de noté'));
+    if (cn && cn.observation) {   // notes de la séance affichée : « P+ », « C− »
+      var oSeance = cn.observation(d.classe, e.numero, seanceDe(d).cle), ddO = creer('dd', 'obs-seance');
+      cn.criteres().forEach(function (k) {
+        if (!oSeance[k] || !CRITERES[k]) return;
+        var x = creer('span', (oSeance[k] > 0 ? 'plus' : 'moins') + (Math.abs(oSeance[k]) > 1 ? ' fort' : ''), CRITERES[k].lettre + signeNiveau(oSeance[k]));
+        x.title = CRITERES[k].libelle + ((oSeance._c || {})[k] ? ' : ' + oSeance._c[k] : '');
+        ddO.appendChild(x);
+      });
+      if (!ddO.childNodes.length) ddO.appendChild(creer('span', 'discret', 'rien de noté'));
+      rang('Séance', ddO);
+    }
     rang('Plateforme', puces(rep.map(function (r) { return r.code; }), REPERES, 'rien de particulier'));
     resume.appendChild(detail);
 
-    // 2. Observé en classe : l'appel (séance, relevé), puis les cartons — noté par l'enseignant sur cet ordinateur
-    var appel = partie('appel', 'Appel · observé en classe', 'classe', 'Noté par vous, gardé sur cet ordinateur.');
+    // 2. Observé en classe : observations de la séance (critères), l'appel, puis les cartons — synchronisé avec la Centrale
+    if (cn && cn.observation) {
+      var obsP = partie('observations', 'Observations · observé en classe', 'classe', 'Séance : de −− à ++ pour chaque critère (= : comme d’habitude), et un commentaire si besoin. Cumul de toutes les séances.');
+      var sObs = seanceDe(d), actuelles = cn.observation(d.classe, e.numero, sObs.cle);
+      cn.criteres().concat(['oubli']).forEach(function (k) {
+        if (!CRITERES[k]) return;
+        var ligneO = creer('div', 'obs-ligne'), b = bilanCritere(d.classe, e.numero, k);
+        ligneO.appendChild(creer('span', 'obs-critere', CRITERES[k].libelle));
+        if (CRITERES[k].caseACocher) {   // oubli de matériel : une case pour ce cours, et le nombre d'oublis
+          var lab = creer('label', 'case obs-case'), ca = creer('input');
+          ca.type = 'checkbox';
+          ca.checked = actuelles[k] === -1;
+          ca.addEventListener('change', function () { cn.definirObservation(d.classe, e.numero, sObs.cle, k, ca.checked ? -1 : 0); actualiser(); });
+          lab.append(ca, ' ce cours');
+          ligneO.append(lab, creer('span', 'obs-total', b.moins ? b.moins + ' oubli' + (b.moins > 1 ? 's' : '') : '—'), pointsSeances(b, 8));
+          obsP.appendChild(ligneO);
+          return;
+        }
+        var choix = creer('span', 'obs-choix');
+        [-2, -1, 0, 1, 2].forEach(function (v) {
+          var bt = creer('button', 'obs-' + (v > 0 ? 'plus' : v < 0 ? 'moins' : 'neutre') + (Math.abs(v) > 1 ? ' fort' : ''), signeNiveau(v));
+          bt.type = 'button';
+          bt.title = sObs.libelle + ' : ' + NIVEAUX[String(v)].libelle;
+          bt.setAttribute('aria-pressed', String((actuelles[k] || 0) === v));
+          bt.addEventListener('click', function () { cn.definirObservation(d.classe, e.numero, sObs.cle, k, v); actualiser(); });
+          choix.appendChild(bt);
+        });
+        ligneO.append(choix, creer('span', 'obs-total', (b.plus || b.moins) ? '+' + b.plus + ' / −' + b.moins : '—'), pointsSeances(b, 8));
+        // commentaire de la séance pour ce critère (enregistré en quittant le champ), puis les précédents
+        var com = creer('input', 'obs-commentaire');
+        com.type = 'text';
+        com.maxLength = 300;
+        com.placeholder = 'Commentaire pour préciser (facultatif)';
+        com.value = (actuelles._c || {})[k] || '';
+        com.addEventListener('change', function () { com.value = cn.definirCommentaire(d.classe, e.numero, sObs.cle, k, com.value) || ''; });
+        com.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') com.blur(); });
+        ligneO.appendChild(com);
+        var anciens = b.commentaires.filter(function (c) { return c.cle !== sObs.cle; }).slice(0, 3);
+        if (anciens.length) {
+          var ul = creer('ul', 'obs-anciens');
+          anciens.forEach(function (c) { ul.appendChild(creer('li', '', c.cle.slice(0, 10).split('-').reverse().join('/') + ' (' + signeNiveau(c.v) + ') : ' + c.texte)); });
+          ligneO.appendChild(ul);
+        }
+        obsP.appendChild(ligneO);
+      });
+    }
+    var appel = partie('appel', 'Appel · observé en classe', 'classe', 'Noté par vous, enregistré sur la Centrale.');
     lignesReperes(appel, obs, CLASSE);
     if (cn && cn.presence) appel.appendChild(sectionPresence(d, e.numero, actualiser));
-    var blocCartons = partie('cartons', 'Cartons · observé en classe', 'classe', 'Observations et récompenses, gardées sur cet ordinateur.');
+    var blocCartons = partie('cartons', 'Cartons · observé en classe', 'classe', 'Observations et récompenses, enregistrées sur la Centrale.');
     if (cn && cn.cartons) blocCartons.appendChild(sectionCartons(d.classe, e.numero, actualiser));
 
     // 3. Sur la plateforme : calculé par la Centrale d'après l'activité dans les ateliers
@@ -1401,7 +1583,7 @@ window.PlanSalle = (function () {
     var liste = cn.absences(d.classe, numero);
     var nbA = liste.filter(function (x) { return x.etat === 'absent'; }).length, nbR = liste.length - nbA;
     bloc.appendChild(creer('p', 'discret presence-bilan', liste.length
-      ? nbA + ' absence' + (nbA > 1 ? 's' : '') + ' · ' + nbR + ' retard' + (nbR > 1 ? 's' : '') + ' notés sur cet ordinateur'
+      ? nbA + ' absence' + (nbA > 1 ? 's' : '') + ' · ' + nbR + ' retard' + (nbR > 1 ? 's' : '') + ' notés à l’appel'
       : 'Aucune absence ni retard noté.'));
     if (liste.length) {
       var ul = creer('ul', 'presence-liste');
@@ -1498,7 +1680,7 @@ window.PlanSalle = (function () {
     var e = id && (d.eleves || []).find(function (x) { return x.id === id; });
     if (!conteneur || !e) return;
     var cn = window.CentraleNoms;
-    var fiche = conteneur.querySelector('.fiche-trois');
+    var fiche = conteneur.querySelector('.fiche-trois:not(.bilan-obs)');   // ni le bilan ni la feuille de séance   // (le bilan de la classe a aussi la classe fiche-trois)
     if (!fiche) {
       fiche = creer('div', 'fiche-trois');
       fiche.hidden = true;
@@ -1561,39 +1743,1063 @@ window.PlanSalle = (function () {
     var cn = window.CentraleNoms;
     return { cle: cn && cn.dateLocale ? cn.dateLocale() : new Date().toISOString().slice(0, 10), libelle: 'aujourd’hui' };
   }
-  function enAppel() { return document.documentElement.classList.contains('mode-appel'); }
+
+  /* ---------- Observations de séance (feuille de séance) : critères notés de −− à ++, oubli de matériel, commentaires ---------- */
+  var CRITERES = {
+    // gravite : couleur d'un « − » (jaune : léger, bavardage ; orange : cahier, matériel ; rouge : grave) — voir GRAVITE
+    participation: { lettre: 'P', libelle: 'Participation', court: 'Particip.', gravite: 'jaune' },
+    comportement:  { lettre: 'C', libelle: 'Comportement, bavardage', court: 'Comport.', gravite: 'jaune' },
+    cahier:        { lettre: 'Ca', libelle: 'Cahier, classeur', court: 'Cahier', gravite: 'orange' },
+    travail:       { lettre: 'T', libelle: 'Travail, autonomie', court: 'Travail', gravite: 'jaune' },
+    materiel:      { lettre: 'M', libelle: 'Matériel (soin, utilisation)', court: 'Matériel', gravite: 'orange' },
+    // case à cocher (toujours là, hors des critères choisis) : oublié ce cours = −1
+    oubli:         { lettre: 'Ob', libelle: 'Oubli de matériel', caseACocher: true, gravite: 'orange' },
+    equipe:        { lettre: 'E', libelle: 'Travail en équipe', court: 'Équipe', gravite: 'jaune' },
+    rangement:     { lettre: 'Rg', libelle: 'Rangement, soin du matériel', court: 'Rangt', gravite: 'orange' },
+    securite:      { lettre: 'S', libelle: 'Sécurité', court: 'Sécurité', gravite: 'rouge' },
+    numerique:     { lettre: 'N', libelle: 'Usage du numérique', court: 'Numér.', gravite: 'jaune' },
+  };
+  /** Couleurs par gravité, partout (feuille, légende, plan 3D) : retard, bavardage, dissipation en jaune ; cahier, oubli
+      en orange ; exclusion, altercation en rouge ; absent en gris bleu (une information, pas un comportement). */
+  var GRAVITE = {
+    jaune:  { couleur: '#e0a800', fort: '#a87b00', texte: '#2b2000', texteFort: '#ffffff', libelle: 'léger : retard, bavardage, dissipation' },
+    orange: { couleur: '#e67e22', fort: '#a84f0c', texte: '#ffffff', texteFort: '#ffffff', libelle: 'à surveiller : cahier non tenu, oubli de matériel' },
+    rouge:  { couleur: '#c0392b', fort: '#8e1f15', texte: '#ffffff', texteFort: '#ffffff', libelle: 'grave : exclusion, altercation' },
+    gris:   { couleur: '#5b6b8c', fort: '#3d4a66', texte: '#ffffff', texteFort: '#ffffff', libelle: 'absent' },
+  };
+  /** Cinq niveaux : −− (-2), − (-1), = (rien, comme d'habitude), + (1), ++ (2). */
+  var NIVEAUX = { '-2': { signe: '−−', libelle: 'gros souci' }, '-1': { signe: '−', libelle: 'à revoir' }, '0': { signe: '=', libelle: 'comme d’habitude' },
+                  '1': { signe: '+', libelle: 'bien' }, '2': { signe: '++', libelle: 'très bien' } };
+  function signeNiveau(v) { return (NIVEAUX[String(v)] || NIVEAUX['0']).signe; }
+  /** Pastilles de la séance affichée : « P+ », « P++ » en vert, « C− », « C−− » en rouge (critères choisis seulement). */
+  function pastillesObservation(d, e) {
+    var cn = window.CentraleNoms;
+    if (!cn || !cn.observation) return [];
+    var o = cn.observation(d.classe, e.numero, seanceDe(d).cle), res = [];
+    cn.criteres().concat(['oubli']).forEach(function (k) { if (o[k] && CRITERES[k]) res.push('ob:' + CRITERES[k].lettre + ':' + o[k] + ':' + (CRITERES[k].gravite || 'orange')); });
+    return res;
+  }
+  /** Bilan d'un élève pour un critère, sur toutes les séances notées : { plus, moins, seances: [ {cle, v} ] (récentes d'abord) }. */
+  function bilanCritere(classe, numero, k) {
+    var cn = window.CentraleNoms, toutes = cn && cn.observationsEleve ? cn.observationsEleve(classe, numero) : {},
+        b = { plus: 0, moins: 0, seances: [], commentaires: [] };
+    Object.keys(toutes).sort().reverse().forEach(function (cle) {
+      var v = toutes[cle][k], com = (toutes[cle]._c || {})[k];
+      if (com) b.commentaires.push({ cle: cle, texte: com, v: v || 0 });
+      if (!v) return;
+      if (v > 0) b.plus += v; else b.moins -= v;   // ++ compte 2, −− compte 2
+      b.seances.push({ cle: cle, v: v });
+    });
+    return b;
+  }
+  function pointsSeances(b, n) {   // les n dernières séances notées : ● vert (+) ou rouge (−), la plus récente à droite
+    var span = creer('span', 'obs-points');
+    b.seances.slice(0, n).reverse().forEach(function (x) {
+      var p = creer('i', (x.v > 0 ? 'plus' : 'moins') + (Math.abs(x.v) > 1 ? ' fort' : ''));
+      p.title = x.cle.slice(0, 10).split('-').reverse().join('/') + (x.cle.length > 10 ? ' ' + x.cle.slice(11) : '') + ' : ' + signeNiveau(x.v);
+      span.appendChild(p);
+    });
+    return span;
+  }
+
+  /**
+   * Feuille de séance (comme une feuille d'appel) : tous les élèves d'un coup, une ligne chacun.
+   *   En classe (noté par l'enseignant, synchronisé avec la Centrale) : Absent, Retard, Oubli de matériel, puis les critères de −− à ++
+   *   (Cahier, Comportement, Participation, puis les autres critères choisis) — une pastille, qui se déplie au survol —
+   *   et un commentaire.
+   *   Plateforme (calculé par la Centrale) : activités terminées, réussite du 1er coup, temps actif, dernière activité, repères.
+   * Pour la séance du plan affiché à l'accueil. Chaque case s'enregistre tout de suite ; le plan 3D suit.
+   */
+  var planAccueil = null;   // plan affiché dans la vue de l'accueil : { svg, d, carte } (feuille de séance)
+  var ORDRE_FEUILLE = ['cahier', 'comportement', 'participation'];
+
+  /* À séparer : des élèves (deux ou plus) qui se dissipent ensemble ou se sont disputés (noté dans la feuille de séance, gardé sur cet
+   * ordinateur). Signalés sur le plan de classe quand ils sont voisins ; le placement au hasard les sépare. */
+  var TYPES_DUO = {
+    dissipation: { libelle: 'Dissipation', icone: '💬', texte: 'se dissipent ensemble (bavardages, chahut)' },
+    altercation: { libelle: 'Altercation', icone: '⚔️', texte: 'se sont disputés ou accrochés' }
+  };
+  /** Les paires d'une classe : [{ a, b, dissipation, altercation, poids, derniere, textes }], la plus lourde d'abord. */
+  function pairesDuos(classe) {   // chaque incident à plusieurs donne toutes ses paires
+    var cn = window.CentraleNoms, carte = {};
+    if (!cn || !cn.incidents) return [];
+    cn.incidents(classe).forEach(function (x) {
+      var m = x.membres.slice().sort(function (u, v) { return u.localeCompare(v, 'fr', { numeric: true }); });
+      for (var i = 0; i < m.length; i++) for (var j = i + 1; j < m.length; j++) {
+        var a = m[i], b = m[j];
+        var p = carte[a + '|' + b] = carte[a + '|' + b] || { a: a, b: b, dissipation: 0, altercation: 0, poids: 0, derniere: '', textes: [] };
+        p[x.type]++;
+        p.poids += x.type === 'altercation' ? 2 : 1;
+        if (x.seance > p.derniere) p.derniere = x.seance;
+        if (x.texte) p.textes.push(x.texte);
+      }
+    });
+    return Object.keys(carte).map(function (k) { return carte[k]; }).sort(function (u, v) { return v.poids - u.poids; });
+  }
+  function jourSeance(cle) { return cle ? cle.slice(8, 10) + '/' + cle.slice(5, 7) : ''; }
+  function resumePaire(p) {
+    return [p.dissipation ? p.dissipation + ' dissipation' + (p.dissipation > 1 ? 's' : '') : '', p.altercation ? p.altercation + ' altercation' + (p.altercation > 1 ? 's' : '') : '']
+      .filter(Boolean).join(' · ') + (p.derniere ? ' (dernière le ' + jourSeance(p.derniere) + ')' : '');
+  }
+
+  /* ---------- Note de séance : moyenne des critères (non noté = 0, comme d'habitude ; oubli de matériel = −1),
+     corrigeable à la main (clé « note », de −2 à 2, avec un commentaire « note ») ---------- */
+  function noteCalculee(ob, criteres) {
+    var vals = criteres.map(function (k) { return ob[k] || 0; });
+    if (ob.oubli) vals.push(-1);
+    if (ob.exclusion) vals.push(-2);   // exclusion du cours
+    return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : 0;
+  }
+  function noteSeance(ob, criteres) {
+    var calc = noteCalculee(ob, criteres);
+    return typeof ob.note === 'number' ? { v: ob.note, auto: false, calc: calc } : { v: calc, auto: true, calc: calc };
+  }
+  function texteNote(v) {
+    if (v == null) return '—';
+    var r = Math.round(v * 10) / 10;
+    if (r === 0) return '=';   // comme d'habitude
+    return (r > 0 ? '+' : '−') + String(Math.abs(r)).replace('.', ',');
+  }
+  function niveauNote(v) { return v == null ? null : v >= 1.5 ? 2 : v >= 0.5 ? 1 : v <= -1.5 ? -2 : v <= -0.5 ? -1 : 0; }
+  function classeNote(v) { var n = niveauNote(v); return n == null ? 'note-vide' : 'note-n' + String(n).replace('-', 'm'); }
+  function dateSeance(cle) { return cle.slice(8, 10) + '/' + cle.slice(5, 7) + (cle.length > 10 ? ' ' + cle.slice(11) : ''); }
+
+  /**
+   * Graphique d'évolution (fenêtre par-dessus la feuille) : une ligne de note par séance, de −− à ++ ;
+   * les notes corrigées à la main sont cerclées ; au survol d'un point, le détail.
+   * points : [{ cle, v (ou null : absent), auto, detail }], dans l'ordre des séances.
+   */
+  function graphiqueEvolution(conteneur, titre, sousTitre, points) {
+    var pop = conteneur.querySelector('.evolution-pop');
+    if (!pop) {
+      pop = creer('div', 'legende-pop evolution-pop');
+      pop.addEventListener('click', function (ev) { ev.stopPropagation(); });
+      conteneur.appendChild(pop);
+    }
+    pop.replaceChildren();
+    var fermerG = creer('button', 'fiche-trois-fermer', '×');
+    fermerG.type = 'button';
+    fermerG.addEventListener('click', function () { pop.hidden = true; });
+    pop.append(fermerG, creer('h4', '', titre), creer('p', 'discret', sousTitre));
+    var notes = points.filter(function (p) { return p.v != null; });
+    if (!notes.length) {
+      pop.appendChild(creer('p', '', 'Aucune séance notée pour l’instant.'));
+      pop.hidden = false;
+      return;
+    }
+    var W = 560, H = 230, gx = 46, gy = 16, dx = 18, bas = 34, n = points.length;
+    var lw = W - gx - dx, lh = H - gy - bas;
+    function X(i) { return gx + (n > 1 ? i * lw / (n - 1) : lw / 2); }
+    function Y(v) { return gy + (2 - v) / 4 * lh; }
+    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'graphique-evolution', role: 'img', 'aria-label': titre });
+    [2, 1, 0, -1, -2].forEach(function (v) {
+      el('line', { x1: gx, x2: W - dx, y1: Y(v), y2: Y(v), class: v === 0 ? 'axe-zero' : 'grille-g' }, svg);
+      var t = el('text', { x: gx - 8, y: Y(v) + 4, class: 'etiq-y' }, svg);
+      t.textContent = signeNiveau(v);
+    });
+    // la ligne, coupée aux séances d'absence
+    var d = '', leve = true;
+    points.forEach(function (p, i) {
+      if (p.v == null) { leve = true; return; }
+      d += (leve ? 'M' : 'L') + X(i).toFixed(1) + ',' + Y(p.v).toFixed(1) + ' ';
+      leve = false;
+    });
+    el('path', { d: d, class: 'ligne-note' }, svg);
+    var pas = Math.max(1, Math.ceil(n / 10));   // pas plus de 10 dates sous l'axe
+    points.forEach(function (p, i) {
+      if (i % pas === 0 || i === n - 1) {
+        var t = el('text', { x: X(i), y: H - bas + 18, class: 'etiq-x' }, svg);
+        t.textContent = p.cle.slice(8, 10) + '/' + p.cle.slice(5, 7);
+      }
+      if (p.v == null) {
+        var a = el('text', { x: X(i), y: Y(0) + 4, class: 'point-absent' }, svg);
+        a.textContent = 'A';
+        el('title', {}, a).textContent = dateSeance(p.cle) + ' : absent';
+        return;
+      }
+      if (p.marque) { var mq = el('text', { x: X(i), y: Y(p.v) - 10, class: 'point-marque' }, svg); mq.textContent = p.marque; }
+      var c = el('circle', { cx: X(i), cy: Y(p.v), r: p.auto ? 5 : 6.5, class: 'point-note ' + classeNote(p.v) + (p.auto ? '' : ' corrigee') }, svg);
+      el('title', {}, c).textContent = dateSeance(p.cle) + ' : ' + texteNote(p.v) + (p.auto ? ' (calculée)' : ' (corrigée)') + (p.detail ? '\n' + p.detail : '');
+    });
+    pop.appendChild(svg);
+    var moy = notes.reduce(function (a, p) { return a + p.v; }, 0) / notes.length, der = notes[notes.length - 1];
+    pop.appendChild(creer('p', 'resume-evolution', notes.length + ' séance' + (notes.length > 1 ? 's' : '') + ' · moyenne ' + texteNote(moy)
+      + ' · dernière ' + texteNote(der.v) + ' · ● calculée, ◉ corrigée à la main, A absent, ⚡ séance interrompue'));
+    pop.hidden = false;
+  }
+  function dureeCourte(sec) {
+    if (!sec) return '—';
+    var h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+    return h ? h + ' h ' + (m < 10 ? '0' : '') + m : m + ' min';
+  }
+  function dateCourte(ts) {
+    if (!ts) return '—';
+    var jours = Math.floor((Date.now() / 1000 - ts) / 86400), dt = new Date(ts * 1000);
+    return jours <= 0 ? 'aujourd’hui' : jours === 1 ? 'hier' : jours < 7 ? 'il y a ' + jours + ' j' : (dt.getDate() < 10 ? '0' : '') + dt.getDate() + '/' + (dt.getMonth() < 9 ? '0' : '') + (dt.getMonth() + 1);
+  }
+  function feuilleSeance(dVoulu) {
+    function pret(dv) {   // le plan voulu est affiché en 3D, et les noms locaux (admin.js, chargé après l'accueil) sont là
+      return planAccueil && (!dv || planAccueil.d === dv) && planAccueil.svg._conteneurTrois && window.CentraleNoms && window.CentraleNoms.observation;
+    }
+    if (!pret(dVoulu)) {   // le plan de ce cours est en train de s'afficher : on l'attend
+      if (!dVoulu && !planAccueil) return;
+      var essais = 0;
+      (function attendre() {
+        if (pret(dVoulu)) feuilleSeance();
+        else if (++essais < 300) setTimeout(attendre, 100);   // jusqu'à 30 s : au premier affichage, la vue 3D se charge d'abord
+      })();
+      return;
+    }
+    if (!planAccueil) return;
+    var svg = planAccueil.svg, d = planAccueil.d, conteneur = svg._conteneurTrois, cn = window.CentraleNoms;
+    if (!conteneur || !cn || !cn.observation) return;
+    var s = seanceDe(d), fond = conteneur.querySelector('.feuille-seance');
+    if (!fond) {
+      fond = creer('div', 'fiche-trois bilan-obs feuille-seance');
+      conteneur.appendChild(fond);
+      fond.addEventListener('click', function (ev) { if (ev.target === fond) fond.hidden = true; });
+      document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fond.hidden = true; });
+    }
+    var defileAvant = fond.querySelector('.bilan-defile');
+    var hautAvant = defileAvant ? defileAvant.scrollTop : 0;
+    fond.replaceChildren();
+    if (!fond._fermeMenus) {
+      fond._fermeMenus = true;
+      fond.addEventListener('click', function (ev) {
+        if (!ev.target.closest('.feuille-niveaux, .feuille-com')) fond.querySelectorAll('.feuille-niveaux.ouvert, .feuille-com.ouvert').forEach(function (x) { x.classList.remove('ouvert'); });
+        if (!ev.target.closest('.feuille-photo')) masquerPhotoGrande();
+      });
+    }
+    /* Photo agrandie : posée sur la vignette (même bord gauche, centrée en hauteur), dans l'écran, au-dessus du tableau */
+    var photoGrande = fond.querySelector('.feuille-photo-grande');
+    function montrerPhotoGrande(ph, visage, nom) {
+      if (!photoGrande) {
+        photoGrande = creer('div', 'feuille-photo-grande');
+        photoGrande.append(creer('div', 'fpg-image'), creer('div', 'fpg-nom'));
+        fond.appendChild(photoGrande);
+      }
+      var L = 132, H = 160, r = ph.getBoundingClientRect();
+      cn.styleVisage(photoGrande.firstChild, visage, L / visage.l, L, H);
+      photoGrande.lastChild.textContent = nom;
+      photoGrande._de = ph;
+      photoGrande.hidden = false;
+      var haut = Math.max(8, Math.min(window.innerHeight - H - 34, r.top + r.height / 2 - H / 2));
+      photoGrande.style.left = Math.max(8, Math.min(window.innerWidth - L - 16, r.left - 4)) + 'px';
+      photoGrande.style.top = haut + 'px';
+    }
+    function masquerPhotoGrande() { if (photoGrande) photoGrande.hidden = true; }
+    var carteF = creer('div', 'fiche-trois-carte bilan-carte feuille-carte'), fermer = creer('button', 'fiche-trois-fermer', '×');
+    fermer.type = 'button';
+    fermer.addEventListener('click', function () { fond.hidden = true; });
+    var choisis = cn.criteres().filter(function (k) { return CRITERES[k] && !CRITERES[k].caseACocher; });
+    var criteres = ORDRE_FEUILLE.filter(function (k) { return choisis.indexOf(k) >= 0; })
+      .concat(choisis.filter(function (k) { return ORDRE_FEUILLE.indexOf(k) < 0; }));
+    var resume = creer('div', 'feuille-resume');
+
+    // case en haut à gauche (au-dessus de « Élève ») : explication, légende des icônes, boutons Bilan et Critères…
+    var outils = creer('div', 'feuille-outils'), bCrit = creer('button', 'petit secondaire', 'Critères…');
+    bCrit.type = 'button';
+    var reglage = creer('div', 'feuille-reglage');
+    reglage.hidden = true;
+    Object.keys(CRITERES).filter(function (k) { return !CRITERES[k].caseACocher; }).forEach(function (k) {
+      var l = creer('label', 'case'), i = creer('input');
+      i.type = 'checkbox';
+      i.checked = choisis.indexOf(k) >= 0;
+      i.addEventListener('change', function () {
+        var liste = Object.keys(CRITERES).filter(function (x) { return !CRITERES[x].caseACocher && (x === k ? i.checked : cn.criteres().indexOf(x) >= 0); });
+        if (!liste.length) { i.checked = true; return; }
+        cn.definirCriteres(liste);
+        feuilleSeance();
+      });
+      l.append(i, ' ' + CRITERES[k].libelle);
+      reglage.appendChild(l);
+    });
+    bCrit.addEventListener('click', function () { reglage.hidden = !reglage.hidden; corpsL.hidden = true; });
+    outils.append(bCrit, reglage);
+    // légende : chaque icône de la feuille, et la règle de chaque repère de la plateforme
+    // (fenêtre flottante par-dessus le tableau : ouverte, elle n'étire pas l'en-tête)
+    var legende = creer('button', 'lien-bouton feuille-legende', 'ⓘ Légende des icônes'), corpsL = creer('div', 'legende-corps legende-pop');
+    legende.type = 'button';
+    corpsL.hidden = true;
+    var fermerL = creer('button', 'fiche-trois-fermer', '×');
+    fermerL.type = 'button';
+    fermerL.addEventListener('click', function () { corpsL.hidden = true; });
+    corpsL.appendChild(fermerL);
+    legende.addEventListener('click', function (ev) { ev.stopPropagation(); corpsL.hidden = !corpsL.hidden; reglage.hidden = true; });
+    corpsL.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    fond.addEventListener('click', function () { corpsL.hidden = true; });
+    function ligneL(parent, ico, texte) { var li = creer('li'); if (ico) li.appendChild(ico); li.append(creer('span', '', texte)); parent.appendChild(li); }
+    function cocheL(cls) { var c = creer('span', 'leg-case ' + cls); return c; }
+    function pastilleL(v) { var c = creer('span', 'leg-niv ' + (v > 0 ? 'niv-plus' : v < 0 ? 'niv-moins' : 'niv-vide') + (Math.abs(v) > 1 ? ' fort' : ''), v ? signeNiveau(v) : '·'); return c; }
+    corpsL.appendChild(creer('p', 'leg-titre leg-classe', 'En classe · noté par vous, enregistré sur la Centrale (par numéro)'));
+    var ulC = creer('ul');
+    ligneL(ulC, cocheL('leg-absent'), 'Absent (Abs.) : une information, pas un comportement');
+    ligneL(ulC, cocheL('leg-retard'), 'En retard (Ret.) — l’un ou l’autre avec Absent');
+    ligneL(ulC, cocheL('leg-oubli'), 'Oubli de matériel');
+    [2, 1, 0].forEach(function (v) { ligneL(ulC, pastilleL(v), NIVEAUX[String(v)].libelle + (v === 0 ? ' (rien de noté)' : '')); });
+    ['jaune', 'orange', 'rouge'].forEach(function (g) {   // « − » et « −− » : couleur selon la gravité du critère
+      var deux = creer('span', 'leg-paire grav-' + g), a = pastilleL(-1), b = pastilleL(-2);
+      deux.append(a, b);
+      ligneL(ulC, deux, '− à revoir, −− gros souci · ' + GRAVITE[g].libelle);
+    });
+    ligneL(ulC, creer('span', 'leg-niv niv-vide avec-com', '·'), 'pastille C : un commentaire écrit pour ce critère (texte au survol)');
+    var exL = cocheL('leg-exclusion'); exL.classList.add('avec-com');
+    ligneL(ulC, exL, 'Exclusion de cours — pastille C : le motif est écrit (survol)');
+    ligneL(ulC, creer('span', 'duo-bouton duo-dissipation', '💬2'), 'À séparer (Sép.) : se dissipe avec des camarades (chiffre : combien) — à ne pas placer ensemble');
+    ligneL(ulC, creer('span', 'duo-bouton duo-altercation', '⚔️1'), 'À séparer : altercation avec un ou plusieurs camarades');
+    corpsL.appendChild(ulC);
+    corpsL.appendChild(creer('p', 'leg-titre leg-plateforme', 'Plateforme · calculé d’après l’activité dans les ateliers'));
+    var ulP = creer('ul');
+    var jaugeL = creer('span', 'mini-jauge'), jr = creer('i'); jr.style.width = '60%'; jaugeL.appendChild(jr);
+    ligneL(ulP, jaugeL, 'Avancement : part des activités déjà abordées par la classe que l’élève a terminées');
+    ligneL(ulP, creer('span', 'leg-txt', '2/4'), 'En cours : questions faites sur le total de l’activité en cours');
+    ligneL(ulP, creer('span', 'leg-txt haut', '32'), 'en vert / en rouge : nettement au-dessus / au-dessous de la classe');
+    Object.keys(REPERES).forEach(function (k) { ligneL(ulP, icone(REPERES[k]), REPERES[k].libelle + ' — ' + REPERES[k].regle); });
+    corpsL.appendChild(ulP);
+    // Interruption de cours (intervention, exercice incendie, confinement, autre) : pour toute la séance, notée sur « _classe »
+    var bInt = creer('button', 'petit secondaire bouton-interruption'), popInt = creer('div', 'legende-pop interruption-pop');
+    bInt.type = 'button';
+    popInt.hidden = true;
+    popInt.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    fond.addEventListener('click', function () { popInt.hidden = true; });
+    function interruption() { var o = cn.observation(d.classe, '_classe', s.cle); return o.interruption ? ((o._c || {}).interruption || 'Interruption') : ''; }
+    function majInterruption() {
+      var t = interruption();
+      bInt.textContent = t ? '⚡ Interrompu' : '⚡ Interruption';
+      bInt.classList.toggle('actif', !!t);
+      bInt.title = t ? 'Séance interrompue : ' + t : 'Signaler une interruption de cours (intervention, exercice incendie…)';
+    }
+    function remplirInterruption() {
+      popInt.replaceChildren();
+      var ferme = creer('button', 'fiche-trois-fermer', '×');
+      ferme.type = 'button';
+      ferme.addEventListener('click', function () { popInt.hidden = true; });
+      var actuel = interruption(), motifActuel = actuel.split(' : ')[0], detail = creer('input', 'niv-com');
+      detail.type = 'text';
+      detail.maxLength = 200;
+      detail.placeholder = 'Précision (facultatif) : durée, intervenant…';
+      detail.value = actuel.indexOf(' : ') >= 0 ? actuel.slice(actuel.indexOf(' : ') + 3) : '';
+      var motifs = creer('div', 'interruption-motifs');
+      ['Intervention', 'Exercice incendie', 'Confinement', 'Autre'].forEach(function (m) {
+        var b = creer('button', 'variante' + (m === motifActuel ? ' active' : ''), m);
+        b.type = 'button';
+        b.addEventListener('click', function () {
+          cn.definirObservation(d.classe, '_classe', s.cle, 'interruption', -1);
+          cn.definirCommentaire(d.classe, '_classe', s.cle, 'interruption', m + (detail.value.trim() ? ' : ' + detail.value.trim() : ''));
+          majInterruption(); compter(); remplirInterruption();
+        });
+        motifs.appendChild(b);
+      });
+      detail.addEventListener('change', function () {
+        var m = interruption().split(' : ')[0];
+        if (m) { cn.definirCommentaire(d.classe, '_classe', s.cle, 'interruption', m + (detail.value.trim() ? ' : ' + detail.value.trim() : '')); majInterruption(); compter(); }
+      });
+      var retirer = creer('button', 'petit secondaire', 'Pas d’interruption');
+      retirer.type = 'button';
+      retirer.disabled = !actuel;
+      retirer.addEventListener('click', function () {
+        cn.definirObservation(d.classe, '_classe', s.cle, 'interruption', 0);
+        cn.definirCommentaire(d.classe, '_classe', s.cle, 'interruption', '');
+        majInterruption(); compter(); remplirInterruption();
+      });
+      popInt.append(ferme, creer('h4', '', '⚡ Interruption de cours'), creer('p', 'discret', 'Pour toute la séance : elle apparaît dans le résumé et sur l’évolution de la classe.'), motifs, detail, retirer);
+    }
+    bInt.addEventListener('click', function (ev) { ev.stopPropagation(); remplirInterruption(); popInt.hidden = !popInt.hidden; corpsL.hidden = true; reglage.hidden = true; });
+    majInterruption();
+    outils.insertBefore(bInt, outils.firstChild);
+    var aide = creer('div', 'feuille-aide');
+    aide.append(resume, legende, outils, creer('div', 'th-eleve', 'Élève'));
+    // En tête et en bas : une grosse case « Feuille terminée » (statut de la feuille), puis l'atelier en cours de la classe
+    var enTete = creer('div', 'feuille-entete'), casesTerm = [], piedResume = creer('div', 'feuille-pied-resume');
+    function caseTerminee(bas) {
+      var lab = creer('label', 'feuille-terminee' + (bas ? ' en-bas' : '')), c = creer('input');
+      c.type = 'checkbox';
+      c.addEventListener('change', function () {
+        cn.definirObservation(d.classe, '_classe', s.cle, 'terminee', c.checked ? 1 : 0);
+        majStatut();
+        document.dispatchEvent(new Event('centrale-appel'));
+      });
+      lab.append(c, creer('span', '', 'Feuille terminée'));
+      casesTerm.push(c);
+      return lab;
+    }
+    function majStatut() {
+      var fini = cn.observation(d.classe, '_classe', s.cle).terminee === 1;
+      casesTerm.forEach(function (c) {
+        c.checked = fini;
+        c.parentNode.classList.toggle('cochee', fini);
+        c.parentNode.title = fini ? 'Feuille terminée : décocher pour la rouvrir' : 'Cocher quand tout est noté pour ce cours (statut « terminée » à l’accueil)';
+      });
+      majWidgetFeuille();
+    }
+    var blocTitre = creer('div', 'feuille-titre'), sousTitre = creer('div', 'feuille-sous');
+    sousTitre.append(creer('span', 'feuille-sous-classe', d.classe), creer('span', '', s.libelle),
+      creer('span', 'discret', (d.eleves || []).filter(function (e) { return e.actif; }).length + ' élèves'));
+    blocTitre.append(creer('h3', '', 'Feuille de séance'), sousTitre);
+    enTete.append(blocTitre, caseTerminee(false));
+    // Atelier papier (FicheStudio) : présentation et correction projetées, reprise là où la classe s'est arrêtée
+    var fi = d.fiche || {}, barreAt = creer('div', 'feuille-atelier');
+    function lienFiche(texte, titre, params, principal) {
+      var a = creer('a', 'btn petit' + (principal ? '' : ' secondaire'), texte);
+      a.href = 'appli.php/fichestudio/#' + params + '&seance=' + encodeURIComponent(s.cle);   // même onglet : « Feuille d'appel » y ramène
+      a.title = titre;
+      return a;
+    }
+    var ligneP = creer('div', 'feuille-atelier-ligne');
+    ligneP.appendChild(creer('span', 'feuille-atelier-label', 'Atelier papier'));
+    if (fi.doc) {
+      var po = fi.position, ou = po ? po.feuille + (po.total ? ', étape ' + po.etape + ' / ' + po.total : po.etape ? ', étape ' + po.etape : '') : '';
+      var quandP = po && po.quand ? new Date(po.quand * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
+      ligneP.append(creer('strong', '', fi.doc), creer('span', 'discret', ou ? ' · ' + (po.fin_cours ? 'arrêt du ' + quandP : 'vu en dernier' + (quandP ? ' le ' + quandP : '')) + ' : ' + ou
+        : fi.autre ? ' · commencé avec ' + (fi.autre.indexOf('g') > 0 ? 'l’autre groupe' : 'la classe entière') + ' : ce groupe part du début' : ' · pas encore commencé'));
+      var cibleQ = 'presenter=' + encodeURIComponent(fi.fichier) + '&classe=' + encodeURIComponent(fi.cible);
+      ligneP.appendChild(lienFiche('Correction en cours →', 'FicheStudio : ' + d.classe + ', ' + fi.doc + (ou ? ', correction reprise à ' + ou : ', correction depuis le début')
+        + ' · « Feuille d’appel » y ramène ici', cibleQ + '&lancer=correction', true));
+      if (!fi.present) ligneP.appendChild(creer('span', 'feuille-atelier-alerte', '⚠ document pas rangé sur la Centrale (☁ Enregistrer dans FicheStudio)'));
+    } else {
+      ligneP.append(creer('span', 'discret', 'aucun présenté à cette classe dans FicheStudio pour l’instant'),
+        lienFiche('Choisir dans FicheStudio →', 'FicheStudio, espace Présentation, avec cette classe choisie : ouvrez le document à présenter (☁ Ouvrir…)', 'classe=' + encodeURIComponent(fi.cible || ('c' + d.classe_id)), false));
+    }
+    /** Une ligne de la barre : libellé | ce qui est en cours | bouton, alignés en colonnes d'une ligne à l'autre. */
+    function ranger(ligne) {
+      var corps = creer('div', 'feuille-atelier-corps'), act = creer('div', 'feuille-atelier-actions');
+      [].slice.call(ligne.childNodes).forEach(function (n) {
+        if (n.classList && n.classList.contains('feuille-atelier-label')) return;
+        (n.tagName === 'A' ? act : corps).appendChild(n);
+      });
+      ligne.append(corps, act);
+      return ligne;
+    }
+    barreAt.appendChild(ranger(ligneP));
+    // Sur la plateforme : ce sur quoi les élèves travaillent (pour information)
+    var at = (d.stats_classe || {}).atelier;
+    if (at) {
+      var ligneA = creer('div', 'feuille-atelier-ligne');
+      ligneA.append(creer('span', 'feuille-atelier-label', 'Sur la plateforme'), creer('strong', '', at.titre), creer('span', 'discret', ' · ' + (at.app_nom || at.app)
+        + (at.source === 'eleves' ? ' · ' + at.nb + ' élève' + (at.nb > 1 ? 's' : '') + ' dessus' + (at.sur ? ' sur ' + at.sur : '') : ' · ouvert pour la classe')));
+      barreAt.appendChild(ranger(ligneA));
+    }
+    carteF.append(fermer, enTete, barreAt, corpsL, popInt);
+
+    var defile = creer('div', 'bilan-defile'), table = creer('table', 'feuille-table');
+    var thead = creer('thead'), groupes = creer('tr', 'feuille-groupes'), tete = creer('tr');
+    var gClasse = creer('th', 'groupe-classe', 'En classe · noté par vous'), gPlat = creer('th', 'groupe-plateforme', 'Plateforme · activité dans les ateliers');
+    gClasse.colSpan = 4 + criteres.length + 2;   // Abs., Ret., Excl., Oubli, les critères, À séparer, Note
+    gPlat.colSpan = 7;                            // Avancement, En cours, Term., 1er coup, Temps, Dern., Rep.
+    var coin = creer('th', 'col-nom feuille-coin');   // explication, légende, boutons, puis « Élève » : sur les deux lignes d'en-tête
+    coin.rowSpan = 2;
+    coin.appendChild(aide);
+    groupes.append(coin, gClasse, gPlat);
+    // En-têtes de colonnes étroites : le nom en grand, à la verticale, et en petit, à l'horizontale, en dessous ;
+    // le détail au survol.
+    function entete(cls, court, vertical, detail) {
+      var th = creer('th', cls);
+      if (vertical) {
+        th.appendChild(creer('div', 'th-v', vertical));
+        th.appendChild(creer('div', 'th-h', court));
+      } else {
+        th.textContent = court;
+      }
+      th.title = detail || vertical || court;
+      tete.appendChild(th);
+    }
+    entete('col-case', 'Abs.', 'Absent');
+    entete('col-case', 'Ret.', 'En retard');
+    entete('col-case col-excl', 'Excl.', 'Exclusion de cours', 'Exclusion de cours (avec un commentaire facultatif) : l’élève passe « hors de la classe » pour aujourd’hui');
+    entete('col-case', 'Oubli', 'Oubli de matériel');
+    criteres.forEach(function (k) {
+      entete('col-niveau', CRITERES[k].court || CRITERES[k].lettre, CRITERES[k].libelle, CRITERES[k].libelle + ' : de −− à ++, et un commentaire (survolez ou touchez la pastille)');
+    });
+    entete('col-duo', 'Sép.', 'À séparer', 'Dissipation ou altercation entre élèves (deux ou plus) : à ne pas placer ensemble (clic pour noter ou voir)');
+    entete('col-note', 'Note', 'Note de la séance', 'Note de la séance : moyenne des critères (non noté = comme d’habitude, oubli = −1), corrigeable à la main avec un commentaire');
+    var sc = d.stats_classe || {};
+    entete('col-plat', 'Avanc.', 'Avancement', 'Part des activités déjà abordées par la classe (' + (sc.programme || 0) + ') que l’élève a terminées (médiane : '
+      + (sc.avancement != null ? Math.round(sc.avancement) + ' %' : '—') + ')');
+    entete('col-plat', 'En cours', 'En cours', 'Activité en cours (la plus récente) : questions faites sur le total');
+    entete('col-plat', 'Term.', 'Activités terminées', 'Activités terminées (médiane de la classe : ' + (sc.terminees != null ? Math.round(sc.terminees) : '—') + ')');
+    entete('col-plat', '1er coup', 'Réussite 1er coup', 'Réussite du premier coup (médiane : ' + (sc.premier_coup != null ? Math.round(sc.premier_coup) + ' %' : '—') + ')');
+    entete('col-plat', 'Temps', 'Temps actif', 'Temps de travail effectif dans les ateliers (médiane : ' + dureeCourte(sc.temps) + ')');
+    entete('col-plat', 'Dern.', 'Dernière activité', 'Dernière activité ou connexion');
+    entete('col-plat', 'Rep.', 'Repères', 'Repères de la plateforme (détail au survol)');
+    thead.append(groupes, tete);
+    table.appendChild(thead);
+    var corps = creer('tbody');
+    function compter() {
+      var a = 0, r = 0, o = 0, x = 0, p = 0, m = 0;
+      (d.eleves || []).forEach(function (e) {
+        var pr = cn.presence(d.classe, e.numero, s.cle), ob = cn.observation(d.classe, e.numero, s.cle);
+        if (pr === 'absent') a++; else if (pr === 'retard') r++;
+        if (ob.oubli) o++;
+        if (ob.exclusion) x++;
+        criteres.forEach(function (k) { if (ob[k] > 0) p++; else if (ob[k] < 0) m++; });
+      });
+      var pl = function (n, mot) { return n + ' ' + mot + (n > 1 ? 's' : ''); };
+      resume.replaceChildren(creer('div', 'resume-titre', 'Résumé de la séance'),
+        creer('div', '', pl(a, 'absent') + ' · ' + pl(r, 'retard')),
+        creer('div', '', pl(x, 'exclusion') + ' · ' + pl(o, 'oubli') + ' de matériel'),
+        creer('div', '', p + ' + · ' + m + ' − notés'));
+      var it = typeof interruption === 'function' ? interruption() : '';
+      if (it) resume.appendChild(creer('div', 'resume-interruption', '⚡ Interrompue : ' + it));
+      // en bas : le même résumé sur une ligne, avec la note de la classe
+      var nc = noteDeLaClasse(d, s.cle), chipN = creer('span', 'widget-note ' + classeNote(nc ? nc.v : null), nc ? texteNote(nc.v) : '—');
+      piedResume.replaceChildren(creer('span', 'pied-chiffres', pl(a, 'absent') + ' · ' + pl(r, 'retard') + ' · ' + pl(x, 'exclusion') + ' · ' + pl(o, 'oubli') + ' · ' + p + ' + · ' + m + ' −'),
+        chipN);
+      if (it) piedResume.appendChild(creer('span', 'resume-interruption', '⚡ ' + it));
+      if (typeof majRangeeClasse === 'function') majRangeeClasse();
+      majStatut();
+      document.dispatchEvent(new Event('centrale-appel'));
+    }
+    function niveauChip(bt, v) {   // la pastille résumée : · (rien), +, ++, −, −−
+      bt.textContent = v ? signeNiveau(v) : '·';
+      bt.className = 'niv-courant ' + (v > 0 ? 'niv-plus' : v < 0 ? 'niv-moins' : 'niv-vide') + (Math.abs(v) > 1 ? ' fort' : '');
+    }
+    var presents = (d.eleves || []).filter(function (e) { return e.actif; });
+    /** Séances de la classe : toutes celles où quelque chose a été noté (élèves ou classe), plus la séance affichée. */
+    function seancesClasse() {
+      var cles = {};
+      cles[s.cle] = true;
+      presents.forEach(function (e) { Object.keys(cn.observationsEleve(d.classe, e.numero)).forEach(function (k) { cles[k] = true; }); });
+      Object.keys(cn.observationsEleve(d.classe, '_classe')).forEach(function (k) { cles[k] = true; });
+      return Object.keys(cles).sort();
+    }
+    function noteEleveA(e, cle) {   // note affichée d'un élève pour une séance (null s'il était absent)
+      if (cn.presence(d.classe, e.numero, cle) === 'absent') return null;
+      return noteSeance(cn.observation(d.classe, e.numero, cle), criteres);
+    }
+    function noteClasseCalculee(cle) {
+      var vs = presents.map(function (e) { return noteEleveA(e, cle); }).filter(function (n) { return n; });
+      return vs.length ? vs.reduce(function (a, n) { return a + n.v; }, 0) / vs.length : null;
+    }
+    function interrompue(cle) { var o = cn.observation(d.classe, '_classe', cle); return o.interruption ? ((o._c || {}).interruption || 'interruption') : ''; }
+    function evolutionEleve(e, nomE) {
+      var pts = seancesClasse().map(function (cle) {
+        var n = noteEleveA(e, cle);
+        if (!n) return { cle: cle, v: null };
+        var ob = cn.observation(d.classe, e.numero, cle), det = criteres.filter(function (k) { return ob[k]; }).map(function (k) { return (CRITERES[k].court || k) + ' ' + signeNiveau(ob[k]); });
+        if (ob.oubli) det.push('oubli de matériel');
+        if (ob.exclusion) det.push('exclu du cours' + ((ob._c || {}).exclusion ? ' (' + ob._c.exclusion + ')' : ''));
+        if ((ob._c || {}).note) det.push('« ' + ob._c.note + ' »');
+        if (interrompue(cle)) det.push('⚡ ' + interrompue(cle));
+        return { cle: cle, v: n.v, auto: n.auto, detail: det.join(' · '), marque: interrompue(cle) ? '⚡' : '' };
+      });
+      graphiqueEvolution(carteF, 'Évolution · ' + nomE, 'Note de chaque séance de ' + d.classe + ' (calculée d’après les critères, ou corrigée).', pts);
+    }
+    function evolutionClasse() {
+      var pts = seancesClasse().map(function (cle) {
+        var ob = cn.observation(d.classe, '_classe', cle), calc = noteClasseCalculee(cle);
+        var manuel = typeof ob.note === 'number' ? ob.note : null;
+        var v = manuel != null ? manuel : calc;
+        return { cle: cle, v: v, auto: manuel == null, marque: interrompue(cle) ? '⚡' : '',
+                 detail: 'moyenne des élèves : ' + texteNote(calc) + ((ob._c || {}).note ? ' · « ' + ob._c.note + ' »' : '') + (interrompue(cle) ? ' · ⚡ ' + interrompue(cle) : '') };
+      });
+      graphiqueEvolution(carteF, 'Évolution · classe ' + d.classe, 'Note de la classe à chaque séance : moyenne des élèves présents, ou corrigée.', pts);
+    }
+
+    /**
+     * Cellule « Note » : la note calculée (ou corrigée, ✎) ; au survol, la même bulle que les critères — −− à ++ pour
+     * corriger, « Auto » pour revenir au calcul, et un commentaire facultatif.
+     */
+    function celluleNote(tr, numero, nomE, calculer, estAbsent) {
+      var td = creer('td', 'col-note'), boite = creer('span', 'feuille-niveaux note-boite'), chip = creer('button', 'note-courante'),
+          palette = creer('span', 'niv-palette'), boutons = creer('span', 'niv-boutons'), auto = creer('button', 'note-auto'), comN = creer('input', 'niv-com');
+      chip.type = auto.type = 'button';
+      comN.type = 'text';
+      comN.maxLength = 300;
+      comN.placeholder = 'Préciser la note (facultatif)';
+      comN.value = (cn.observation(d.classe, numero, s.cle)._c || {}).note || '';
+      function maj() {
+        var ob = cn.observation(d.classe, numero, s.cle), abs = estAbsent && estAbsent(), calc = calculer();
+        var manuel = typeof ob.note === 'number' ? ob.note : null, v = abs ? null : (manuel != null ? manuel : calc);
+        chip.textContent = abs ? 'abs.' : texteNote(v) + (manuel != null ? ' ✎' : '');
+        chip.className = 'note-courante ' + classeNote(v) + (manuel != null ? ' corrigee' : '') + (comN.value.trim() ? ' avec-com' : '');
+        chip.title = nomE + ' · note de la séance : ' + (abs ? 'absent' : texteNote(v) + (manuel != null ? ' (corrigée ; calculée : ' + texteNote(calc) + ')' : ' (calculée)'))
+          + (comN.value.trim() ? ' · « ' + comN.value.trim() + ' »' : '');
+        boutons.querySelectorAll('button').forEach(function (b2, i) { b2.setAttribute('aria-pressed', String(manuel === [-2, -1, 0, 1, 2][i])); });
+        auto.textContent = 'Auto (' + texteNote(calc) + ')';
+        auto.disabled = manuel == null;
+      }
+      chip.addEventListener('click', function () {
+        var ouvrir = !boite.classList.contains('ouvert');
+        fond.querySelectorAll('.feuille-niveaux.ouvert, .feuille-com.ouvert').forEach(function (x) { x.classList.remove('ouvert'); });
+        boite.classList.toggle('ouvert', ouvrir);
+      });
+      [-2, -1, 0, 1, 2].forEach(function (v) {
+        var bt = creer('button', 'niv niv-' + (v > 0 ? 'plus' : v < 0 ? 'moins' : 'neutre') + (Math.abs(v) > 1 ? ' fort' : ''), v === 0 ? '=' : signeNiveau(v));
+        bt.type = 'button';
+        bt.title = 'Corriger la note : ' + NIVEAUX[String(v)].libelle;
+        bt.addEventListener('click', function () {
+          var ob = cn.observation(d.classe, numero, s.cle);
+          cn.definirObservation(d.classe, numero, s.cle, 'note', ob.note === v ? null : v);   // re-cliquer : retour au calcul
+          bt.blur();
+          maj();
+          compter();
+        });
+        boutons.appendChild(bt);
+      });
+      auto.addEventListener('click', function () { cn.definirObservation(d.classe, numero, s.cle, 'note', null); auto.blur(); maj(); compter(); });
+      comN.addEventListener('change', function () { comN.value = cn.definirCommentaire(d.classe, numero, s.cle, 'note', comN.value) || ''; maj(); });
+      comN.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === 'Escape') { ev.stopPropagation(); comN.blur(); boite.classList.remove('ouvert'); } });
+      palette.append(creer('span', 'niv-titre', 'Note de la séance · ' + nomE), boutons, auto, comN);
+      boite.append(chip, palette);
+      td.appendChild(boite);
+      tr.appendChild(td);
+      maj();
+      return maj;
+    }
+
+    /** Détail de la plateforme pour un élève (clic sur une case de la partie Plateforme) : fenêtre par-dessus la feuille. */
+    function detailPlateforme(e, nomE, st) {
+      var pop = carteF.querySelector('.detail-pop');
+      if (!pop) {
+        pop = creer('div', 'legende-pop detail-pop');
+        pop.addEventListener('click', function (ev) { ev.stopPropagation(); });
+        fond.addEventListener('click', function () { pop.hidden = true; });
+        carteF.appendChild(pop);
+      }
+      pop.replaceChildren();
+      var ferme = creer('button', 'fiche-trois-fermer', '×');
+      ferme.type = 'button';
+      ferme.addEventListener('click', function () { pop.hidden = true; });
+      pop.append(ferme, creer('h4', '', 'Plateforme · ' + nomE), creer('p', 'discret', 'Activité dans les ateliers, comparée à la classe ' + d.classe + '.'));
+      var dl = creer('dl', 'detail-plateforme');
+      function ligne(t, v, cmp) { dl.append(creer('dt', '', t), creer('dd', '', v + (cmp ? ' · classe : ' + cmp : ''))); }
+      ligne('Avancement', st.avancement != null ? st.avancement + ' % (' + st.terminees + ' terminées sur ' + (sc.programme || 0) + ' activités abordées par la classe)' : '—',
+        sc.avancement != null ? Math.round(sc.avancement) + ' %' : '');
+      var ec = st.en_cours;
+      ligne('En cours', ec ? ec.titre + ' (' + ec.app + ')' + (ec.total ? ' : ' + (ec.faites || 0) + ' sur ' + ec.total : '') + ' · ' + dateCourte(ec.maj) : 'aucune activité en cours', '');
+      ligne('Activités', (st.terminees || 0) + ' terminées sur ' + (st.commencees || 0) + ' commencées', sc.terminees != null ? Math.round(sc.terminees) + ' terminées' : '');
+      ligne('Réussite du 1er coup', st.premier_coup != null ? st.premier_coup + ' %' : '—', sc.premier_coup != null ? Math.round(sc.premier_coup) + ' %' : '');
+      ligne('Temps actif', dureeCourte(st.temps), sc.temps ? dureeCourte(sc.temps) : '');
+      ligne('Dernière activité', dateCourte(st.derniere) + (st.jours != null ? ' · ' + st.jours + ' jour' + (st.jours > 1 ? 's' : '') + ' de connexion en 8 semaines' : ''), sc.jours != null ? Math.round(sc.jours) + ' jours' : '');
+      pop.appendChild(dl);
+      var reps = (e.reperes || []).filter(function (r) { return REPERES[r.code]; });
+      pop.appendChild(creer('p', 'leg-titre leg-plateforme', 'Repères'));
+      var ul = creer('ul', 'detail-reperes');
+      if (!reps.length) ul.appendChild(creer('li', 'discret', 'Rien de particulier.'));
+      reps.forEach(function (r) {
+        var li = creer('li'), def = REPERES[r.code];
+        li.append(icone(def), creer('span', '', ''));
+        li.lastChild.append(creer('strong', '', def.libelle), ' · ' + r.texte, creer('br'), creer('span', 'discret', 'Règle : ' + def.regle));
+        ul.appendChild(li);
+      });
+      pop.appendChild(ul);
+      pop.hidden = false;
+    }
+
+    // À séparer (dissipation, altercation, à deux ou plus) : un panneau pour noter avec qui, et les incidents déjà notés
+    var majDuos = [], parNumero = {};
+    (d.eleves || []).forEach(function (e) { parNumero[String(e.numero)] = e; });
+    function nomDe(num) { var e = parNumero[String(num)]; return cn.nomLocal(d.classe, num) || (e && e.simule) || ('n° ' + num); }
+    function rafraichirDuos() { majDuos.forEach(function (f) { f(); }); majStatut(); document.dispatchEvent(new Event('centrale-appel')); }
+    /** Un sélecteur d'élèves (pastilles) : choix[numero] = true ; « exclus » : numéros à ne pas proposer. */
+    function choixEleves(choix, exclus, auChoix) {
+      var boite = creer('div', 'duo-camarades');
+      presents.filter(function (x) { return exclus.indexOf(String(x.numero)) < 0; })
+        .sort(function (u, v) { return String(u.numero).localeCompare(String(v.numero), 'fr', { numeric: true }); })
+        .forEach(function (x) {
+          var b = creer('button', 'duo-camarade');
+          b.type = 'button';
+          b.append(creer('span', 'numero', x.numero), ' ' + nomDe(x.numero));
+          b.setAttribute('aria-pressed', 'false');
+          b.addEventListener('click', function () {
+            choix[x.numero] = !choix[x.numero];
+            b.setAttribute('aria-pressed', String(!!choix[x.numero]));
+            if (auChoix) auChoix(String(x.numero));
+          });
+          boite.appendChild(b);
+        });
+      return boite;
+    }
+    /** Panneau des dissipations et altercations : pour un élève (eleve), ou pour toute la classe (null). */
+    function ouvrirDuos(eleve) {
+      var pop = carteF.querySelector('.duo-pop');
+      if (!pop) {
+        pop = creer('div', 'legende-pop detail-pop duo-pop');
+        pop.addEventListener('click', function (ev) { ev.stopPropagation(); });
+        fond.addEventListener('click', function () { pop.hidden = true; });
+        carteF.appendChild(pop);
+      }
+      var defilePop = pop.scrollTop;
+      pop.replaceChildren();
+      var ferme = creer('button', 'fiche-trois-fermer', '×');
+      ferme.type = 'button';
+      ferme.addEventListener('click', function () { pop.hidden = true; });
+      pop.appendChild(ferme);
+      var num = eleve ? String(eleve.numero) : null, nomE = eleve ? nomDe(num) : '';
+      function rouvrir() { rafraichirDuos(); ouvrirDuos(eleve); }
+      pop.append(creer('h4', '', eleve ? 'À séparer · ' + nomE : 'À séparer · classe ' + d.classe),
+        creer('p', 'discret', eleve ? 'Nouvel incident : avec qui ? un ou plusieurs camarades, puis le type.'
+          : 'Nouvel incident : choisissez au moins deux élèves, puis le type. Le plan de classe signale ceux qui sont assis ensemble et le placement au hasard les sépare.'));
+      // nouvel incident
+      var choix = {}, type = 'dissipation';
+      var texte = creer('input', 'niv-com duo-texte'), noter = creer('button', 'petit duo-noter', 'Noter');
+      function retenus() { return Object.keys(choix).filter(function (k) { return choix[k]; }); }
+      function majNoter() { noter.disabled = retenus().length < (eleve ? 1 : 2); }
+      pop.appendChild(choixEleves(choix, num ? [num] : [], majNoter));
+      var types = creer('div', 'duo-types'), btTypes = {};
+      Object.keys(TYPES_DUO).forEach(function (t) {
+        var b = creer('button', 'duo-type duo-' + t, TYPES_DUO[t].icone + ' ' + TYPES_DUO[t].libelle);
+        b.type = 'button';
+        b.title = TYPES_DUO[t].texte;
+        b.setAttribute('aria-pressed', String(t === type));
+        b.addEventListener('click', function () { type = t; Object.keys(btTypes).forEach(function (k) { btTypes[k].setAttribute('aria-pressed', String(k === t)); }); });
+        btTypes[t] = b;
+        types.appendChild(b);
+      });
+      texte.type = 'text';
+      texte.maxLength = 200;
+      texte.placeholder = 'Préciser (facultatif)';
+      noter.type = 'button';
+      majNoter();
+      noter.addEventListener('click', function () {
+        cn.ajouterIncident(d.classe, (num ? [num] : []).concat(retenus()), type, s.cle, texte.value);
+        rouvrir();
+      });
+      texte.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && !noter.disabled) noter.click(); });
+      var ligneN = creer('div', 'duo-ligne');
+      ligneN.append(texte, noter);
+      pop.append(types, ligneN);
+      // incidents déjà notés (de l'élève, ou de la classe) : retirer un élève, en ajouter, supprimer
+      var liste = cn.incidents(d.classe).filter(function (x) { return !num || x.membres.indexOf(num) >= 0; })
+        .sort(function (u, v) { return String(v.seance).localeCompare(String(u.seance)); });
+      pop.appendChild(creer('p', 'leg-titre', 'Déjà noté (' + liste.length + ')'));
+      var ul = creer('ul', 'duo-liste');
+      if (!liste.length) ul.appendChild(creer('li', 'discret', 'Rien pour l’instant.'));
+      liste.forEach(function (x) {
+        var li = creer('li', 'duo-' + x.type), tete = creer('div', 'duo-incident-tete'), membres = creer('div', 'duo-membres');
+        var sup = creer('button', 'duo-suppr', '✕');
+        sup.type = 'button';
+        sup.title = 'Supprimer cet incident';
+        sup.addEventListener('click', function () { if (confirmerEnLigne(sup, 'Supprimer ?')) { cn.supprimerIncident(d.classe, x.id); rouvrir(); } });
+        tete.append(creer('strong', '', TYPES_DUO[x.type].icone + ' ' + TYPES_DUO[x.type].libelle), creer('span', 'discret', ' · ' + jourSeance(x.seance) + ' · ' + x.membres.length + ' élèves'), sup);
+        x.membres.slice().sort(function (u, v) { return u.localeCompare(v, 'fr', { numeric: true }); }).forEach(function (m) {
+          var puce = creer('span', 'duo-membre' + (m === num ? ' moi' : ''));
+          puce.append(creer('span', 'numero', m), ' ' + nomDe(m));
+          if (m !== num) {
+            var r = creer('button', 'duo-retirer', '×');
+            r.type = 'button';
+            r.title = 'Retirer ' + nomDe(m) + ' de cet incident' + (x.membres.length <= 2 ? ' (l’incident disparaît)' : '');
+            r.addEventListener('click', function () { cn.modifierIncident(d.classe, x.id, { retirer: m }); rouvrir(); });
+            puce.appendChild(r);
+          }
+          membres.appendChild(puce);
+        });
+        var plus = creer('button', 'duo-ajouter', '＋ ajouter');
+        plus.type = 'button';
+        plus.title = 'Ajouter des élèves à cet incident';
+        membres.appendChild(plus);
+        li.append(tete, membres);
+        if (x.texte) li.appendChild(creer('div', 'discret duo-precision', '« ' + x.texte + ' »'));
+        plus.addEventListener('click', function () {   // les autres élèves : un clic les ajoute aussitôt
+          var ouvert = li.querySelector('.duo-camarades');
+          if (ouvert) { ouvert.remove(); return; }
+          var aj = {};
+          li.appendChild(choixEleves(aj, x.membres, function (m) { if (aj[m]) { cn.modifierIncident(d.classe, x.id, { ajouter: [m] }); rouvrir(); } }));
+        });
+        ul.appendChild(li);
+      });
+      pop.appendChild(ul);
+      pop.hidden = false;
+      pop.scrollTop = defilePop;
+    }
+
+    // Rangée « Classe » (en tête) : effectifs, moyenne de chaque critère, note de la classe (corrigeable), médianes de la plateforme
+    var trC = creer('tr', 'rangee-classe'), celC = {};
+    var tdCN = creer('td', 'col-nom'), blocC = creer('div', 'feuille-eleve rangee-titre');
+    blocC.append(creer('span', 'feuille-photo icone-classe', '👥'), creer('span', 'feuille-nom', 'Classe'), creer('span', 'numero', 'séance'));
+    blocC.title = 'Classe ' + d.classe + ' : clic pour l’évolution de toutes les séances';
+    blocC.addEventListener('click', evolutionClasse);
+    tdCN.appendChild(blocC);
+    trC.appendChild(tdCN);
+    ['absent', 'retard', 'exclusion', 'oubli'].forEach(function (k) { celC[k] = creer('td', 'col-case compte-classe' + (k === 'exclusion' ? ' col-excl' : '')); trC.appendChild(celC[k]); });
+    criteres.forEach(function (k) { celC[k] = creer('td', 'col-niveau moyenne-classe'); trC.appendChild(celC[k]); });
+    var tdDC = creer('td', 'col-duo'), bDC = creer('button', 'duo-bouton');
+    bDC.type = 'button';
+    bDC.addEventListener('click', function (ev) { ev.stopPropagation(); ouvrirDuos(null); });
+    tdDC.appendChild(bDC);
+    trC.appendChild(tdDC);
+    majDuos.push(function () {
+      var l = cn.incidents(d.classe), alt = l.some(function (x) { return x.type === 'altercation'; });
+      bDC.textContent = l.length ? (alt ? '⚔️' : '💬') + l.length : '＋';
+      bDC.className = 'duo-bouton' + (l.length ? (alt ? ' duo-altercation' : ' duo-dissipation') : '');
+      bDC.title = l.length ? l.length + ' incident' + (l.length > 1 ? 's' : '') + ' noté' + (l.length > 1 ? 's' : '') + ' dans la classe : clic pour la liste, ou en noter un'
+        : 'Noter une dissipation ou une altercation entre élèves';
+    });
+    var majNoteClasse = celluleNote(trC, '_classe', 'classe ' + d.classe, function () { return noteClasseCalculee(s.cle); }, null);
+    [[sc.avancement != null ? Math.round(sc.avancement) + ' %' : '—', 'Avancement médian'], ['', ''], [sc.terminees != null ? String(Math.round(sc.terminees)) : '—', 'Activités terminées : médiane'],
+     [sc.premier_coup != null ? Math.round(sc.premier_coup) + ' %' : '—', 'Réussite du 1er coup : médiane'], [dureeCourte(sc.temps), 'Temps actif : médiane'], ['', ''], ['', '']].forEach(function (x) {
+      var td = creer('td', 'col-plat', x[0]);
+      if (x[1]) td.title = x[1] + ' de la classe';
+      trC.appendChild(td);
+    });
+    function majRangeeClasse() {
+      var a = 0, r = 0, o = 0, x = 0, somme = {}, nb = 0;
+      criteres.forEach(function (k) { somme[k] = 0; });
+      presents.forEach(function (e) {
+        var pr = cn.presence(d.classe, e.numero, s.cle), ob = cn.observation(d.classe, e.numero, s.cle);
+        if (pr === 'absent') { a++; return; }
+        if (pr === 'retard') r++;
+        if (ob.oubli) o++;
+        if (ob.exclusion) x++;
+        nb++;
+        criteres.forEach(function (k) { somme[k] += ob[k] || 0; });
+      });
+      celC.absent.textContent = a || '';
+      celC.retard.textContent = r || '';
+      celC.oubli.textContent = o || '';
+      celC.exclusion.textContent = x || '';
+      criteres.forEach(function (k) {
+        var m = nb ? somme[k] / nb : 0;
+        celC[k].textContent = texteNote(m);
+        celC[k].className = 'col-niveau moyenne-classe ' + classeNote(m);
+        celC[k].title = CRITERES[k].libelle + ' : moyenne des ' + nb + ' élèves présents';
+      });
+      majNoteClasse();
+    }
+    corps.appendChild(trC);
+
+    presents.slice().sort(function (a, b) { return String(a.numero).localeCompare(String(b.numero), 'fr', { numeric: true }); }).forEach(function (e) {
+      var tr = creer('tr'), ob = cn.observation(d.classe, e.numero, s.cle), pr = cn.presence(d.classe, e.numero, s.cle);
+      var nomE = cn.nomLocal(d.classe, e.numero) || e.simule || ('n° ' + e.numero);
+      // élève : petite photo (grande au survol), numéro, nom
+      var tdNom = creer('td', 'col-nom'), blocNomE = creer('div', 'feuille-eleve'), ph = creer('span', 'feuille-photo'), visage = photo(d.classe, e.numero);
+      if (visage && cn.styleVisage) cn.styleVisage(ph, visage, 28 / visage.l, 28, 34);
+      else ph.textContent = String(nomE).replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 1);
+      if (visage) {   // agrandie au survol (ou au toucher) : une photo flottante posée sur la vignette, jamais coupée
+        ph.addEventListener('mouseenter', function () { montrerPhotoGrande(ph, visage, nomE); });
+        ph.addEventListener('mouseleave', masquerPhotoGrande);
+        ph.addEventListener('click', function () { if (photoGrande && photoGrande._de === ph && !photoGrande.hidden) masquerPhotoGrande(); else montrerPhotoGrande(ph, visage, nomE); });
+      }
+      var lienEvo = creer('span', 'lien-evolution');
+      lienEvo.append(creer('span', 'numero', e.numero), creer('span', 'feuille-nom', nomE));
+      lienEvo.title = nomE + ' : clic pour l’évolution de toutes les séances';
+      lienEvo.addEventListener('click', function () { evolutionEleve(e, nomE); });
+      blocNomE.append(ph, lienEvo);
+      tdNom.appendChild(blocNomE);
+      tr.appendChild(tdNom);
+      // absent / en retard : l'un ou l'autre
+      var cases = {};
+      ['absent', 'retard'].forEach(function (etat) {
+        var td = creer('td', 'col-case'), c = creer('input');
+        c.type = 'checkbox';
+        c.className = 'case-' + etat;
+        c.checked = pr === etat;
+        c.title = (etat === 'absent' ? 'Absent' : 'En retard') + ' · ' + nomE;
+        c.addEventListener('change', function () {
+          if (c.checked) cases[etat === 'absent' ? 'retard' : 'absent'].checked = false;
+          cn.definirPresence(d.classe, e.numero, s.cle, c.checked ? etat : '');
+          tr.classList.toggle('absent', cases.absent.checked);
+          if (tr._majNote) tr._majNote();
+          compter();
+        });
+        cases[etat] = c;
+        td.appendChild(c);
+        tr.appendChild(td);
+      });
+      tr.classList.toggle('absent', pr === 'absent');
+      // exclusion de cours : case, et un commentaire facultatif (bulle) ; l'élève passe « hors de la classe » aujourd'hui
+      var tdX = creer('td', 'col-case col-excl col-exclusion'), cx = creer('input'), boiteX = creer('span', 'feuille-niveaux excl-niveaux'),
+          pointX = creer('span', 'excl-point', 'C'), paletteX = creer('span', 'niv-palette excl-palette'), comX = creer('input', 'niv-com');
+      cx.type = 'checkbox';
+      cx.className = 'case-exclusion';
+      cx.checked = ob.exclusion === -1;
+      comX.type = 'text';
+      comX.maxLength = 300;
+      comX.placeholder = 'Motif (facultatif)';
+      comX.value = (ob._c || {}).exclusion || '';
+      function majX() {   // pastille « C » s'il y a un motif ; motif au survol, comme les autres critères
+        var t = comX.value.trim();
+        boiteX.classList.toggle('coche', cx.checked);
+        pointX.hidden = !(cx.checked && t);
+        cx.title = 'Exclusion de cours · ' + nomE + (cx.checked ? (t ? ' : « ' + t + ' »' : ' : survolez pour préciser le motif') : '');
+        tr.classList.toggle('exclu', cx.checked);
+      }
+      cx.addEventListener('change', function () {
+        cn.definirObservation(d.classe, e.numero, s.cle, 'exclusion', cx.checked ? -1 : 0);
+        if (cn.definirStatut && cn.dateLocale && seanceDe(d).cle.slice(0, 10) === cn.dateLocale()) cn.definirStatut(d.classe, e.numero, 'exclu_cours', cx.checked ? cn.dateLocale() : '');
+        majX();
+        fond.querySelectorAll('.feuille-niveaux.ouvert').forEach(function (z) { z.classList.remove('ouvert'); });
+        if (cx.checked) { boiteX.classList.add('ouvert'); setTimeout(function () { comX.focus(); }, 0); }
+        if (tr._majNote) tr._majNote();
+        compter();
+      });
+      pointX.addEventListener('click', function () {   // toucher : rouvrir le motif
+        var ouvrir = !boiteX.classList.contains('ouvert');
+        fond.querySelectorAll('.feuille-niveaux.ouvert').forEach(function (z) { z.classList.remove('ouvert'); });
+        boiteX.classList.toggle('ouvert', ouvrir);
+      });
+      comX.addEventListener('change', function () { comX.value = cn.definirCommentaire(d.classe, e.numero, s.cle, 'exclusion', comX.value) || ''; majX(); });
+      comX.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === 'Escape') { ev.stopPropagation(); comX.value = cn.definirCommentaire(d.classe, e.numero, s.cle, 'exclusion', comX.value) || ''; majX(); comX.blur(); boiteX.classList.remove('ouvert'); }
+      });
+      paletteX.append(creer('span', 'niv-titre', 'Exclusion · ' + nomE), comX);
+      boiteX.append(cx, pointX, paletteX);
+      tdX.appendChild(boiteX);
+      tr.appendChild(tdX);
+      majX();
+      // oubli de matériel
+      var tdO = creer('td', 'col-case'), co = creer('input');
+      co.type = 'checkbox';
+      co.className = 'case-oubli';
+      co.checked = ob.oubli === -1;
+      co.title = 'Oubli de matériel · ' + nomE;
+      co.addEventListener('change', function () { cn.definirObservation(d.classe, e.numero, s.cle, 'oubli', co.checked ? -1 : 0); if (tr._majNote) tr._majNote(); compter(); });
+      tdO.appendChild(co);
+      tr.appendChild(tdO);
+      // critères : pastille résumée ; au survol (ou au clic), les 5 niveaux ; re-cliquer sur le niveau choisi l'efface
+      criteres.forEach(function (k) {
+        var td = creer('td', 'col-niveau'), boite = creer('span', 'feuille-niveaux grav-' + (CRITERES[k].gravite || 'orange')), chip = creer('button'), palette = creer('span', 'niv-palette'),
+            boutons = creer('span', 'niv-boutons'), comK = creer('input', 'niv-com');
+        chip.type = 'button';
+        comK.type = 'text';
+        comK.maxLength = 300;
+        comK.placeholder = 'Préciser (facultatif)';
+        comK.value = (ob._c || {})[k] || '';
+        function majChip(v) {   // pastille : niveau, « C » s'il y a un commentaire, commentaire au survol
+          niveauChip(chip, v);
+          chip.classList.toggle('avec-com', !!comK.value.trim());
+          chip.title = CRITERES[k].libelle + ' · ' + nomE + (comK.value.trim() ? ' : « ' + comK.value.trim() + ' »' : ' : survolez pour choisir');
+        }
+        majChip(ob[k] || 0);
+        comK.addEventListener('change', function () {
+          comK.value = cn.definirCommentaire(d.classe, e.numero, s.cle, k, comK.value) || '';
+          majChip(cn.observation(d.classe, e.numero, s.cle)[k] || 0);
+        });
+        comK.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter' || ev.key === 'Escape') { ev.stopPropagation(); comK.blur(); boite.classList.remove('ouvert'); }
+        });
+        chip.addEventListener('click', function () {   // toucher (tablette, smartphone) : ouvre ou ferme, un seul à la fois
+          var ouvrir = !boite.classList.contains('ouvert');
+          fond.querySelectorAll('.feuille-niveaux.ouvert, .feuille-com.ouvert').forEach(function (x) { x.classList.remove('ouvert'); });
+          boite.classList.toggle('ouvert', ouvrir);
+        });
+        [-2, -1, 0, 1, 2].forEach(function (v) {
+          var bt = creer('button', 'niv niv-' + (v > 0 ? 'plus' : v < 0 ? 'moins' : 'neutre') + (Math.abs(v) > 1 ? ' fort' : ''), v === 0 ? '·' : signeNiveau(v));
+          bt.type = 'button';
+          bt.title = CRITERES[k].libelle + ' : ' + NIVEAUX[String(v)].libelle;
+          bt.setAttribute('aria-pressed', String((ob[k] || 0) === v && v !== 0));
+          bt.addEventListener('click', function () {
+            var actuel = cn.observation(d.classe, e.numero, s.cle)[k] || 0, nouveau = actuel === v ? 0 : v;
+            cn.definirObservation(d.classe, e.numero, s.cle, k, nouveau);
+            boutons.querySelectorAll('button').forEach(function (b2, i) { b2.setAttribute('aria-pressed', String([-2, -1, 0, 1, 2][i] === nouveau && nouveau !== 0)); });
+            majChip(nouveau);
+            if (tr._majNote) tr._majNote();
+            bt.blur();   // au survol, la palette reste là le temps d'écrire un commentaire ; elle se replie quand la souris s'en va
+            compter();
+          });
+          boutons.appendChild(bt);
+        });
+        palette.append(creer('span', 'niv-titre', CRITERES[k].libelle + ' · ' + nomE), boutons, comK);   // titre : affiché sur smartphone (bandeau en bas)
+        boite.append(chip, palette);
+        td.appendChild(boite);
+        tr.appendChild(td);
+      });
+      // duo : avec qui l'élève se dissipe ou s'est disputé (toutes séances) ; clic pour noter
+      var tdD = creer('td', 'col-duo'), bD = creer('button', 'duo-bouton');
+      bD.type = 'button';
+      bD.addEventListener('click', function (ev) { ev.stopPropagation(); ouvrirDuos(e); });
+      tdD.appendChild(bD);
+      tr.appendChild(tdD);
+      majDuos.push(function () {
+        var num = String(e.numero), l = pairesDuos(d.classe).filter(function (p) { return p.a === num || p.b === num; });
+        var alt = l.some(function (p) { return p.altercation; });
+        bD.textContent = l.length ? (alt ? '⚔️' : '💬') + l.length : '·';
+        bD.className = 'duo-bouton' + (l.length ? (alt ? ' duo-altercation' : ' duo-dissipation') : '');
+        bD.title = l.length ? 'À séparer de : ' + l.map(function (p) { return nomDe(p.a === num ? p.b : p.a) + ' (' + resumePaire(p) + ')'; }).join(', ')
+          : nomE + ' : clic pour noter une dissipation ou une altercation avec un ou plusieurs camarades';
+      });
+      // note de la séance (calculée, corrigeable)
+      tr._majNote = celluleNote(tr, e.numero, nomE, function () { return noteCalculee(cn.observation(d.classe, e.numero, s.cle), criteres); },
+        function () { return cn.presence(d.classe, e.numero, s.cle) === 'absent'; });
+      // plateforme : chiffres comparés à la médiane de la classe
+      var st = e.stats || {};
+      function cellule(texte, titre, etat) {
+        var td = creer('td', 'col-plat' + (etat ? ' ' + etat : ''), texte);
+        if (titre) td.title = titre;
+        tr.appendChild(td);
+      }
+      var medT = sc.terminees, medP = sc.premier_coup, medA = sc.avancement;
+      // avancement : une jauge et le pourcentage ; en cours : faites / total de l'activité la plus récente
+      var tdA = creer('td', 'col-plat col-avancement' + (medA >= 10 && st.avancement >= medA * 1.4 ? ' haut' : medA >= 10 && st.avancement <= medA * 0.6 ? ' bas' : ''));
+      if (st.avancement != null) {
+        var jauge = creer('span', 'mini-jauge'), rempli = creer('i');
+        rempli.style.width = Math.min(100, st.avancement) + '%';
+        jauge.appendChild(rempli);
+        tdA.append(jauge, creer('span', '', st.avancement + ' %'));
+        tdA.title = st.terminees + ' terminées sur ' + (sc.programme || 0) + ' activités abordées par la classe' + (medA != null ? ' · médiane : ' + Math.round(medA) + ' %' : '');
+      } else tdA.textContent = '—';
+      tr.appendChild(tdA);
+      var ec = st.en_cours;
+      cellule(ec ? (ec.total ? (ec.faites || 0) + '/' + ec.total : '…') : '—', ec ? ec.titre + ' (' + ec.app + ')' + (ec.total ? ' : ' + (ec.faites || 0) + ' sur ' + ec.total : '') + ' · ' + dateCourte(ec.maj) : 'Aucune activité en cours', ec ? 'col-encours' : '');
+      cellule(st.terminees != null ? String(st.terminees) : '—', (st.commencees || 0) + ' commencées' + (medT != null ? ' · médiane de la classe : ' + Math.round(medT) : ''),
+        medT >= 2 && st.terminees >= medT * 1.5 ? 'haut' : medT >= 2 && st.terminees <= medT * 0.6 ? 'bas' : '');
+      cellule(st.premier_coup != null ? st.premier_coup + ' %' : '—', medP != null ? 'médiane de la classe : ' + Math.round(medP) + ' %' : '',
+        st.premier_coup != null && st.premier_coup < 40 ? 'bas' : st.premier_coup != null && st.premier_coup >= 80 ? 'haut' : '');
+      cellule(dureeCourte(st.temps), sc.temps ? 'médiane de la classe : ' + dureeCourte(sc.temps) : '', '');
+      var vieux = st.derniere && (Date.now() / 1000 - st.derniere) > 14 * 86400;
+      cellule(dateCourte(st.derniere), st.jours != null ? st.jours + ' jour' + (st.jours > 1 ? 's' : '') + ' de connexion en 8 semaines' : '', !st.derniere || vieux ? 'bas' : '');
+      var tdR = creer('td', 'col-plat col-reperes');
+      (e.reperes || []).forEach(function (r) {
+        var def = REPERES[r.code];
+        if (!def) return;
+        var ic = icone(def);
+        ic.title = def.libelle + ' · ' + r.texte;
+        tdR.appendChild(ic);
+      });
+      tr.appendChild(tdR);
+      tr.querySelectorAll('td.col-plat').forEach(function (td) {   // clic : le détail de la plateforme
+        td.classList.add('cliquable');
+        td.addEventListener('click', function (ev) { ev.stopPropagation(); detailPlateforme(e, nomE, st); });
+      });
+      corps.appendChild(tr);
+    });
+    table.appendChild(corps);
+    defile.appendChild(table);
+    carteF.appendChild(defile);
+    var pied = creer('div', 'feuille-pied');
+    pied.append(piedResume, caseTerminee(true));
+    carteF.appendChild(pied);
+    fond.appendChild(carteF);
+    fond.hidden = false;
+    defile.scrollTop = hautAvant;
+    rafraichirDuos();
+    compter();
+  }
+
+
 
   /*
    * Deux sources qu'on ne mélange jamais :
-   *  - OBSERVÉ EN CLASSE (CLASSE) : ce que l'enseignant a noté sur cet ordinateur — appel de la séance, absences ou
+   *  - OBSERVÉ EN CLASSE (CLASSE) : ce que l'enseignant a noté (synchronisé avec la Centrale) — appel de la séance, absences ou
    *    retards répétés à l'appel, cartons d'observation et récompenses. Ronds et cartons.
    *  - SUR LA PLATEFORME (REPERES) : ce que la Centrale calcule d'après l'activité dans les ateliers (lib/reperes.php),
    *    en comparant l'élève à sa classe. Carrés arrondis.
    * Sur le plan, les deux groupes sont séparés par un trait ; dans la fiche, ce sont deux parties.
    */
   var CLASSE = {
-    absent:         { forme: 'rond', glyphe: 'A', couleur: '#c0392b', libelle: 'Absent à ce cours (appel)' },
-    retard:         { forme: 'rond', glyphe: 'R', couleur: '#e67e22', libelle: 'En retard à ce cours (appel)' },
-    'cl-absences':  { forme: 'rond', glyphe: 'A+', couleur: '#8e44ad', libelle: 'Absences répétées (3 ou plus à l’appel)' },
-    'cl-retards':   { forme: 'rond', glyphe: 'R+', couleur: '#a04000', libelle: 'Retards répétés (2 ou plus à l’appel)' },
-    'cl-dehors':    { forme: 'rond', glyphe: '⇥', couleur: '#5d6d7e', libelle: 'Hors de la classe (exclu du cours, exclu, sorti)' },
+    absent:         { forme: 'rond', glyphe: 'A', couleur: '#5b6b8c', libelle: 'Absent à ce cours (appel)' },
+    retard:         { forme: 'rond', glyphe: 'R', couleur: '#e0a800', texte: '#2b2000', libelle: 'En retard à ce cours (appel)' },
+    'cl-absences':  { forme: 'rond', glyphe: 'A+', couleur: '#3d4a66', libelle: 'Absences répétées (3 ou plus à l’appel)' },
+    'cl-retards':   { forme: 'rond', glyphe: 'R+', couleur: '#a87b00', libelle: 'Retards répétés (2 ou plus à l’appel)' },
+    'cl-exclu':     { forme: 'rond', glyphe: '⇥', couleur: '#c0392b', libelle: 'Exclu (du cours aujourd’hui, ou de l’établissement)' },
+    'cl-dehors':    { forme: 'rond', glyphe: '⇥', couleur: '#5d6d7e', libelle: 'Sorti de l’établissement (retiré)' },
     observation:    { forme: 'carton', glyphe: '', couleur: '#f2b705', libelle: 'Observation (carton)' },
     recompense:     { forme: 'medaille', glyphe: '', couleur: '#2e8b57', libelle: 'Récompense' },
   };
   var REPERES = {
-    avance:       { forme: 'carre', glyphe: '▲', couleur: '#2e8b57', libelle: 'En avance sur la classe' },
-    retard:       { forme: 'carre', glyphe: '▼', couleur: '#e67e22', libelle: 'En retard dans le travail' },
-    difficulte:   { forme: 'carre', glyphe: '!', couleur: '#c0392b', libelle: 'En difficulté (essais, 1er coup)' },
-    corrections:  { forme: 'carre', glyphe: '?', couleur: '#2f6fb5', libelle: 'Regarde souvent les corrections' },
-    retardataire: { forme: 'carre', glyphe: '⏱', couleur: '#d35400', libelle: 'Se connecte après son groupe' },
-    absences:     { forme: 'carre', glyphe: '∅', couleur: '#8e44ad', libelle: 'Peu de connexions' },
-    decroche:     { forme: 'carre', glyphe: 'Z', couleur: '#5d6d7e', libelle: 'Plus d’activité (décroché)' },
-    jamais:       { forme: 'carre', glyphe: '–', couleur: '#95a5a6', libelle: 'Jamais connecté' },
+    avance:       { forme: 'carre', glyphe: '▲', couleur: '#2e8b57', libelle: 'En avance sur la classe', regle: 'au moins 1,5 fois la médiane de la classe en activités terminées' },
+    retard:       { forme: 'carre', glyphe: '▼', couleur: '#e67e22', libelle: 'En retard dans le travail', regle: 'au plus 60 % de la médiane de la classe en activités terminées' },
+    difficulte:   { forme: 'carre', glyphe: '!', couleur: '#c0392b', libelle: 'En difficulté (essais, 1er coup)', regle: 'moins de 40 % de réussite du 1er coup, ou 3 essais par question ou plus' },
+    corrections:  { forme: 'carre', glyphe: '?', couleur: '#2f6fb5', libelle: 'Regarde souvent les corrections', regle: 'affiche souvent les corrections (5 au moins, et 30 % des questions)' },
+    retardataire: { forme: 'carre', glyphe: '⏱', couleur: '#d35400', libelle: 'Se connecte après son groupe', regle: 'se connecte en général 8 min ou plus après son groupe' },
+    absences:     { forme: 'carre', glyphe: '∅', couleur: '#8e44ad', libelle: 'Peu de connexions', regle: 'deux fois moins de jours de connexion que la classe (8 dernières semaines)' },
+    decroche:     { forme: 'carre', glyphe: 'Z', couleur: '#5d6d7e', libelle: 'Plus d’activité (décroché)', regle: 'plus aucune activité depuis 2 semaines alors que la classe travaille' },
+    jamais:       { forme: 'carre', glyphe: '–', couleur: '#95a5a6', libelle: 'Jamais connecté', regle: 'ne s’est jamais connecté' },
   };
   /** Sur la plateforme : repères calculés par la Centrale (rien de ce qui est noté en classe). */
   function reperesEleve(d, e) { return (e.reperes || []).slice(); }
   /**
-   * Élève « hors de la classe » (statuts gardés sur cet ordinateur) : exclu du cours aujourd'hui (il garde sa place),
+   * Élève « hors de la classe » (statuts synchronisés avec la Centrale) : exclu du cours aujourd'hui (il garde sa place),
    * exclu ou sorti de l'établissement. Renvoie { motif, date, texte } ou null.
    */
   var MOTIFS_DEHORS = { exclu_cours: 'Exclu du cours', exclu: 'Exclu de l’établissement', sortie: 'Sorti de l’établissement' };
@@ -1606,11 +2812,11 @@ window.PlanSalle = (function () {
     if (st.exclu_cours === auj) return { motif: 'exclu_cours', date: auj, texte: MOTIFS_DEHORS.exclu_cours + ' aujourd’hui' };
     return null;
   }
-  /** Observé en classe, répété : absences (3 ou plus) et retards (2 ou plus) notés à l'appel sur cet ordinateur. */
+  /** Observé en classe, répété : absences (3 ou plus) et retards (2 ou plus) notés à l'appel. */
   function observationsClasse(d, e) {
     var cn = window.CentraleNoms, res = [];
     var dh = dehors(d.classe, e.numero);
-    if (dh) res.push({ code: 'cl-dehors', texte: dh.texte });
+    if (dh) res.push({ code: dh.motif === 'sortie' ? 'cl-dehors' : 'cl-exclu', texte: dh.texte });   // exclusion : rouge, comme dans la feuille
     if (!cn || !cn.absences) return res;
     var a = cn.absences(d.classe, e.numero), nA = a.filter(function (x) { return x.etat === 'absent'; }).length, nR = a.length - nA;
     if (nA >= 3) res.push({ code: 'cl-absences', texte: nA + ' absences notées à l’appel' });
@@ -1618,24 +2824,60 @@ window.PlanSalle = (function () {
     return res;
   }
   function reperesVisibles() { return !document.documentElement.classList.contains('sans-reperes'); }
-  function classeVisible() { return !document.documentElement.classList.contains('sans-classe') || enAppel(); }
+  function classeVisible() { return !document.documentElement.classList.contains('sans-classe'); }
   /** Pastille de légende ou de fiche : même forme et même couleur que sur le plan. */
   function icone(def) {
     var ico = creer('span', 'repere-ico forme-' + (def.forme || 'carre'), def.glyphe || '');
     ico.style.background = def.couleur;
+    if (def.texte) ico.style.color = def.texte;
     return ico;
   }
-  var SUIVANT_APPEL = { '': 'absent', absent: 'retard', retard: '' };
-  /** Compteur du bouton « Faire l'appel » (accueil) pour le plan affiché dans la vue. */
-  function compterAppel(d) {
-    var cn = window.CentraleNoms, compte = document.getElementById('appel-compte');
-    if (!compte || !cn || !cn.presence) return;
-    var s = seanceDe(d), a = 0, r = 0;
-    (d.eleves || []).forEach(function (e) {
-      var p = cn.presence(d.classe, e.numero, s.cle);
-      if (p === 'absent') a++; else if (p === 'retard') r++;
-    });
-    compte.textContent = d.classe + ' · ' + s.libelle + ' : ' + (a || r ? a + ' absent' + (a > 1 ? 's' : '') + ', ' + r + ' retard' + (r > 1 ? 's' : '') : 'tous présents');
+  /**
+   * Statut de la feuille de séance d'un cours, d'après ce qui est noté (synchronisé avec la Centrale) :
+   * terminee (marquée par l'enseignant), commencee (quelque chose est noté), a-remplir (cours commencé ou passé, rien de noté),
+   * a-venir. null si les noms ne sont pas encore chargés (admin.js).
+   */
+  function statutFeuille(classe, cle, debut, fin) {
+    var cn = window.CentraleNoms;
+    if (!cn || !cn.etatSeance) return null;
+    var e = cn.etatSeance(classe, cle), n = new Date();
+    var maintenant = cn.dateLocale() + ' ' + ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2);
+    var jour = String(cle).slice(0, 10), debutCle = debut ? jour + ' ' + debut : cle, finCle = fin ? jour + ' ' + fin : jour + ' 23:59';
+    var quoi = [e.eleves ? e.eleves + ' élève' + (e.eleves > 1 ? 's' : '') + ' noté' + (e.eleves > 1 ? 's' : '') : '', e.incidents ? e.incidents + ' incident' + (e.incidents > 1 ? 's' : '') : '',
+      e.interruption ? 'interruption' : ''].filter(Boolean).join(', ');
+    if (e.terminee) return { code: 'terminee', court: '✓ terminée', libelle: 'terminée' + (quoi ? ' (' + quoi + ')' : '') };
+    if (e.eleves || e.incidents || e.classe) return { code: 'commencee', court: '✎ commencée', libelle: 'commencée' + (quoi ? ' (' + quoi + ')' : '') + ', pas encore marquée terminée' };
+    if (maintenant < debutCle) return { code: 'a-venir', court: 'à venir', libelle: 'à venir' };
+    if (maintenant <= finCle) return { code: 'a-remplir en-cours', court: '● à remplir', libelle: 'cours en ce moment, rien de noté' };
+    return { code: 'a-remplir', court: '! à remplir', libelle: 'rien de noté pour ce cours' };
+  }
+  /** Critères notés dans la feuille, dans l'ordre des colonnes. */
+  function criteresFeuille() {
+    var cn = window.CentraleNoms, choisis = cn.criteres().filter(function (k) { return CRITERES[k] && !CRITERES[k].caseACocher; });
+    return ORDRE_FEUILLE.filter(function (k) { return choisis.indexOf(k) >= 0; }).concat(choisis.filter(function (k) { return ORDRE_FEUILLE.indexOf(k) < 0; }));
+  }
+  /** Note de la classe pour une séance (comme la rangée « Classe ») : corrigée à la main, sinon moyenne des présents ;
+      null si rien n'est noté. */
+  function noteDeLaClasse(d, cle) {
+    var cn = window.CentraleNoms;
+    if (!cn || !cn.observation || !cn.etatSeance) return null;
+    var oc = cn.observation(d.classe, '_classe', cle);
+    if (typeof oc.note === 'number') return { v: oc.note, auto: false };
+    if (!cn.etatSeance(d.classe, cle).eleves) return null;
+    var crit = criteresFeuille(), vs = (d.eleves || []).filter(function (e) { return e.actif && cn.presence(d.classe, e.numero, cle) !== 'absent'; })
+      .map(function (e) { return noteSeance(cn.observation(d.classe, e.numero, cle), crit).v; });
+    return vs.length ? { v: vs.reduce(function (a, b) { return a + b; }, 0) / vs.length, auto: true } : null;
+  }
+  /** Le widget « Feuille de séance » de l'accueil : la classe, le cours, le statut de sa feuille et la note de la classe. */
+  function majWidgetFeuille() {
+    var el = document.getElementById('feuille-statut');
+    if (!el || !planAccueil) return;
+    var d = planAccueil.d, s = seanceDe(d), st = statutFeuille(d.classe, s.cle, s.cle.slice(11, 16), ''), n = noteDeLaClasse(d, s.cle);
+    var stat = creer('span', 'widget-statut' + (st ? ' statut-' + st.code : ''), st ? st.court : '');
+    var note = creer('span', 'widget-note ' + classeNote(n ? n.v : null), n ? texteNote(n.v) : '—');
+    note.title = n ? 'Note de la classe pour ce cours' + (n.auto ? ' (moyenne des élèves présents)' : ' (corrigée)') : 'Pas encore de note pour ce cours';
+    el.replaceChildren(creer('span', 'widget-cours', d.classe + ' · ' + s.libelle.replace(/^cours de /, '')), stat, note);
+    el.className = 'widget-feuille-etat';
   }
 
   /** Aperçu en lecture seule d'un plan placé (accueil) : dessine la salle + les élèves posés. */
@@ -1680,30 +2922,29 @@ window.PlanSalle = (function () {
             if (!e || !cn || !cn.cartons) return [];
             // en classe (appel, répétitions, cartons) | sur la plateforme (repères)
             var p = cn.presence ? cn.presence(d.classe, e.numero, seanceDe(d).cle) : '';
-            var classe = classeVisible() ? (p ? [p] : []).concat(observationsClasse(d, e).map(function (r) { return r.code; }),
+            var classe = classeVisible() ? (p ? [p] : []).concat(pastillesObservation(d, e), observationsClasse(d, e).map(function (r) { return r.code; }),
               cn.cartons(d.classe, e.numero).map(function (c) { return c.type; })) : [];
             var plateforme = reperesVisibles() ? reperesEleve(d, e).map(function (r) { return 'rep-' + r.code; }) : [];
             return classe.concat(classe.length && plateforme.length ? ['|'] : [], plateforme);
           },
           surClic: function (idPlace) {
             var cn = window.CentraleNoms, e = carte[idPlace] && eleve(carte[idPlace]);
-            if (enAppel() && e && cn && cn.definirPresence) {   // appel : présent → absent → en retard → présent
-              cn.definirPresence(d.classe, e.numero, seanceDe(d).cle, SUIVANT_APPEL[cn.presence(d.classe, e.numero, seanceDe(d).cle)] || '');
-              return;
-            }
             ficheEleve(svg, d, carte, idPlace);
           },
         },
       });
     }
     var rendreDessin = rendre;
-    rendre = function () { rendreDessin(); if (svg.closest('#dash-plan')) compterAppel(d); };
+    rendre = function () {
+      rendreDessin();
+      if (svg.closest('#dash-plan')) { planAccueil = { svg: svg, d: d, carte: carte }; majWidgetFeuille(); }
+    };
     rendre();
-    document.addEventListener('centrale-appel', function () { if (svg.closest('#dash-plan')) compterAppel(d); });
+    document.addEventListener('centrale-appel', function () { if (svg.closest('#dash-plan')) majWidgetFeuille(); });
     document.addEventListener('centrale-noms', rendre);   // redessine quand les noms locaux sont chargés
     document.addEventListener('centrale-vue', rendre);    // et quand la présentation change
   }
 
   return { editeur: editeur, placement: placement, dessiner: dessiner, apercu: apercu, barreVue: barreVue, TYPES: TYPES,
-           REPERES: REPERES, CLASSE: CLASSE, icone: icone };
+           REPERES: REPERES, CLASSE: CLASSE, CRITERES: CRITERES, GRAVITE: GRAVITE, icone: icone, feuilleSeance: feuilleSeance, statutFeuille: statutFeuille };
 })();

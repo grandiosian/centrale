@@ -404,27 +404,61 @@ window.PlanSalle3D = (function () {
    *   observé en classe (ronds et cartons : appel de la séance, absences ou retards répétés, observations, récompenses),
    *   puis sur la plateforme (carrés arrondis : repères calculés par la Centrale).
    */
+  /**
+   * Pastilles au-dessus d'un élève, sur deux rangées : en haut, la plateforme (repères) ; en dessous, ce qui est noté
+   * en classe pour le cours (appel, observations, cartons, hors de la classe). 8 pastilles au plus par rangée, puis « +n ».
+   */
   function carteCartons(types) {
     var cv = document.createElement('canvas'), g = cv.getContext('2d');
-    var montres = [], n = 0;
-    types.forEach(function (t) { if (t === '|' ? montres.length && montres[montres.length - 1] !== '|' : n++ < 8) montres.push(t); });
-    if (montres[montres.length - 1] === '|') montres.pop();
-    var reste = types.filter(function (t) { return t !== '|'; }).length - montres.filter(function (t) { return t !== '|'; }).length;
-    var largeur = montres.reduce(function (l, t) { return l + (t === '|' ? 14 : 30); }, 0);
-    cv.width = largeur + 12 + (reste ? 40 : 0); cv.height = 40;
-    var x = 6;
-    montres.forEach(function (t) {
-      if (t === '|') {   // séparation entre ce qui est observé en classe et ce que dit la plateforme
-        g.fillStyle = '#ffffff'; g.fillRect(x + 4, 2, 4, 36);
-        x += 14;
-        return;
+    function dePlateforme(t) { return t.indexOf('rep-') === 0 || t === 'nuage'; }
+    var plateforme = types.filter(dePlateforme);
+    var enClasse = types.filter(function (t) { return t !== '|' && !dePlateforme(t); });
+    var rangees = [plateforme, enClasse].filter(function (r) { return r.length; }).map(function (r) {
+      var montres = r.slice(0, 8), reste = r.length - montres.length;
+      return { montres: montres, reste: reste, largeur: montres.length * 30 + (reste ? 40 : 0) };
+    });
+    var largeur = rangees.reduce(function (l, r) { return Math.max(l, r.largeur); }, 0);
+    cv.width = largeur + 12; cv.height = 40 * rangees.length + (rangees.length > 1 ? 4 : 0);
+    rangees.forEach(function (rg, n) {
+      g.save();
+      g.translate(0, n * 44);
+      var x = 6 + (largeur - rg.largeur) / 2;   // rangées centrées l'une sous l'autre
+      rg.montres.forEach(function (t) { x = jeton(t, x); });
+      if (rg.reste) {
+        g.fillStyle = '#ffffff'; g.fillRect(x, 3, 34, 34);
+        g.fillStyle = '#1d1f24'; g.font = '700 22px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText('+' + rg.reste, x + 17, 21);
+      }
+      g.restore();
+    });
+    /** Une pastille à l'abscisse x ; renvoie l'abscisse de la suivante. */
+    function jeton(t, x) {
+      if (t === 'nuage') {   // en tête de la rangée de la plateforme : un petit nuage
+        g.fillStyle = '#2b6cb0';
+        g.beginPath();
+        if (g.roundRect) g.roundRect(x - 2, 4, 28, 32, 7); else g.rect(x - 2, 4, 28, 32);
+        g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
+        g.fillStyle = '#ffffff';
+        g.beginPath(); g.arc(x + 7, 23, 5, 0, Math.PI * 2); g.arc(x + 13, 18, 7, 0, Math.PI * 2); g.arc(x + 19, 23, 5, 0, Math.PI * 2); g.fill();
+        g.fillRect(x + 7, 22, 12, 6);
+        return x + 30;
       }
       var rep = t.indexOf('rep-') === 0 && window.PlanSalle && PlanSalle.REPERES ? PlanSalle.REPERES[t.slice(4)] : null;
       var cl = t.indexOf('cl-') === 0 && window.PlanSalle && PlanSalle.CLASSE ? PlanSalle.CLASSE[t] : null;   // dont cl-dehors
-      if (cl) {   // en classe, répété (absences, retards à l'appel) : rond avec un liseré
+      if (t.indexOf('ob:') === 0) {   // observation de la séance : « P+ », « P++ » en vert, « C− », « C−− » en rouge (foncé si fort)
+        var morceaux = t.split(':'), niv = +morceaux[2], texteOb = morceaux[1] + (niv > 0 ? '+' : '−') + (Math.abs(niv) > 1 ? (niv > 0 ? '+' : '−') : '');
+        // « − » : couleur de la gravité du critère (jaune, orange, rouge ; PlanSalle.GRAVITE), plus foncée si « −− »
+        var grav = (window.PlanSalle && PlanSalle.GRAVITE && PlanSalle.GRAVITE[morceaux[3]]) || { couleur: '#e67e22', fort: '#a84f0c', texte: '#ffffff', texteFort: '#ffffff' };
+        g.fillStyle = niv > 1 ? '#1e6b42' : niv > 0 ? '#2e8b57' : niv < -1 ? grav.fort : grav.couleur;
+        g.beginPath();
+        if (g.roundRect) g.roundRect(x - 2, 6, 28, 28, 14); else g.rect(x - 2, 6, 28, 28);
+        g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = Math.abs(niv) > 1 ? 4 : 3; g.stroke();
+        g.fillStyle = niv > 0 ? '#ffffff' : niv < -1 ? grav.texteFort : grav.texte; g.font = '800 ' + (texteOb.length > 3 ? 9 : texteOb.length > 2 ? 11 : 14) + 'px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(texteOb, x + 12, 21);
+      } else if (cl) {   // en classe, répété (absences, retards à l'appel) : rond avec un liseré
         g.beginPath(); g.arc(x + 12, 20, 15, 0, Math.PI * 2);
         g.fillStyle = cl.couleur; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
-        g.fillStyle = '#ffffff'; g.font = '800 14px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillStyle = cl.texte || '#ffffff'; g.font = '800 14px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(cl.glyphe, x + 12, 21);
       } else if (rep) {   // plateforme : pastille carrée arrondie, couleur et icône du repère
         g.fillStyle = rep.couleur;
@@ -433,10 +467,11 @@ window.PlanSalle3D = (function () {
         g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
         g.fillStyle = '#ffffff'; g.font = '800 19px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(rep.glyphe, x + 12, 21);
-      } else if (t === 'absent' || t === 'retard') {   // appel : pastille rouge « A » (absent) ou orange « R » (en retard)
+      } else if (t === 'absent' || t === 'retard') {   // appel : pastille gris bleu « A » (absent) ou jaune « R » (en retard) — PlanSalle.CLASSE
+        var defA = (window.PlanSalle && PlanSalle.CLASSE && PlanSalle.CLASSE[t]) || { couleur: t === 'absent' ? '#5b6b8c' : '#e0a800' };
         g.beginPath(); g.arc(x + 12, 20, 15, 0, Math.PI * 2);
-        g.fillStyle = t === 'absent' ? '#c0392b' : '#e67e22'; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
-        g.fillStyle = '#ffffff'; g.font = '800 18px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillStyle = defA.couleur; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.stroke();
+        g.fillStyle = defA.texte || '#ffffff'; g.font = '800 18px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(t === 'absent' ? 'A' : 'R', x + 12, 21);
       } else if (t === 'recompense') {   // médaille verte : ruban rouge en dessous
         g.fillStyle = '#c0392b';
@@ -448,13 +483,7 @@ window.PlanSalle3D = (function () {
         g.fillRect(x, 3, 24, 34);
         g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.strokeRect(x, 3, 24, 34);
       }
-      x += 30;
-    });
-    if (reste) {
-      var x0 = x;
-      g.fillStyle = '#ffffff'; g.fillRect(x0, 3, 34, 34);
-      g.fillStyle = '#1d1f24'; g.font = '700 22px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText('+' + reste, x0 + 17, 21);
+      return x + 30;
     }
     return { tex: texture(cv, 1, 1), w: cv.width * ECHELLE_CARTON, h: cv.height * ECHELLE_CARTON };
   }
@@ -478,11 +507,18 @@ window.PlanSalle3D = (function () {
     etiquette.depart = etiquette.repos.w / etiquette.grand.w;
     etiquette.sRepos = sprite(etiquette.repos, true);
     etiquette.sGrand = sprite(etiquette.grand, false);
-    if (item.cartons && item.cartons.length) {   // petits cartons au-dessus de l'étiquette
-      var cartes = carteCartons(item.cartons);
-      etiquette.cartons = cartes;
-      etiquette.sCartons = sprite(cartes, false);
-      etiquette.sCartons.scale.set(cartes.w, cartes.h, 1);
+    // pastilles : la plateforme (☁) au-dessus de la photo, ce qui est noté en classe sous le nom
+    var plat = (item.cartons || []).filter(function (t) { return t.indexOf('rep-') === 0; });
+    var enClasse = (item.cartons || []).filter(function (t) { return t !== '|' && t.indexOf('rep-') !== 0; });
+    if (plat.length) {
+      etiquette.plat = carteCartons(['nuage'].concat(plat));
+      etiquette.sPlat = sprite(etiquette.plat, false);
+      etiquette.sPlat.scale.set(etiquette.plat.w, etiquette.plat.h, 1);
+    }
+    if (enClasse.length) {
+      etiquette.enClasse = carteCartons(enClasse);
+      etiquette.sClasse = sprite(etiquette.enClasse, false);
+      etiquette.sClasse.scale.set(etiquette.enClasse.w, etiquette.enClasse.h, 1);
     }
     st.labels[o.id] = etiquette;
     appliquer(etiquette);
@@ -502,10 +538,15 @@ window.PlanSalle3D = (function () {
     l.sRepos.position.set(l.x, BAS_ETIQUETTE + r.h / 2, l.z);
     l.sRepos.renderOrder = 1;
     l.sRepos.visible = l.p < 0.01;   // l'étiquette de repos disparaît dès le survol
-    if (l.sCartons) {   // les cartons suivent le haut de l'étiquette affichée
+    var ordre = l.p > 0.01 ? 12 : 2;   // pastilles de l'élève survolé devant sa photo ; celles des autres derrière la carte survolée (10)
+    if (l.sPlat) {   // plateforme : au-dessus de l'étiquette affichée (petite ou agrandie)
       var hauteur = l.p > 0.01 ? g.h * echelle : r.h;
-      l.sCartons.position.set(l.x, BAS_ETIQUETTE + hauteur + l.cartons.h / 2 + 0.03, l.z);
-      l.sCartons.renderOrder = l.p > 0.01 ? 12 : 2;   // cartons de l'élève survolé devant sa photo ; ceux des autres derrière la carte survolée (10)
+      l.sPlat.position.set(l.x, BAS_ETIQUETTE + hauteur + l.plat.h / 2 + 0.03, l.z);
+      l.sPlat.renderOrder = ordre;
+    }
+    if (l.sClasse) {   // en classe : sous le nom (l'étiquette ne bouge pas : les noms restent alignés d'un élève à l'autre)
+      l.sClasse.position.set(l.x, BAS_ETIQUETTE - l.enClasse.h / 2 - 0.02, l.z);
+      l.sClasse.renderOrder = ordre;
     }
   }
 
@@ -1179,12 +1220,14 @@ window.PlanSalle3D = (function () {
       }, { passive: false });
       canvas.addEventListener('dblclick', function () {
         clearTimeout(st.tClic);
+        if (st.opts && st.opts.immediat && st.opts.immediat()) return;   // appel, observation : chaque clic compte
         recentrer(conteneur);
       });
       canvas.addEventListener('click', function (ev) {
         clearTimeout(st.tClic);
         if (st.deplacement > 5) return;   // un glissement n'est pas un clic
         var id = st.opts && st.opts.surGlisser ? placeSous(st, ev) : pointeur(st, ev);   // plan de classe : les places vides aussi
+        if (id && st.opts && st.opts.surClic && st.opts.immediat && st.opts.immediat()) { st.opts.surClic(id); return; }   // appel, observation : tout de suite
         // le clic attend la fin d'un éventuel double-clic, qui recentre la vue au lieu d'ouvrir la fiche
         if (id && st.opts && st.opts.surClic) st.tClic = setTimeout(function () { st.opts.surClic(id); }, 250);
       });
