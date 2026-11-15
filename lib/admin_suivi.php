@@ -189,15 +189,15 @@ function action_suivi(string $action): bool
                 mb_substr(trim((string) ($_POST['icone'] ?? '')), 0, 4),
                 implode(',', array_filter(array_map('trim', explode(',', (string) ($_POST['classes'] ?? ''))))),
                 (int) ($_POST['ordre'] ?? 0), empty($_POST['actif']) ? 0 : 1, implode("\n", array_unique($secours)),
-                $emplacements['local'], $emplacements['github'], $emplacements['gitlab'], $emplacements['alwaysdata']];
+                $emplacements['local'], $emplacements['github'], $emplacements['gitlab'], $emplacements['alwaysdata'], $emplacements['domaine']];
             try {
                 if ($id) {
                     $pdo->prepare('UPDATE ateliers SET app = ?, nom = ?, description = ?, url = ?, icone = ?, classes = ?, ordre = ?, actif = ?, urls_secours = ?,
-                                   url_local = ?, url_github = ?, url_gitlab = ?, url_alwaysdata = ? WHERE id = ?')
+                                   url_local = ?, url_github = ?, url_gitlab = ?, url_alwaysdata = ?, url_domaine = ? WHERE id = ?')
                         ->execute([...$champs, $id]);
                 } else {
                     $pdo->prepare('INSERT INTO ateliers (app, nom, description, url, icone, classes, ordre, actif, urls_secours,
-                                   url_local, url_github, url_gitlab, url_alwaysdata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                                   url_local, url_github, url_gitlab, url_alwaysdata, url_domaine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                         ->execute($champs);
                 }
             } catch (PDOException) {
@@ -212,6 +212,12 @@ function action_suivi(string $action): bool
             // Où tourne la Centrale, et dans quel ordre essayer les emplacements des applications
             $lieu = (string) ($_POST['lieu_centrale'] ?? 'auto');
             definir_reglage('lieu_centrale', in_array($lieu, ['local', 'en_ligne'], true) ? $lieu : 'auto');
+            $domaine = rtrim(trim((string) ($_POST['domaine_centrale'] ?? '')), '/');
+            if ($domaine !== '' && !preg_match('#^https?://[^/\s]+$#', $domaine)) {
+                flash('Nom de domaine : indiquez seulement l’adresse du site, ex. https://technoversailles.fr', 'err');
+                rediriger('./?p=applications#emplacements');
+            }
+            definir_reglage('domaine_centrale', $domaine);
             foreach (array_keys(ORDRE_EMPLACEMENTS) as $l) {
                 $ordre = array_values(array_unique(array_intersect((array) ($_POST['ordre_' . $l] ?? []), array_keys(EMPLACEMENTS))));
                 definir_reglage('ordre_' . $l, $ordre ? implode(',', $ordre) : ORDRE_EMPLACEMENTS[$l]);
@@ -776,11 +782,21 @@ function catalogue_pour_parcours(): array
         }
     }
     $connues = catalogue_activites();
+    // adresse des lignes : le premier emplacement public de l'ordre de préférence (en ligne : le nom de domaine de la Centrale),
+    // celui que le portail ouvre ; toute adresse connue de l'application est de toute façon reconnue et redirigée
+    $publique = function (array $a): string {
+        foreach (adresses_atelier($a) as $u) {
+            if (type_emplacement($u) !== 'local') {
+                return $u;
+            }
+        }
+        return (string) $a['url'];
+    };
     $ligne = fn(string $titre, string $app, string $id, string $url) => str_replace('|', '/', $titre) . ' | ' . $app . ' | ' . $id . ' | ' . $url;
     $res = [];
     foreach ($apps as $a) {
         $app = (string) $a['app'];
-        $url = (string) $a['url'];
+        $url = $publique($a);
         $vues = [];
         $ateliers = [];
         foreach ($par_app[$app] ?? [] as $r) {
@@ -1101,10 +1117,12 @@ function page_applications(): void
                     <p class="aide">Le portail ouvre le premier emplacement qui répond, dans l'ordre réglé plus bas
                         (« Ordre des emplacements »). Laissez vide un emplacement qui n'existe pas.</p>
                     <?php $exemples = ['local' => '/miroir/netsim/', 'github' => 'https://grandiosian.github.io/NetSim/',
-                        'gitlab' => 'https://lionelcaruana.forge.apps.education.fr/netsim/', 'alwaysdata' => 'https://technoversailles.alwaysdata.net/miroir/netsim/'];
+                        'gitlab' => 'https://lionelcaruana.forge.apps.education.fr/netsim/', 'alwaysdata' => 'https://technoversailles.alwaysdata.net/miroir/netsim/',
+                        'domaine' => 'vide = ' . (domaine_centrale() ?: 'https://technoversailles.fr') . '/miroir/netsim/ (automatique)'];
                     foreach (EMPLACEMENTS as $type => $libelle): ?>
                         <label><?= h($libelle) ?>
                             <?php if ($type === 'local'): ?><span class="aide">Copie servie par cette Centrale (<code>/miroir/…/</code>, voir miroirs.txt) ou adresse d'un dossier local (<code>http://localhost:8080/…</code>).</span><?php endif; ?>
+                            <?php if ($type === 'domaine'): ?><span class="aide">Laissez vide : la copie <code>/miroir/…/</code> de cette Centrale, à son nom de domaine (réglé dans « Ordre des emplacements »).</span><?php endif; ?>
                             <input name="url_<?= $type ?>" class="mono" value="<?= h($courant['url_' . $type] ?? '') ?>" placeholder="<?= h($exemples[$type]) ?>"></label>
                     <?php endforeach; ?>
                     <label>Autres adresses (facultatives)
@@ -1232,6 +1250,10 @@ function page_applications(): void
                         <option value="local" <?= $lieu_auto === 'local' ? 'selected' : '' ?>>En local (ordinateur de la classe)</option>
                         <option value="en_ligne" <?= $lieu_auto === 'en_ligne' ? 'selected' : '' ?>>En ligne (serveur alwaysdata…)</option>
                     </select></label>
+                <label>Nom de domaine de cette Centrale
+                    <span class="aide">L'adresse officielle du site (ex. <code>https://technoversailles.fr</code>), qui sert les mêmes pages que le serveur alwaysdata.
+                        Emplacement « Nom de domaine » : sa copie <code>/miroir/…/</code>. Vide = aucun.</span>
+                    <input name="domaine_centrale" class="mono" value="<?= h(domaine_centrale()) ?>" placeholder="https://technoversailles.fr"></label>
                 <?php foreach (['local' => 'Centrale en local', 'en_ligne' => 'Centrale en ligne'] as $l => $titre): $ordre = ordre_emplacements($l); ?>
                     <p><?= h($titre) ?> :
                         <?php for ($k = 0; $k < count(EMPLACEMENTS); $k++): ?>

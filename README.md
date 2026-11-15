@@ -196,15 +196,17 @@ Dans **Parcours**, l'enchaînement des étapes est vérifié avec les descripteu
 
 ### Hébergements multiples et copie de secours
 
-- Chaque atelier a **quatre emplacements**, réglables dans la page Applications (bouton « Modifier ») :
+- Chaque atelier a **cinq emplacements**, réglables dans la page Applications (bouton « Modifier ») :
   - **Local** : la copie servie par cette Centrale, `/miroir/<nom>/` (rempli par défaut), ou un dossier local (`http://localhost:8080/…`) ;
+  - **Nom de domaine de la Centrale** (ex. `https://technoversailles.fr/miroir/netsim/`) : laissé vide, il se remplit tout seul avec la copie `/miroir/<nom>/` au nom de domaine réglé dans « Ordre des emplacements » (`domaine_centrale`, par défaut `https://technoversailles.fr` ; vide = aucun). Ce domaine pointe vers le même serveur que alwaysdata : sa copie est vérifiée sur le disque ;
   - **GitHub Pages** (ex. `https://grandiosian.github.io/NetSim/`) ;
   - **GitLab Pages**, sur la Forge ÉdNat (ex. `https://lionelcaruana.forge.apps.education.fr/netsim/`) ;
   - **Serveur alwaysdata** (ex. `https://technoversailles.alwaysdata.net/miroir/netsim/`).
   Des « autres adresses » (une par ligne) peuvent s'ajouter ; elles sont essayées après.
 - **Ordre de préférence** (carte « Ordre des emplacements », en bas de la page Applications) :
-  - Centrale **en local** (localhost, 127.0.0.1, adresse 192.168… / 10…, nom en .local) : local → GitHub → GitLab → alwaysdata ;
-  - Centrale **en ligne** : alwaysdata (la copie `/miroir/…` de ce serveur) → GitHub → GitLab (le local est ignoré : les élèves ne peuvent pas joindre l'ordinateur du professeur).
+  - Centrale **en local** (localhost, 127.0.0.1, adresse 192.168… / 10…, nom en .local) : local → GitHub → GitLab → nom de domaine → alwaysdata ;
+  - Centrale **en ligne** : nom de domaine (`technoversailles.fr/miroir/…`) → alwaysdata (`technoversailles.alwaysdata.net/miroir/…`) → GitHub → GitLab (le local est ignoré : les élèves ne peuvent pas joindre l'ordinateur du professeur).
+  Un ordre enregistré avant l'ajout du nom de domaine le reçoit juste avant alwaysdata.
   La détection est automatique ; on peut forcer « en local » ou « en ligne », et changer chaque ordre.
 - La Centrale vérifie elle-même quelles adresses répondent (cache de 5 minutes ; la copie `/miroir/` est vérifiée directement sur le disque). Le portail, les propositions, les parcours et « Tester comme élève » ouvrent **le premier emplacement qui répond** ; si aucun ne répond, la première adresse publique. Les liens des étapes de parcours (souvent vers GitHub) sont redirigés de la même façon. Dans l'onglet Ateliers, ● veut dire que l'adresse répond, ○ qu'elle ne répond pas, – qu'elle n'est pas utilisée ici ; « ← ouvert par le portail » montre le choix actuel.
 - À la mise à jour, les anciennes « adresse principale » et « adresses de secours » sont rangées automatiquement dans les emplacements. L'import d'un `centrale.json` (`url`, `urls_secours`) remplit aussi les emplacements vides.
@@ -373,7 +375,7 @@ Programmer la lampe         | technostudio | charte-lampe-de-poche/P1 | https://
 ```
 
 - **Activité vide** = tout l'atelier. L'étape est terminée quand toutes ses activités déclarées le sont.
-- **Ateliers de vos applications** (sous le formulaire) : par application, puis par atelier du catalogue, chaque activité avec sa ligne d'étape toute prête (`Titre | app | activité | adresse`). « + » l'ajoute à la fin des étapes, « + tout l'atelier » ajoute une étape par activité, « + toute l'application » une étape sans activité précise. Une recherche filtre ateliers et activités ; « Autres activités » regroupe celles qu'aucun atelier ne contient (`catalogue_pour_parcours()`).
+- **Ateliers de vos applications** (sous le formulaire) : par application, puis par atelier du catalogue, chaque activité avec sa ligne d'étape toute prête (`Titre | app | activité | adresse`). L'adresse est celle que le portail ouvre en premier (en ligne : `https://technoversailles.fr/miroir/…`) ; une étape écrite avec une autre adresse connue de l'application (GitHub…) est de toute façon redirigée. « + » l'ajoute à la fin des étapes, « + tout l'atelier » ajoute une étape par activité, « + toute l'application » une étape sans activité précise. Une recherche filtre ateliers et activités ; « Autres activités » regroupe celles qu'aucun atelier ne contient (`catalogue_pour_parcours()`).
 - **Classes concernées** : vide = toutes.
 - Sur le **portail élève** (`https://VOTRECOMPTE.alwaysdata.net/`), un parcours n'apparaît que s'il est placé dans le **Calendrier** de la classe : une carte 🧭 avec ses étapes, l'étape suivante, et **Commencer** ou **Continuer**. Le logiciel s'ouvre déjà connecté : le jeton passe dans l'adresse (`#centrale=…`) et le module le retire aussitôt.
 - **Bouton « Étape N : titre → »** : le module l'ajoute dans toute application ouverte depuis une étape de parcours, en bas à gauche, à côté de « ← Mes ateliers ».

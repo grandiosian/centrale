@@ -526,7 +526,8 @@ function adresse_repond(string $url): bool
 {
     // Adresse sur ce serveur (ex. copie de secours /miroir/netsim/) : on regarde directement le disque
     $p = parse_url($url);
-    if (meme_serveur($p)) {
+    $domaine = strtolower((string) ($p['host'] ?? '')) === hote_domaine_centrale() && hote_domaine_centrale() !== '';
+    if (meme_serveur($p) || $domaine) {   // ce serveur, ou son nom de domaine : même disque
         if (preg_match('#^/miroir/([A-Za-z0-9_-]+)/#', (string) ($p['path'] ?? ''), $m)) {
             return is_file(__DIR__ . '/../public/miroir/' . $m[1] . '/index.html');
         }
@@ -566,6 +567,7 @@ function adresse_repond(string $url): bool
 /** Emplacements possibles d'une application (colonnes url_<type> de la table ateliers). */
 const EMPLACEMENTS = [
     'local'      => 'Local (copie sur cet ordinateur)',
+    'domaine'    => 'Nom de domaine de la Centrale',
     'github'     => 'GitHub Pages',
     'gitlab'     => 'GitLab Pages (Forge ÉdNat)',
     'alwaysdata' => 'Serveur alwaysdata',
@@ -573,9 +575,41 @@ const EMPLACEMENTS = [
 
 /** Ordre de préférence par défaut, selon l'endroit où tourne la Centrale. */
 const ORDRE_EMPLACEMENTS = [
-    'local'    => 'local,github,gitlab,alwaysdata',
-    'en_ligne' => 'alwaysdata,github,gitlab',   // d'abord la copie de ce serveur : l'app y parle à cette Centrale
+    'local'    => 'local,github,gitlab,domaine,alwaysdata',
+    'en_ligne' => 'domaine,alwaysdata,github,gitlab',   // d'abord la copie de ce serveur (son nom de domaine) : l'app y parle à cette Centrale
 ];
+
+/** Nom de domaine de la Centrale en ligne, par défaut (réglage « domaine_centrale », page Applications ; vide = aucun). */
+const DOMAINE_CENTRALE_DEFAUT = 'https://technoversailles.fr';
+
+/** Nom de domaine de la Centrale (« https://technoversailles.fr », sans / final), ou '' s'il n'y en a pas. */
+function domaine_centrale(): string
+{
+    static $d = null;   // lu une fois par page (type_emplacement l'appelle souvent)
+    if ($d === null) {
+        $d = rtrim(trim((string) reglage('domaine_centrale', DOMAINE_CENTRALE_DEFAUT)), '/');
+        $d = preg_match('#^https?://[^/\s]+$#', $d) ? $d : '';
+    }
+    return $d;
+}
+
+/** Hôte du nom de domaine de la Centrale (« technoversailles.fr »), ou ''. */
+function hote_domaine_centrale(): string
+{
+    return strtolower((string) parse_url(domaine_centrale(), PHP_URL_HOST));
+}
+
+/** Chemin de la copie d'une application sur la Centrale (« /miroir/netsim/ »), d'après ses emplacements ; null s'il n'y en a pas. */
+function chemin_miroir(array $atelier): ?string
+{
+    foreach (['url_local', 'url_alwaysdata', 'url_domaine'] as $champ) {
+        $chemin = (string) parse_url((string) ($atelier[$champ] ?? ''), PHP_URL_PATH);
+        if (preg_match('#^(/miroir/[A-Za-z0-9_-]+/)#', $chemin, $m)) {
+            return $m[1];
+        }
+    }
+    return null;
+}
 
 /** Type d'emplacement d'une adresse, d'après son hôte (« autre » si inconnu). */
 function type_emplacement(string $url): string
@@ -586,6 +620,7 @@ function type_emplacement(string $url): string
     $hote = strtolower((string) parse_url($url, PHP_URL_HOST));
     return match (true) {
         hote_local($hote) => 'local',
+        $hote !== '' && ($hote === hote_domaine_centrale() || $hote === 'www.' . hote_domaine_centrale()) => 'domaine',
         str_ends_with($hote, '.github.io') => 'github',
         str_ends_with($hote, 'forge.apps.education.fr') || str_contains($hote, 'gitlab') => 'gitlab',
         str_ends_with($hote, '.alwaysdata.net') => 'alwaysdata',
@@ -618,8 +653,15 @@ function lieu_centrale(): string
 function ordre_emplacements(?string $lieu = null): array
 {
     $lieu ??= lieu_centrale();
-    $ordre = array_intersect(array_map('trim', explode(',', (string) reglage('ordre_' . $lieu, ORDRE_EMPLACEMENTS[$lieu]))), array_keys(EMPLACEMENTS));
-    return array_values(array_unique($ordre));
+    $ordre = array_values(array_unique(array_intersect(array_map('trim', explode(',', (string) reglage('ordre_' . $lieu, ORDRE_EMPLACEMENTS[$lieu]))), array_keys(EMPLACEMENTS))));
+    if (domaine_centrale() === '') {
+        return array_values(array_diff($ordre, ['domaine']));
+    }
+    if (!in_array('domaine', $ordre, true)) {   // ordre enregistré avant le nom de domaine : il passe juste avant alwaysdata
+        $i = array_search('alwaysdata', $ordre, true);
+        array_splice($ordre, $i === false ? ($lieu === 'en_ligne' ? 0 : count($ordre)) : $i, 0, ['domaine']);
+    }
+    return $ordre;
 }
 
 /**
@@ -688,6 +730,9 @@ function emplacements_atelier(array $atelier): array
     $local = (string) ($atelier['url_local'] ?? '');
     foreach ($ordre as $t) {
         $u = (string) ($atelier['url_' . $t] ?? '');
+        if ($t === 'domaine' && $u === '' && domaine_centrale() !== '' && ($m = chemin_miroir($atelier)) !== null) {
+            $u = domaine_centrale() . $m;   // nom de domaine : la copie /miroir/<app>/ de cette Centrale, à son adresse officielle
+        }
         if ($t === 'alwaysdata' && $u === '' && str_starts_with($local, '/') && lieu_centrale() === 'en_ligne') {
             $u = $local;   // Centrale en ligne : sa copie /miroir/<app>/ est la copie « serveur »
         }
