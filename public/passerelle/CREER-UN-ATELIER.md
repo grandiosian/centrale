@@ -45,20 +45,17 @@ FicheStudio **n'exporte pas** vers TechnoStudio : on en tire un **PDF**, qui ser
 1. Compte → Mon profil → **Enseignant**.
 2. Fichier → **Mes ateliers (créer, publier)** → **Nouvel atelier**, ou **Convertir une fiche papier** (PDF ou photos : le
    texte est extrait, les pages sont jointes ; la structure P/R/S/E et les compétences sont à refaire), ou **Dupliquer** un atelier existant.
-3. Remplir la **Fiche** : titre, niveau, durée, problématique, compétences (avec leur lien au référentiel), déroulement, matériel.
+3. Remplir la **Fiche** : d'abord l'**identifiant** (« Proposer » le tire du titre, puis « Changer » : lettres sans accent, chiffres, tirets ; il se fige à la première publication), puis titre, niveau, durée, problématique, compétences, déroulement, matériel. Une sous-compétence s'écrit « - T2C31 : intitulé → SFC31.5.1, SFC31.5.2 » : la flèche donne son lien au référentiel de la Centrale.
 4. Ajouter les **Feuilles** : une par page papier, avec son type (P/R/S/E), sa séance et son numéro.
 5. **Insertion** : les blocs de chaque feuille ; une question notée reçoit ses pastilles de compétences.
    L'atelier s'enregistre tout seul dans le navigateur, et l'éditeur signale ce qui n'est pas conforme.
 6. Essayer l'atelier en élève (lecteur), feuille par feuille.
 
-> L'éditeur donne à un nouvel atelier un identifiant au hasard (`at-k3j9x2ab`) et ne permet pas de le changer.
-> Pour un identifiant lisible (`radar-recul-robot-mbot`), le changer **avant le premier dépôt** : ouvrir le fichier
-> téléchargé à l'étape C1 dans un éditeur de texte, remplacer la valeur de `"id"`, renommer le fichier
-> `<nouvel id>.technostudio.json`, puis le réimporter (Fichier → Importer un paquet…) pour continuer à travailler dessus.
+> Un nouvel atelier reçoit d'abord un identifiant au hasard (`at-k3j9x2ab`). « Publier » le rappelle tant qu'il n'a pas été
+> remplacé par un identifiant lisible (`radar-recul-robot-mbot`). Après la publication, il ne peut plus changer.
 
 ### Étape C — Publier avec l'application
-1. Fichier → Mes ateliers (créer, publier) → **Publier** sur la ligne de l'atelier : le fichier `<id>.technostudio.json` est téléchargé.
-   (Le bouton reste grisé tant que l'atelier n'est pas conforme.)
+1. Fichier → Mes ateliers (créer, publier) → **Publier** sur la ligne de l'atelier (ou dans l'éditeur) : la fenêtre rappelle l'identifiant et la version, puis « Télécharger » donne le fichier `<id>.technostudio.json`. (Le bouton reste grisé tant que l'atelier n'est pas conforme.)
 2. Sur GitHub, dépôt **TechnoStudio**, dossier `ateliers/` : **Add file → Upload files**, déposer le fichier, **Commit changes**.
 3. La publication automatique (quelques minutes) vérifie l'atelier, refait `ateliers.json`, `centrale.json` et le fichier
    unique, puis met le site à jour. Une erreur dans le fichier bloque toute la publication : regarder l'onglet **Actions** de GitHub.
@@ -72,22 +69,21 @@ FicheStudio **n'exporte pas** vers TechnoStudio : on en tire un **PDF**, qui ser
 
 ## 4. Modifier un atelier déjà publié
 
-Sur un atelier publié, le bouton **Dupliquer et modifier** en fait une **copie avec un nouvel identifiant** (« ma version ») :
-la publier crée un autre atelier, sans le travail des élèves. Pour garder l'identifiant :
+1. TechnoStudio → Fichier → Mes ateliers (créer, publier), section « Ateliers publiés avec TechnoStudio » → **Modifier**.
+   L'atelier garde son identifiant : le travail des élèves reste rattaché.
+2. Modifier, en respectant les règles du §2 (nouvelles feuilles à la fin).
+3. **Publier** : la version suivante est proposée d'elle-même si le contenu a changé. Télécharger le fichier : il porte le même nom.
+4. Sur GitHub, redéposer le fichier dans `ateliers/` : il remplace l'ancien. Puis étapes C3, C4 et D1.
 
-1. Récupérer le fichier publié (Centrale → Inspecter → lien « Fichier complet », ou GitHub `ateliers/`).
-2. TechnoStudio → Fichier → **Importer un paquet…** avec ce fichier : l'atelier garde son identifiant, et le bouton devient **Modifier**.
-3. Modifier, en respectant les règles du §2, augmenter `version`, puis **Publier**.
-4. Sur GitHub, redéposer le fichier **sous le même nom** (il remplace l'ancien), puis étapes C3, C4 et D1.
-
-Sur l'ordinateur de l'enseignant, la copie locale d'un atelier passe avant la version publiée : après publication, supprimer
-la copie locale (Mes ateliers) pour voir ce que voient les élèves.
+- **Dupliquer** (à côté de Modifier) fait un **autre** atelier, avec un nouvel identifiant et sans le travail des élèves.
+- **Abandonner** (dans Mes ateliers) efface les modifications de ce poste : la version publiée revient.
+- Tant que des modifications non publiées restent sur l'ordinateur de l'enseignant, c'est elles qu'il voit, pas la version des élèves.
 
 ## 5. Avant de dire « c'est fini »
 
 - [ ] L'atelier s'ouvre dans TechnoStudio sans connexion (`#activite=<id>`) et en lien seul (`?atelier=<id>`).
 - [ ] Centrale → Inspecter : identifiant lisible, une activité par feuille notée, aucune compétence « sans lien au référentiel ».
-- [ ] `version` augmentée ; aucune feuille déjà utilisée renumérotée.
+- [ ] Version augmentée (Inspecter → « Fichier complet ») ; aucune feuille déjà utilisée renumérotée.
 - [ ] Testé à la place d'un élève, vue Élève (étapes une à une) et vue Enseignant.
 - [ ] Images raisonnables : elles sont dans le fichier (au-delà de 1 à 2 Mo, les postes de la salle le chargent lentement).
 
