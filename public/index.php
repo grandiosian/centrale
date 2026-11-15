@@ -284,19 +284,25 @@ h2.section .nb { display: inline-grid; place-items: center; min-width: 24px; hei
 .carte.atelier.courant[class*="app-"] { border-left: 7px solid var(--app-bande, var(--app)); }
 .atelier.courant .icone { width: 60px; height: 60px; font-size: 2rem; }
 .atelier.courant h3 { font-size: 1.35rem; }
-.courant-suite { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 12px; padding: 12px 14px; border-radius: 12px;
+.courant-suite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; padding: 10px 12px 10px 14px; border-radius: 12px;
   background: color-mix(in srgb, var(--encre) 8%, var(--surface)); }
-.courant-etiquette { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--encre); flex-basis: 100%; }
-.courant-suite strong { font-size: 1.05rem; flex: 1 1 200px; }
+/* 1re ligne : « Tu en es là » et jusqu'à quand (ou permanent) ; 2e : prochaine activité, applications du parcours, bouton */
+.courant-etiquette { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.courant-etiquette > b { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--encre); }
+.courant-suite strong { font-size: 1.05rem; flex: 1 1 180px; min-width: 0; }
 .courant-go { font-size: 1rem; padding: 10px 20px; border-radius: 999px; }
-/* « Tu en es là » : jusqu'à quand (ou permanent) et, pour un parcours, ses applications */
-.courant-infos { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 4px; font-size: .88rem; color: var(--doux); }
-.courant-validite { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--surface); }
+.courant-validite { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 999px; background: var(--surface); font-size: .8rem; color: var(--doux); white-space: nowrap; }
 .courant-validite.limite { color: var(--encre); font-weight: 600; }
 .courant-validite.proche { color: #b3261e; }
-.courant-apps { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.courant-app { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 3px; border-radius: 999px; background: var(--surface); color: var(--texte, inherit); }
-.courant-app .icone-mini { width: 22px; height: 22px; border-radius: 6px; font-size: .8rem; display: grid; place-items: center; flex: none; background: var(--code-fond); }
+/* applications d'un parcours : grandes icônes, le nom en bulle */
+.courant-apps { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.courant-apps .icone-mini { width: 38px; height: 38px; border-radius: 10px; font-size: 1.2rem; display: grid; place-items: center; background: var(--code-fond);
+  box-shadow: 0 0 0 2px var(--surface); }
+@media (max-width: 520px) {
+  .courant-suite strong { flex-basis: 100%; }
+  .courant-apps .icone-mini { width: 32px; height: 32px; border-radius: 9px; }
+  .courant-go { margin-left: auto; padding: 9px 14px; font-size: .95rem; }
+}
 .atelier.courant .pied > button:last-child { display: none; }   /* le grand bouton « Continuer » suffit */
 details.bloc-ateliers > summary { list-style: none; cursor: pointer; }
 details.bloc-ateliers > summary::-webkit-details-marker { display: none; }
@@ -686,6 +692,9 @@ details.fait .atelier { opacity: .85; }
   }
 
   /* ---------- À faire : activités proposées par le professeur ---------- */
+  function dateMoyenne(iso) {   // « jeu. 26 nov. »
+    return new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
   function dateCourte(iso) {
     return new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   }
@@ -828,20 +837,21 @@ details.fait .atelier { opacity: .85; }
     if (date) {
       const jours = Math.round((new Date(date + 'T12:00:00') - new Date(new Date().toLocaleDateString('sv') + 'T12:00:00')) / 864e5);
       validite = el('span', { class: 'courant-validite limite' + (jours <= 2 ? ' proche' : ''), title: 'Ton professeur a prévu cet atelier jusqu’au ' + dateCourte(date) },
-        el('span', { 'aria-hidden': 'true' }, '📅'), jours < 0 ? 'À compléter : c’était jusqu’au ' + dateCourte(date) : jours > 1 ? 'À compléter jusqu’au ' + dateCourte(date) : 'À compléter ' + (jours ? 'd’ici demain' : 'aujourd’hui'));
+        el('span', { 'aria-hidden': 'true' }, '📅'), jours < 0 ? 'À compléter : c’était jusqu’au ' + dateCourte(date) : jours > 1 ? 'À compléter jusqu’au ' + dateMoyenne(date) : 'À compléter ' + (jours ? 'd’ici demain' : 'aujourd’hui'));
     } else {
       validite = el('span', { class: 'courant-validite', title: 'Pas de date limite : tu peux le faire à ton rythme' },
         el('span', { 'aria-hidden': 'true' }, '♾'), parcours ? 'Parcours permanent' : 'Atelier permanent');
     }
-    const infos = el('div', { class: 'courant-infos' }, validite);
     const apps = parcours ? (a.apps || [...new Set(acts.map((x) => x.app).filter(Boolean))]) : [];
+    let icones = null;
     if (apps.length) {
       const noms = {};
       ateliers.forEach((b) => { if (b.app !== 'parcours') noms[b.app] = b.appli || b.nom; });
-      infos.append(el('span', { class: 'courant-apps', 'aria-label': 'Applications du parcours' }, 'Avec',
-        ...apps.map((k) => el('span', { class: 'courant-app app-' + k }, iconeApp(k, '🧩', 'icone-mini'), NOMS_APPS[k] || noms[k] || k))));
+      const nom = (k) => NOMS_APPS[k] || noms[k] || k;
+      icones = el('span', { class: 'courant-apps', role: 'img', 'aria-label': 'Applications du parcours : ' + apps.map(nom).join(', ') },
+        ...apps.map((k) => { const i = iconeApp(k, '🧩', 'icone-mini'); i.title = nom(k); return i; }));
     }
-    return infos;
+    return { validite, icones };
   }
 
   /**
@@ -862,12 +872,12 @@ details.fait .atelier { opacity: .85; }
     if (courant) {
       const c = carteAtelier(courant, ouverts).node, x = prochaineActivite(courant);
       c.classList.add('courant');
-      const suite = el('div', { class: 'courant-suite' },
-        el('span', { class: 'courant-etiquette' }, statutAtelier(courant) === 'encours' ? 'Tu en es là' : 'Pour commencer'),
-        el('strong', {}, x ? (x.titre || x.id) : 'Toutes les activités'));
+      const infos = infosCourant(courant, ateliers);
       const go = el('button', { class: 'courant-go' }, (avancement(courant).commence ? 'Continuer' : 'Commencer') + ' →');
       go.onclick = () => reprendreAtelier(courant);
-      suite.append(go, infosCourant(courant, ateliers));
+      const suite = el('div', { class: 'courant-suite' },
+        el('div', { class: 'courant-etiquette' }, el('b', {}, statutAtelier(courant) === 'encours' ? 'Tu en es là' : 'Pour commencer'), infos.validite),
+        el('strong', {}, x ? (x.titre || x.id) : 'Toutes les activités'), infos.icones, go);
       c.querySelector('.atelier-tete').after(suite);
       haut.replaceChildren(el('h2', { class: 'section' }, 'Mon atelier en cours'), c);   // un seul, en grand
       haut.hidden = false;
