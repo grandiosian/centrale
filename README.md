@@ -305,12 +305,20 @@ Les ateliers sont créés **dans les applications** et publiés avec elles : ils
 
 ### Calendrier des ateliers (progression d'une classe, pas à pas)
 
-Onglet **Calendrier** (`?p=calendrier`, code : `lib/progression.php` et `lib/admin_progression.php`, table `progression_ateliers`). Pour chaque classe, l'enseignant range les ateliers du catalogue dans l'ordre où elle les fera, avec pour chacun un **nombre de séances** et une **date d'ouverture**.
+Onglet **Calendrier** (`?p=calendrier`, code : `lib/progression.php`, `lib/admin_progression.php` et l'éditeur dans `public/admin/admin.js`, table `progression_ateliers`). Pour chaque classe, l'enseignant choisit ses ateliers, les range dans l'ordre où elle les fera, et chacun reçoit une **date d'ouverture**.
 
-- **Dates calculées** : « Calculer les dates d'après l'emploi du temps » part du « Premier atelier le … » et ouvre chaque atelier à la séance qui suit la fin du précédent. Le calcul suit les cours de la classe, les semaines A/B, les vacances et les séances annulées, déplacées ou ajoutées. Il ne compte que les cours en classe entière, ou à défaut ceux du premier groupe. Chaque date reste modifiable à la main ; un atelier qui s'ouvre avant le précédent est signalé (⚠).
-- **Ajout** : un atelier ajouté se place à la fin, daté à la séance qui suit le dernier atelier daté. Le nombre de séances vient de sa durée annoncée (« 3 séances », « 2 h »), 1 sinon.
-- **Révision** : une case par atelier. Cochée sur un atelier déjà ouvert, il passe chez les élèves dans la section « Révisions » (bouton « Réviser »), même s'ils l'ont terminé. Colonne `revision` de `progression_ateliers`, champ `revision` de `api/ateliers.php`.
-- **Copier vers d'autres classes** : la même suite d'ateliers, avec les dates recalculées d'après l'emploi du temps de chaque classe, si on le coche.
+- **Choisir une classe** : une pastille par classe, avec son nombre d'ateliers au calendrier (– : pas de calendrier).
+- **Partir d'une autre classe** : « Partir du calendrier de… » (ou « Remplacer par… ») reprend la liste d'une autre classe, dates recalculées sur l'emploi du temps de celle-ci. Rien n'est enregistré avant « Enregistrer ».
+- **Ajouter** : catalogue à gauche, avec recherche, niveau (celui de la classe par défaut, ou tous) et application. Le bouton « + » ajoute l'atelier à la fin, **déjà daté**. Le nombre de séances vient de sa durée annoncée (« 3 séances », « 2 h », « 220 min ») pour des séances d'1 h 30, 1 sinon.
+- **Ranger** : glisser une ligne (poignée ⠿ ou titre), ou ↑ ↓. ✕ retire l'atelier. ↺ le remet en **révision** : chez les élèves, il passe dans « Révisions » (bouton « Réviser »), même s'ils l'ont terminé (colonne `revision`, champ `revision` de `api/ateliers.php`).
+- **Dates calculées en direct** à partir de « Premier atelier le … » : chaque atelier s'ouvre à la séance qui suit la fin du précédent, d'après sa durée en séances.
+  - « avec le précédent » (`seances = 0`) : il s'ouvre le même jour que le précédent (deux ateliers courts dans une séance).
+  - Une date changée à la main est **fixée** 📌 (colonne `date_fixe`) et les suivantes repartent de là ; cliquer 📌 la remet en calcul. Un atelier qui s'ouvre avant le précédent est signalé (⚠).
+  - Le calcul suit l'emploi du temps : semaines A/B, vacances, séances annulées, déplacées ou ajoutées. Il compte les cours en classe entière **et** ceux du premier demi-groupe (un élève suit les deux) ; la page affiche les cours comptés.
+  - Sans emploi du temps : une séance par semaine à partir de la date de début.
+  - À l'ouverture de la page, une date enregistrée qui ne suit plus le calcul (saisie à la main avant, emploi du temps changé) est gardée et fixée ; « Tout recalculer » les remet toutes en calcul.
+- **Enregistrer** : un seul bouton pour toute la page ; la page prévient si on la quitte sans enregistrer. Une liste vidée puis enregistrée supprime le calendrier.
+- **Copier vers d'autres classes** : le calendrier enregistré, avec les dates recalculées d'après l'emploi du temps de chaque classe si on le coche.
 - **Ce que voit l'élève** dès que sa classe a un calendrier :
   - seulement les ateliers du calendrier, dans leur ordre ;
   - ouverts à partir de leur date, en « À venir » avant (gris, compte à rebours) ;
@@ -319,7 +327,7 @@ Onglet **Calendrier** (`?p=calendrier`, code : `lib/progression.php` et `lib/adm
 - **Une carte par atelier** sur le portail (et non par application) : un atelier fait va dans « Déjà fait » pendant que le suivant de la même application est en « À venir ». Le nom de l'application est écrit au-dessus du titre, et « Revoir » rouvre l'atelier, pas toute l'application.
 - **Étapes une à une** (pour toutes les classes, avec ou sans calendrier) : dans un atelier ouvert, une étape s'ouvre quand la précédente est terminée. La vue enseignant d'un essai (« Tester à la place d'un élève ») lève ces verrous. Les suivantes sont affichées 🔒 avec « S'ouvre quand tu as terminé « … » ». Le bouton de la carte ouvre la prochaine étape, pas toute l'application.
 - **Restent toujours ouverts** : les parcours et ce que l'enseignant demande à un élève (propositions), car ce sont des demandes explicites. Ils ne suivent que les périodes de disponibilité.
-- **Sans calendrier**, une classe garde les périodes de disponibilité, le réglage « activités proposées » et une carte par application ; les étapes s'ouvrent quand même une à une dans chaque atelier. « Supprimer la progression » y ramène la classe.
+- **Sans calendrier**, une classe garde les périodes de disponibilité, le réglage « activités proposées » et une carte par application ; les étapes s'ouvrent quand même une à une dans chaque atelier. « Supprimer le calendrier » (en bas de la page) y ramène la classe.
 - **Limite** : une application reste ouvrable seule, et sa propre bibliothèque n'est pas filtrée par la Centrale. Le calendrier règle ce que montrent le portail et `api/ateliers.php`, qui renvoie `verrou` et `apres` pour une étape verrouillée.
 
 Règles communes : [`public/passerelle/DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md`](public/passerelle/DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md) et [`public/passerelle/COMPETENCES.md`](public/passerelle/COMPETENCES.md), lisibles en ligne sur `/passerelle/?doc=donnees` et `/passerelle/?doc=competences`.

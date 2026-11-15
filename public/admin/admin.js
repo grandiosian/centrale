@@ -1997,3 +1997,320 @@
     document.body.appendChild(a); a.click(); a.remove();
   });
 })();
+
+/* ---------- Calendrier des ateliers d'une classe (?p=calendrier, lib/admin_progression.php) ----------
+ * Catalogue à gauche (recherche, niveau, application, « + »), ateliers de la classe à droite (glisser, ↑ ↓),
+ * dates calculées en direct d'après les séances de la classe. Même règle que dates_progression (lib/progression.php) :
+ * premier atelier à la première séance à partir du début, chaque suivant à la séance qui suit la fin du précédent ;
+ * seances = 0 : le même jour que le précédent ; date_fixe : date gardée, les suivants repartent de là ;
+ * sans emploi du temps : une séance par semaine. Tout part au serveur en un seul envoi (champ « lignes », JSON).
+ */
+(function () {
+  'use strict';
+  var source = document.getElementById('calat-donnees');
+  var form = document.getElementById('calat-form');
+  if (!source || !form) return;
+  var D = JSON.parse(source.textContent);
+  var cat = {};
+  D.catalogue.forEach(function (r) { cat[r.cle] = r; });
+  var lignes = D.lignes.map(function (l) {
+    return { app: l.app, atelier: l.atelier, seances: +l.seances, ouvre_le: l.ouvre_le || '', date_fixe: !!+l.date_fixe, revision: !!+l.revision };
+  });
+  var debut = document.getElementById('calat-debut');
+  var liste = document.getElementById('calat-liste');
+  var catListe = document.getElementById('calat-cat-liste');
+  var cherche = document.getElementById('calat-cherche');
+  var etat = document.getElementById('calat-etat');
+  var avis = document.getElementById('calat-avis');
+  var filtre = { niveau: D.classe.niveau ? 'classe' : 'tous', app: '' };
+  var modifie = false, envoi = false, glisse = null;
+  var JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+  var MOIS = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+  function cle(l) { return l.app + '|' + l.atelier; }
+  function el(tag, attrs, enfants) {
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === 'texte') e.textContent = attrs[k];
+      else if (k === 'classe') e.className = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    });
+    (enfants || []).forEach(function (c) { if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function jour(d) { var p = d.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function iso(dt) { return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
+  function lisible(d, court) { var j = jour(d); return JOURS[j.getDay()] + ' ' + j.getDate() + (court ? '' : ' ' + MOIS[j.getMonth()]); }
+  function semaines(d) { var r = [], j = jour(d); for (var i = 0; i < 52; i++) { r.push(iso(new Date(j.getFullYear(), j.getMonth(), j.getDate() + 7 * i))); } return r; }
+  function depuis(serie, d) { for (var i = 0; i < serie.length; i++) { if (serie[i] >= d) return i; } return serie.length; }
+
+  /* Dates calculées (voir dates_progression) : renvoie les dates sans toucher aux lignes. */
+  function calculer(ls) {
+    var hebdo = !D.seances.length, d0 = debut.value || D.prochaine;
+    var serie = hebdo ? semaines(d0) : D.seances, pos = depuis(serie, d0), avant = '';
+    return ls.map(function (l, k) {
+      var d;
+      if (l.date_fixe && l.ouvre_le) {
+        d = l.ouvre_le;
+        if (hebdo) serie = semaines(d);
+        pos = depuis(serie, d) + Math.max(1, l.seances);
+      } else if (l.seances === 0 && k > 0) {
+        d = avant;
+      } else {
+        d = serie[pos] || '';
+        pos += Math.max(1, l.seances);
+      }
+      avant = d;
+      return d;
+    });
+  }
+  function appliquer() {
+    calculer(lignes).forEach(function (d, k) { if (!lignes[k].date_fixe) lignes[k].ouvre_le = d; });
+  }
+  function marquer() { modifie = true; majEtat(); }
+  function majEtat() {
+    etat.textContent = modifie ? 'Modifications non enregistrées' : '';
+    form.classList.toggle('modifie', modifie);
+  }
+
+  /* Au chargement : une date enregistrée qui ne suit pas le calcul (saisie à la main avant, emploi du temps changé)
+     est gardée et fixée ; une ligne sans date en reçoit une. */
+  (function chargement() {
+    var gardees = 0, datees = 0, k;
+    for (var tour = 0; tour < lignes.length; tour++) {
+      var calc = calculer(lignes);
+      for (k = 0; k < lignes.length; k++) {
+        if (!lignes[k].date_fixe && lignes[k].ouvre_le && calc[k] !== lignes[k].ouvre_le) break;
+      }
+      if (k === lignes.length) break;
+      lignes[k].date_fixe = true;
+      gardees++;
+    }
+    lignes.forEach(function (l) { if (!l.ouvre_le) datees++; });
+    appliquer();
+    var msgs = [];
+    if (gardees) msgs.push(gardees + (gardees > 1 ? ' dates enregistrées ne suivent' : ' date enregistrée ne suit') + ' pas l’emploi du temps : gardée' + (gardees > 1 ? 's' : '') + ' et fixée' + (gardees > 1 ? 's' : '') + ' 📌.');
+    if (datees) { msgs.push(datees + (datees > 1 ? ' ateliers sans date en ont reçu une' : ' atelier sans date en a reçu une') + ' : enregistrez pour la montrer aux élèves.'); modifie = true; }
+    if (msgs.length) {
+      avis.hidden = false;
+      avis.appendChild(el('span', { texte: msgs.join(' ') + ' ' }));
+      if (gardees) {
+        var b = el('button', { type: 'button', classe: 'petit secondaire', texte: 'Tout recalculer' });
+        b.addEventListener('click', function () {
+          lignes.forEach(function (l) { l.date_fixe = false; });
+          appliquer(); marquer(); rendre(); avis.hidden = true;
+        });
+        avis.appendChild(b);
+      }
+    }
+  })();
+
+  /* ----- En-tête : résumé, cours comptés, reprendre une autre classe ----- */
+  function rendreTete() {
+    var ouverts = 0, venir = 0, sans = 0;
+    lignes.forEach(function (l) { if (!l.ouvre_le) sans++; else if (l.ouvre_le <= D.aujourdhui) ouverts++; else venir++; });
+    var n = lignes.length;
+    document.getElementById('calat-resume').textContent = n
+      ? '— ' + n + ' atelier' + (n > 1 ? 's' : '') + ' : ' + ouverts + ' ouvert' + (ouverts > 1 ? 's' : '') + ', ' + venir + ' à venir' + (sans ? ', ' + sans + ' sans date' : '')
+      : '— pas de calendrier : les élèves voient tous les ateliers';
+    var r = document.getElementById('calat-reprendre');
+    var sel = document.getElementById('calat-reprendre-classe');
+    r.hidden = !D.autres.length;
+    document.getElementById('calat-vide-reprendre').hidden = !D.autres.length;
+    document.getElementById('calat-reprendre-texte').textContent = n ? 'Remplacer par le calendrier de' : 'Partir du calendrier de';
+    if (!sel.options.length) {
+      D.autres.slice().sort(function (a, b) { return (b.meme_niveau - a.meme_niveau) || a.nom.localeCompare(b.nom); }).forEach(function (a) {
+        sel.appendChild(el('option', { value: a.id, texte: a.nom + ' (' + a.lignes.length + ' atelier' + (a.lignes.length > 1 ? 's' : '') + ')' }));
+      });
+    }
+    r.classList.toggle('en-avant', !n);
+  }
+  document.getElementById('calat-cours').textContent = D.seances.length
+    ? (D.cours.length ? 'Séances comptées : ' + D.cours.join(', ') + '.' : 'D’après l’emploi du temps de la classe.')
+      + ' Vacances et cours annulés sont sautés.'
+    : 'Pas d’emploi du temps pour cette classe (page Emploi du temps) : une séance par semaine, à partir de cette date.';
+  document.getElementById('calat-reprendre-bouton').addEventListener('click', function () {
+    var id = +document.getElementById('calat-reprendre-classe').value;
+    var a = D.autres.filter(function (x) { return x.id === id; })[0];
+    if (!a) return;
+    if (lignes.length && !confirm('Remplacer les ' + lignes.length + ' ateliers de la liste par ceux de ' + a.nom + ' ?')) return;
+    lignes = a.lignes.map(function (l) { return { app: l.app, atelier: l.atelier, seances: +l.seances, ouvre_le: '', date_fixe: false, revision: !!+l.revision }; });
+    appliquer(); marquer(); rendre();
+    etat.textContent = 'Calendrier de ' + a.nom + ' repris : vérifiez les dates, puis enregistrez.';
+  });
+
+  /* ----- Ateliers de la classe ----- */
+  function bouton(texte, titre, action, classe) {
+    return el('button', { type: 'button', classe: 'calat-b ' + (classe || ''), 'data-cal': action, title: titre, 'aria-label': titre, texte: texte });
+  }
+  function rendreListe() {
+    liste.textContent = '';
+    document.getElementById('calat-vide').hidden = lignes.length > 0;
+    var avant = '';
+    lignes.forEach(function (l, k) {
+      var r = cat[cle(l)];
+      var titre = r ? r.titre : l.atelier;
+      var info = [r ? r.nom_app : l.app];
+      if (r && r.etapes) info.push(r.etapes + ' étape' + (r.etapes > 1 ? 's' : ''));
+      if (r && r.duree) info.push(r.duree);
+      if (!r) info.push('plus au catalogue');
+      else if (!r.actif) info.push('retiré par l’application');
+
+      var duree = el('select', { 'aria-label': 'Durée de « ' + titre + ' »', 'data-cal': 'seances' });
+      var max = Math.max(10, l.seances);
+      if (k > 0) duree.appendChild(el('option', { value: '0', texte: 'avec le précédent' }));
+      for (var i = 1; i <= max; i++) duree.appendChild(el('option', { value: String(i), texte: i + ' séance' + (i > 1 ? 's' : '') }));
+      duree.value = String(k === 0 && l.seances === 0 ? 1 : l.seances);
+
+      var date = el('input', { type: 'date', value: l.ouvre_le, 'aria-label': 'Date d’ouverture de « ' + titre + ' »', 'data-cal': 'date' });
+      var quand = el('span', { classe: 'calat-jour', texte: l.ouvre_le ? lisible(l.ouvre_le, true) : '' });
+      var colDate = el('span', { classe: 'calat-date' + (l.date_fixe ? ' fixe' : '') }, [quand, date,
+        l.date_fixe ? bouton('📌', 'Date fixée à la main : cliquer pour la recalculer', 'defixer', 'calat-epingle') : null]);
+      var alerte = !l.ouvre_le ? 'Pas de séance trouvée : à dater à la main'
+        : (avant && l.ouvre_le < avant ? 'S’ouvre avant le précédent' : '');
+      if (l.ouvre_le) avant = l.ouvre_le;
+
+      var et = !l.ouvre_le ? ['ferme', 'Pas montré'] : (l.ouvre_le <= D.aujourdhui ? ['ouvert', 'Ouvert'] : ['bientot', 'À venir']);
+      var li = el('li', { classe: 'calat-ligne' + (l.seances === 0 && k > 0 ? ' avec-precedent' : ''), 'data-k': k }, [
+        el('span', { classe: 'calat-poignee', title: 'Glisser pour ranger', 'aria-hidden': 'true', texte: '⠿' }),
+        el('span', { classe: 'calat-num', texte: String(k + 1) }),
+        el('span', { classe: 'calat-titre' }, [
+          el('strong', {}, [(r ? r.icone + ' ' : '') + titre]),
+          el('span', { classe: 'calat-info', texte: info.join(' · ') }),
+          alerte ? el('span', { classe: 'calat-alerte', texte: '⚠ ' + alerte }) : null
+        ]),
+        el('span', { classe: 'calat-reglages' }, [duree, colDate,
+          el('span', { classe: 'calat-pour' }, [el('span', { classe: 'pastille-dispo ' + et[0], texte: et[1] }),
+            l.revision ? el('span', { classe: 'pastille-dispo revision', texte: 'Révision' }) : null])]),
+        el('span', { classe: 'calat-actions' }, [
+          bouton('↑', 'Monter', 'haut'), bouton('↓', 'Descendre', 'bas'),
+          bouton('↺', l.revision ? 'Ne plus proposer en révision' : 'Remettre en révision (rouvert aux élèves, même terminé)', 'revision', l.revision ? 'actif' : ''),
+          bouton('✕', 'Retirer du calendrier', 'retirer', 'calat-retirer')
+        ])
+      ]);
+      liste.appendChild(li);
+    });
+  }
+  liste.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-cal]'); if (!b) return;
+    var k = +b.closest('li').dataset.k, a = b.dataset.cal, l = lignes[k];
+    if (a === 'haut' && k > 0) { lignes.splice(k - 1, 0, lignes.splice(k, 1)[0]); }
+    else if (a === 'bas' && k < lignes.length - 1) { lignes.splice(k + 1, 0, lignes.splice(k, 1)[0]); }
+    else if (a === 'retirer') { lignes.splice(k, 1); }
+    else if (a === 'revision') { l.revision = !l.revision; }
+    else if (a === 'defixer') { l.date_fixe = false; }
+    else return;
+    if (lignes[0] && lignes[0].seances === 0) lignes[0].seances = 1;
+    appliquer(); marquer(); rendre();
+  });
+  liste.addEventListener('change', function (e) {
+    var c = e.target, li = c.closest('li'); if (!li) return;
+    var l = lignes[+li.dataset.k];
+    if (c.dataset.cal === 'seances') l.seances = +c.value;
+    else if (c.dataset.cal === 'date') { l.ouvre_le = c.value; l.date_fixe = !!c.value; }
+    else return;
+    appliquer(); marquer(); rendre();
+  });
+  /* glisser-déposer : la ligne suit la souris, l'ordre est relu à la fin */
+  /* seuls la poignée et le titre font glisser : les champs de la ligne restent utilisables */
+  liste.addEventListener('pointerdown', function (e) {
+    var li = e.target.closest('li');
+    if (li) li.draggable = !!e.target.closest('.calat-poignee, .calat-titre');
+  });
+  liste.addEventListener('dragstart', function (e) {
+    var li = e.target.closest && e.target.closest('li');
+    if (!li || !li.draggable) { e.preventDefault(); return; }
+    glisse = li; li.classList.add('glisse');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', li.dataset.k); } catch (x) { /* rien */ }
+  });
+  liste.addEventListener('dragover', function (e) {
+    if (!glisse) return;
+    e.preventDefault();
+    var li = e.target.closest('li');
+    if (!li || li === glisse) return;
+    var b = li.getBoundingClientRect();
+    liste.insertBefore(glisse, e.clientY < b.top + b.height / 2 ? li : li.nextSibling);
+  });
+  liste.addEventListener('drop', function (e) { if (glisse) e.preventDefault(); });
+  liste.addEventListener('dragend', function () {
+    if (!glisse) return;
+    glisse.classList.remove('glisse'); glisse = null;
+    var ordre = Array.prototype.map.call(liste.children, function (li) { return lignes[+li.dataset.k]; });
+    var change = ordre.some(function (l, i) { return l !== lignes[i]; });
+    lignes = ordre;
+    if (lignes[0] && lignes[0].seances === 0) lignes[0].seances = 1;
+    if (change) { appliquer(); marquer(); }
+    rendre();
+  });
+
+  /* ----- Catalogue ----- */
+  var apps = [];
+  D.catalogue.forEach(function (r) { if (r.actif && apps.indexOf(r.nom_app) < 0) apps.push(r.nom_app); });
+  function pilule(conteneur, valeur, texte, champ) {
+    var b = el('button', { type: 'button', classe: 'calat-pilule', 'aria-pressed': String(filtre[champ] === valeur), texte: texte });
+    b.addEventListener('click', function () { filtre[champ] = valeur; rendreFiltres(); rendreCatalogue(); });
+    conteneur.appendChild(b);
+  }
+  function rendreFiltres() {
+    var n = document.getElementById('calat-niveaux'), a = document.getElementById('calat-apps');
+    n.textContent = ''; a.textContent = '';
+    if (D.classe.niveau) pilule(n, 'classe', D.classe.niveau + 'e', 'niveau');
+    pilule(n, 'tous', 'Tous niveaux', 'niveau');
+    if (apps.length > 1) {
+      pilule(a, '', 'Toutes', 'app');
+      apps.forEach(function (x) { pilule(a, x, x, 'app'); });
+    }
+  }
+  function rendreCatalogue() {
+    var dans = {};
+    lignes.forEach(function (l) { dans[cle(l)] = true; });
+    var q = cherche.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    catListe.textContent = '';
+    var n = 0;
+    D.catalogue.forEach(function (r) {
+      if (!r.actif || (filtre.app && r.nom_app !== filtre.app)) return;
+      if (filtre.niveau === 'classe' && r.niveau && r.niveau.indexOf(D.classe.niveau) !== 0) return;
+      if (q && (r.titre + ' ' + r.nom_app + ' ' + r.atelier).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').indexOf(q) < 0) return;
+      n++;
+      var info = [r.nom_app, r.niveau, r.duree, r.etapes ? r.etapes + ' étape' + (r.etapes > 1 ? 's' : '') : ''].filter(Boolean).join(' · ');
+      var b = dans[r.cle]
+        ? el('span', { classe: 'calat-deja', texte: '✓ ajouté' })
+        : el('button', { type: 'button', classe: 'calat-ajouter', 'data-cle': r.cle, title: 'Ajouter à la fin', 'aria-label': 'Ajouter « ' + r.titre + ' »', texte: '+' });
+      catListe.appendChild(el('li', { classe: dans[r.cle] ? 'deja' : '' }, [
+        el('span', { classe: 'calat-titre' }, [el('span', { texte: r.icone + ' ' + r.titre }), el('span', { classe: 'calat-info', texte: info })]), b]));
+    });
+    if (!n) catListe.appendChild(el('li', { classe: 'calat-rien', texte: 'Aucun atelier ne correspond.' }));
+  }
+  catListe.addEventListener('click', function (e) {
+    var b = e.target.closest('.calat-ajouter'); if (!b) return;
+    var r = cat[b.dataset.cle]; if (!r) return;
+    lignes.push({ app: r.app, atelier: r.atelier, seances: r.seances, ouvre_le: '', date_fixe: false, revision: false });
+    appliquer(); marquer(); rendre();
+    var der = liste.lastElementChild;
+    if (der) { der.classList.add('nouveau'); }
+  });
+  cherche.addEventListener('input', rendreCatalogue);
+  debut.addEventListener('change', function () { if (debut.value) { appliquer(); marquer(); rendre(); } });
+
+  function rendre() { rendreTete(); rendreListe(); rendreCatalogue(); majEtat(); }
+
+  /* ----- Enregistrer ----- */
+  form.addEventListener('submit', function (e) {
+    if (D.lignes.length && !lignes.length && !confirm('Plus aucun atelier : ' + D.classe.nom + ' n’aura plus de calendrier et ses élèves verront tous les ateliers. Enregistrer ?')) {
+      e.preventDefault(); return;
+    }
+    form.elements.lignes.value = JSON.stringify(lignes.map(function (l) {
+      return { app: l.app, atelier: l.atelier, seances: l.seances, ouvre_le: l.ouvre_le, date_fixe: l.date_fixe ? 1 : 0, revision: l.revision ? 1 : 0 };
+    }));
+    envoi = true;
+  });
+  window.addEventListener('beforeunload', function (e) { if (modifie && !envoi) { e.preventDefault(); e.returnValue = ''; } });
+  var copie = document.getElementById('calat-copie');
+  if (copie) copie.addEventListener('submit', function (e) {
+    if (modifie) { e.preventDefault(); e.stopImmediatePropagation(); alert('Enregistrez d’abord vos modifications : c’est le calendrier enregistré qui est copié.'); }
+  }, true);
+
+  rendreFiltres();
+  rendre();
+})();
