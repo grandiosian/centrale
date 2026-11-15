@@ -184,6 +184,22 @@ td.avancement { min-width: 110px; font-weight: 600; }
 textarea.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .88rem; }
 .aide-catalogue { margin-bottom: 12px; font-size: .9rem; }
 .aide-catalogue summary { cursor: pointer; color: var(--accent); }
+/* Page Parcours : ateliers des applications, étapes toutes prêtes à ajouter */
+.parcours-catalogue { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--bord); }
+.parcours-catalogue h3 { margin: 0 0 4px; font-size: 1rem; }
+.parcours-catalogue .pc-cherche { max-width: 420px; margin: 6px 0 10px; padding: 7px 10px; }
+.pc-app { border: 1px solid var(--bord); border-radius: 8px; margin-bottom: 8px; background: var(--surface); }
+.pc-app[hidden], .pc-atelier[hidden], .pc-ligne[hidden] { display: none; }
+.pc-app > summary { cursor: pointer; padding: 8px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .95rem; }
+.pc-app > summary .discret { color: var(--doux); font-size: .85rem; }
+.pc-atelier { padding: 6px 10px 8px; border-top: 1px solid var(--bord); }
+.pc-atelier-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 4px; font-size: .92rem; }
+.pc-atelier-tete .discret { color: var(--doux); font-size: .82rem; }
+.pc-ligne { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 10px; }
+.pc-ligne code { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: .8rem; padding: 3px 6px; border-radius: 5px; background: var(--code-fond); user-select: all; }
+.pc-tout { padding: 0 10px 8px; }
+.pc-ligne button, .pc-atelier-tete button { flex: none; padding: 2px 9px; }
+button.pc-ajoute { background: var(--ok-fond); color: var(--ok); border-color: var(--ok); }
 .ok { color: var(--ok); font-weight: 600; }
 .grille-atelier { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 0 14px; align-items: end; }
 .grille-atelier label.case { display: flex; align-items: center; gap: 8px; font-weight: 500; }

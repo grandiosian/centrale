@@ -2382,3 +2382,48 @@
   rendreFiltres();
   rendre();
 })();
+
+/* ---------- Page Parcours : ateliers des applications, étapes toutes prêtes (lib/admin_suivi.php, catalogue_pour_parcours) ----------
+ * « + » ajoute la ligne d'étape à la fin du champ « Étapes » ; la recherche filtre ateliers et activités.
+ */
+(function () {
+  'use strict';
+  var zone = document.querySelector('.parcours-catalogue');
+  if (!zone) return;
+  var champ = zone.closest('form').querySelector('textarea[name=etapes]');
+  zone.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-ligne]');
+    if (!b || !champ) return;
+    var v = champ.value.replace(/\s+$/, '');
+    champ.value = (v ? v + '\n' : '') + b.dataset.ligne + '\n';
+    champ.scrollTop = champ.scrollHeight;
+    b.classList.add('pc-ajoute');
+    var texte = b.textContent;
+    b.textContent = '✓ ajouté';
+    setTimeout(function () { b.textContent = texte; b.classList.remove('pc-ajoute'); }, 1200);
+  });
+  var cherche = zone.querySelector('.pc-cherche');
+  var sansAccent = function (t) { return t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
+  cherche.addEventListener('input', function () {
+    var q = sansAccent(cherche.value.trim());
+    zone.querySelectorAll('.pc-app').forEach(function (app) {
+      var nApp = 0;
+      app.querySelectorAll('.pc-atelier').forEach(function (at) {
+        var titreAtelier = sansAccent(at.querySelector('.pc-atelier-tete').textContent);
+        var n = 0;
+        at.querySelectorAll('.pc-ligne').forEach(function (l) {
+          var ok = !q || titreAtelier.indexOf(q) >= 0 || sansAccent(l.textContent).indexOf(q) >= 0;
+          l.hidden = !ok;
+          if (ok) n++;
+        });
+        at.hidden = !n;
+        nApp += n;
+      });
+      var nomApp = sansAccent(app.querySelector('summary').textContent).indexOf(q) >= 0;
+      var tout = app.querySelector('.pc-tout');
+      if (tout) tout.hidden = !!q && !nomApp;   // « toute l'application » : seulement si on cherche l'application
+      app.hidden = !!q && !nApp && !nomApp;
+      if (q) app.open = nApp > 0;
+    });
+  });
+})();

@@ -373,6 +373,7 @@ Programmer la lampe         | technostudio | charte-lampe-de-poche/P1 | https://
 ```
 
 - **Activité vide** = tout l'atelier. L'étape est terminée quand toutes ses activités déclarées le sont.
+- **Ateliers de vos applications** (sous le formulaire) : par application, puis par atelier du catalogue, chaque activité avec sa ligne d'étape toute prête (`Titre | app | activité | adresse`). « + » l'ajoute à la fin des étapes, « + tout l'atelier » ajoute une étape par activité, « + toute l'application » une étape sans activité précise. Une recherche filtre ateliers et activités ; « Autres activités » regroupe celles qu'aucun atelier ne contient (`catalogue_pour_parcours()`).
 - **Classes concernées** : vide = toutes.
 - Sur le **portail élève** (`https://VOTRECOMPTE.alwaysdata.net/`), un parcours n'apparaît que s'il est placé dans le **Calendrier** de la classe : une carte 🧭 avec ses étapes, l'étape suivante, et **Commencer** ou **Continuer**. Le logiciel s'ouvre déjà connecté : le jeton passe dans l'adresse (`#centrale=…`) et le module le retire aussitôt.
 - **Bouton « Étape N : titre → »** : le module l'ajoute dans toute application ouverte depuis une étape de parcours, en bas à gauche, à côté de « ← Mes ateliers ».
