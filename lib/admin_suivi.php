@@ -768,9 +768,11 @@ function page_suivi(): void
 
 /**
  * Ateliers et activités des applications, pour écrire les étapes d'un parcours : par application, puis par atelier du
- * catalogue, chaque activité avec sa ligne d'étape toute prête (« Titre | app | activité | adresse »). Les activités
- * qu'aucun atelier ne regroupe sont dans « Autres activités ».
- * → [ app => ['nom', 'icone', 'url', 'ateliers' => [ ['titre', 'info', 'lignes' => [ ['titre', 'id', 'ligne'] ]] ]] ]
+ * catalogue, chaque activité avec son étape toute prête : « Titre | app | activité | adresse », puis ses lignes de détail
+ * « reçoit : » et « produit : » (fichiers du dossier de projet déclarés par l'application dans son centrale.json, nom
+ * conseillé pour un motif) et « compétences : » (codes de l'activité, sinon de l'atelier). Les activités qu'aucun atelier
+ * ne regroupe sont dans « Autres activités ».
+ * → [ app => ['nom', 'icone', 'url', 'fichiers', 'ateliers' => [ ['titre', 'info', 'lignes' => [ ['titre', 'id', 'ligne', 'details', 'bloc'] ]] ], 'tout'] ]
  */
 function catalogue_pour_parcours(): array
 {
@@ -792,11 +794,45 @@ function catalogue_pour_parcours(): array
         }
         return (string) $a['url'];
     };
-    $ligne = fn(string $titre, string $app, string $id, string $url) => str_replace('|', '/', $titre) . ' | ' . $app . ' | ' . $id . ' | ' . $url;
+    // Fichiers du dossier de projet que l'application déclare recevoir et produire (noms à écrire dans l'étape)
+    $fichiers = function (string $app): array {
+        $d = descripteur_de($app);
+        $f = is_array($d['fichiers'] ?? null) ? $d['fichiers'] : [];
+        $res = ['recoit' => [], 'produit' => []];
+        if (!$d || ($f['utilises'] ?? true) === false || ($f['dossier_projet'] ?? true) === false) {
+            return $res;
+        }
+        foreach (array_keys($res) as $liste) {
+            foreach (fichiers_declares($d, $liste) as $x) {
+                $nom = (string) (($x['nom_conseille'] ?? '') ?: $x['nom']);
+                if ($nom !== '' && !str_contains($nom, '*')) {
+                    $res[$liste][] = $nom;
+                }
+            }
+            $res[$liste] = array_values(array_unique($res[$liste]));
+        }
+        return $res;
+    };
+    $codes = function ($c): string {
+        $l = is_array($c) ? $c : preg_split('/[\s,;]+/', (string) $c);
+        return implode(', ', array_values(array_unique(array_filter(array_map('trim', (array) $l), 'is_string'))));
+    };
+    // Une étape : sa ligne, ses détails (reçoit, produit, compétences) et le bloc à ajouter au champ « Étapes »
+    $etape = function (string $titre, string $app, string $id, string $url, array $fic, string $competences): array {
+        $ligne = str_replace('|', '/', $titre) . ' | ' . $app . ' | ' . $id . ' | ' . $url;
+        $details = array_values(array_filter([
+            $fic['recoit'] ? 'reçoit : ' . implode(', ', $fic['recoit']) : '',
+            $fic['produit'] ? 'produit : ' . implode(', ', $fic['produit']) : '',
+            $competences !== '' ? 'compétences : ' . $competences : '',
+        ]));
+        return ['titre' => $titre, 'id' => $id, 'ligne' => $ligne, 'details' => $details,
+                'bloc' => implode("\n", array_merge([$ligne], array_map(fn($d) => '  ' . $d, $details)))];
+    };
     $res = [];
     foreach ($apps as $a) {
         $app = (string) $a['app'];
         $url = $publique($a);
+        $fic = $fichiers($app);
         $vues = [];
         $ateliers = [];
         foreach ($par_app[$app] ?? [] as $r) {
@@ -808,7 +844,7 @@ function catalogue_pour_parcours(): array
                 }
                 $vues[$id] = true;
                 $titre = (string) (($x['titre'] ?? '') ?: ($connues[$app][$id]['titre'] ?? '') ?: $id);
-                $lignes[] = ['titre' => $titre, 'id' => $id, 'ligne' => $ligne($titre, $app, $id, $url)];
+                $lignes[] = $etape($titre, $app, $id, $url, $fic, $codes($x['competences'] ?? []) ?: $codes($r['competences']));
             }
             if ($lignes) {
                 $ateliers[] = ['titre' => $r['titre'] ?: $r['atelier'], 'info' => implode(' · ', array_filter([(string) $r['niveau'], (string) $r['duree']])), 'lignes' => $lignes];
@@ -818,14 +854,14 @@ function catalogue_pour_parcours(): array
         foreach ($connues[$app] ?? [] as $id => $c) {
             if (!isset($vues[(string) $id])) {
                 $titre = (string) ($c['titre'] ?: $id);
-                $autres[] = ['titre' => $titre, 'id' => (string) $id, 'ligne' => $ligne($titre, $app, (string) $id, $url)];
+                $autres[] = $etape($titre, $app, (string) $id, $url, $fic, $codes($c['competences'] ?? ''));
             }
         }
         if ($autres) {
             $ateliers[] = ['titre' => 'Autres activités', 'info' => 'déclarées par l’application, hors atelier', 'lignes' => $autres];
         }
-        $res[$app] = ['nom' => $a['nom'], 'icone' => $a['icone'], 'url' => $url, 'ateliers' => $ateliers,
-                      'tout' => $ligne((string) $a['nom'], $app, '', $url)];
+        $res[$app] = ['nom' => $a['nom'], 'icone' => $a['icone'], 'url' => $url, 'fichiers' => $fic, 'ateliers' => $ateliers,
+                      'tout' => $etape((string) $a['nom'], $app, '', $url, $fic, '')];
     }
     return $res;
 }
@@ -914,25 +950,30 @@ Programmer la lampe | technostudio | charte-lampe-de-poche/P1 | https://grandios
                 <?php if ($catalogue): ?>
                     <section class="parcours-catalogue" aria-label="Ateliers de vos applications">
                         <h3>Ateliers de vos applications</h3>
-                        <p class="aide">Chaque ligne est une étape toute prête. « + » l’ajoute à la fin des étapes ci-dessus ;
-                            « + tout l’atelier » ajoute une étape par activité. Vous pouvez aussi la copier et changer son titre.</p>
+                        <p class="aide">Chaque bloc est une étape toute prête, avec ce qu’elle <strong>reçoit</strong> et <strong>produit</strong> dans le dossier de projet
+                            (si l’application en échange) et ses <strong>compétences</strong>. « + » l’ajoute à la fin des étapes ci-dessus ;
+                            « + tout l’atelier » ajoute une étape par activité. Vous pouvez aussi la copier, puis changer son titre ou retirer une ligne.</p>
                         <input type="search" class="pc-cherche" placeholder="Chercher un atelier ou une activité…" aria-label="Chercher un atelier ou une activité">
                         <?php foreach ($catalogue as $app => $c): ?>
                             <details class="pc-app" data-app="<?= h($app) ?>">
                                 <summary><?= icone_app($app, $c['icone']) ?> <strong><?= h($c['nom']) ?></strong> <code><?= h($app) ?></code>
                                     <span class="discret">· <?= count($c['ateliers']) ?> atelier<?= count($c['ateliers']) > 1 ? 's' : '' ?></span></summary>
-                                <div class="pc-ligne pc-tout"><code><?= h($c['tout']) ?></code>
-                                    <button type="button" class="petit secondaire" data-ligne="<?= h($c['tout']) ?>" title="Une étape : toute l’application, sans activité précise">+ toute l’application</button></div>
+                                <?php if ($c['fichiers']['recoit'] || $c['fichiers']['produit']): ?>
+                                    <p class="pc-fichiers">Dossier de projet : reçoit <code><?= h(implode(', ', $c['fichiers']['recoit']) ?: '—') ?></code>,
+                                        produit <code><?= h(implode(', ', $c['fichiers']['produit']) ?: '—') ?></code> (déclarés par l’application ; à adapter si besoin).</p>
+                                <?php endif; ?>
+                                <div class="pc-ligne pc-tout"><code><?= h($c['tout']['bloc']) ?></code>
+                                    <button type="button" class="petit secondaire" data-ligne="<?= h($c['tout']['bloc']) ?>" title="Une étape : toute l’application, sans activité précise">+ toute l’application</button></div>
                                 <?php foreach ($c['ateliers'] as $at): ?>
                                     <div class="pc-atelier">
                                         <div class="pc-atelier-tete"><strong><?= h($at['titre']) ?></strong>
                                             <?= $at['info'] !== '' ? '<span class="discret">' . h($at['info']) . '</span>' : '' ?>
                                             <?php if (count($at['lignes']) > 1): ?>
-                                                <button type="button" class="petit secondaire" data-ligne="<?= h(implode("\n", array_column($at['lignes'], 'ligne'))) ?>">+ tout l’atelier (<?= count($at['lignes']) ?> étapes)</button>
+                                                <button type="button" class="petit secondaire" data-ligne="<?= h(implode("\n", array_column($at['lignes'], 'bloc'))) ?>">+ tout l’atelier (<?= count($at['lignes']) ?> étapes)</button>
                                             <?php endif; ?></div>
                                         <?php foreach ($at['lignes'] as $l): ?>
-                                            <div class="pc-ligne"><code title="<?= h($l['titre']) ?>"><?= h($l['ligne']) ?></code>
-                                                <button type="button" class="petit secondaire" data-ligne="<?= h($l['ligne']) ?>" aria-label="Ajouter l’étape « <?= h($l['titre']) ?> »">+</button></div>
+                                            <div class="pc-ligne"><code title="<?= h($l['titre']) ?>"><?= h($l['bloc']) ?></code>
+                                                <button type="button" class="petit secondaire" data-ligne="<?= h($l['bloc']) ?>" aria-label="Ajouter l’étape « <?= h($l['titre']) ?> »">+</button></div>
                                         <?php endforeach; ?>
                                     </div>
                                 <?php endforeach; ?>

@@ -196,7 +196,9 @@ textarea.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace
 .pc-atelier-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 4px; font-size: .92rem; }
 .pc-atelier-tete .discret { color: var(--doux); font-size: .82rem; }
 .pc-ligne { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 10px; }
-.pc-ligne code { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: .8rem; padding: 3px 6px; border-radius: 5px; background: var(--code-fond); user-select: all; }
+.pc-ligne { align-items: flex-start; }
+.pc-ligne code { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: pre; font-size: .8rem; line-height: 1.45; padding: 3px 6px; border-radius: 5px; background: var(--code-fond); user-select: all; }
+.pc-fichiers { margin: 0; padding: 0 10px 6px; font-size: .82rem; color: var(--doux); }
 .pc-tout { padding: 0 10px 8px; }
 .pc-ligne button, .pc-atelier-tete button { flex: none; padding: 2px 9px; }
 button.pc-ajoute { background: var(--ok-fond); color: var(--ok); border-color: var(--ok); }
