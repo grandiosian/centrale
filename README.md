@@ -69,6 +69,8 @@ Sur un autre ordinateur, ou après avoir vidé le navigateur : **Charger mon fic
 
 Code perdu : **Nouveau code** sur la ligne de l'élève (l'ancien cesse de fonctionner).
 
+Code et identifiant : le **code** (« 5F-LHA-2345-abcd-efgh », sur la fiche) sert à se connecter ; l'**identifiant** (« 5F-LHA-BaleineLucide », affiché sur le portail) n'est qu'un nom visible. Si un élève tape son identifiant, la connexion le lui dit ; le code d'un élève désactivé est signalé comme tel. Un ancien code remplacé par **Nouveau code** est simplement inconnu (`api/login.php`).
+
 Classes créées avec l'ancienne version (noms enregistrés en ligne) : bouton **Anonymiser la classe**. Les noms sont remplacés par des numéros, et la correspondance est téléchargée.
 
 ---

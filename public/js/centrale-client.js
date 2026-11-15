@@ -1394,11 +1394,16 @@
     var s = session();
     if (!s || !s.essai) return false;
     v = v === 'enseignant' ? 'enseignant' : 'eleve';
-    if (s.vue !== v) { s.vue = v; enregistrerSession(s); prevenirVue(); }
+    // La vue est d'abord enregistrée sur le serveur, PUIS les écouteurs sont prévenus : beaucoup relisent l'API
+    // (le portail recharge api/ateliers.php) et liraient sinon l'ancienne vue (Élève et Enseignant inversés).
+    var ok = false;
     try {
       var r = await fetch(url('session.php', { app: config.app }), { method: 'POST', headers: { 'X-Jeton': s.jeton, 'Content-Type': 'application/json' }, body: JSON.stringify({ vue: v }) });
-      return r.ok;
-    } catch (e) { return false; }
+      ok = r.ok;
+    } catch (e) { /* hors ligne : la vue change quand même ici */ }
+    var s2 = session();
+    if (s2 && s2.jeton === s.jeton && s2.vue !== v) { s2.vue = v; enregistrerSession(s2); prevenirVue(); }
+    return ok;
   }
 
   /** Relit la vue gardée sur le serveur (changée dans une autre application ou un autre onglet). */

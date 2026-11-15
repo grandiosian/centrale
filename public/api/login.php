@@ -53,7 +53,34 @@ $eleve = $st->fetch();
 if (!$eleve) {
     noter_echec($cle_ip);
     usleep(400000); // ralentit les essais en série
-    envoyer_json(401, ['ok' => false, 'erreur' => 'Code inconnu ou désactivé.']);
+    envoyer_json(401, ['ok' => false, 'erreur' => explication_code_refuse($code, $empreinte)]);
+}
+
+/**
+ * Message quand un code est refusé : l'élève a souvent tapé son identifiant (« 5F-LHA-BaleineLucide », affiché sur
+ * le portail) au lieu de son code (« 5F-LHA-2345-abcd-efgh », sur sa carte), ou le code d'un élève désactivé.
+ */
+function explication_code_refuse(string $code, string $empreinte): string
+{
+    $st = db()->prepare('SELECT 1 FROM eleves WHERE code_hash = ? AND actif = 0');
+    $st->execute([$empreinte]);
+    if ($st->fetchColumn()) {
+        return 'Ce code a été désactivé. Demande à ton professeur.';
+    }
+    $saisi = trim($code);
+    $surnom = substr((string) strrchr($saisi, '-'), 1);
+    if ($surnom !== '' && !preg_match('/\d/', $surnom)) {
+        $st = db()->prepare('SELECT e.surnom, c.nom, c.etablissement_id FROM eleves e JOIN classes c ON c.id = e.classe_id
+                             WHERE e.surnom = ? COLLATE NOCASE AND e.actif = 1');
+        $st->execute([$surnom]);
+        foreach ($st->fetchAll() as $r) {
+            if (strcasecmp(identifiant_eleve(['nom' => $r['nom'], 'etablissement_id' => $r['etablissement_id']], $r['surnom']), $saisi) === 0) {
+                return 'C’est ton identifiant, pas ton code. Ton code est sur la carte donnée par ton professeur : il a des chiffres, comme '
+                    . substr($saisi, 0, strlen($saisi) - strlen($surnom)) . '2345-abcd-efgh.';
+            }
+        }
+    }
+    return 'Code inconnu ou désactivé. Vérifie ta carte (chiffres et lettres, tirets compris) ou demande ton code à ton professeur.';
 }
 
 db()->prepare('UPDATE eleves SET derniere_connexion = ? WHERE id = ?')
