@@ -384,6 +384,7 @@ Programmer la lampe         | technostudio | charte-lampe-de-poche/P1 | https://
   - Au clic, il enregistre tout, puis ouvre directement l'étape suivante : la bonne application, la bonne activité, le même dossier de projet, sans repasser par le portail.
   - Si l'étape suivante est verrouillée (« dans l'ordre » ou « après validation »), il affiche un 🔒 et explique pourquoi. En mode « dans l'ordre », quand l'application dépose ses fichiers en partant (Établi 3D), il reste cliquable : il dépose d'abord, puis ouvre l'étape suivante si l'étape est terminée.
   - À la dernière étape, il devient « Parcours terminé → Mes ateliers ».
+- **Boutons des applications** (formulaire du parcours) : « ← » en haut (dès la 2ᵉ étape) revient à l'étape précédente ou à la Centrale ; le bouton du bas ouvre l'étape suivante ou ramène à la Centrale (« Mes ateliers → », la suite du parcours est sur le portail). Pour une seule étape, ajoutez sous elle `avant : mes ateliers` ou `après : mes ateliers` (`étape` pour revenir au comportement habituel).
   - Il se met à jour tout seul après chaque progression ou dépôt de fichier.
 - **Côté application** (détails : spécification de la passerelle, § 2.6) :
   - `Centrale.init({ avantDeQuitter: async () => … })` : dépose ce qui attend encore, avant « ← Mes ateliers » ou « Étape suivante » (15 s au plus) ;

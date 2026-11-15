@@ -131,13 +131,18 @@
   /**
    * Étape suivante du parcours ouvert dans cet onglet, ou null hors parcours :
    * { numero, etape: { titre, app, activite, url, ouverte, statut… } | null (fin du parcours),
-   *   actuelle, fin, raison: texte si l'étape suivante n'est pas encore ouverte }.
+   *   actuelle, fin, raison: texte si l'étape suivante n'est pas encore ouverte,
+   *   portail: true si l'enseignant veut que le bouton du bas ramène à la Centrale (réglage « après » du parcours ou de l'étape) }.
    */
   async function etapeSuivante() {
     var d = await etape();
     if (!d) return null;
     var n = d.numero + 1;
     var e = d.etapes[n] || null;
+    // Réglage de l'enseignant (parcours ou étape) : le bouton du bas ramène à la Centrale au lieu d'ouvrir l'étape suivante
+    if (e && d.etape && d.etape.apres === 'portail') {
+      return { numero: n, etape: e, actuelle: d.etape, fin: false, portail: true, raison: '', parcours: d.parcours };
+    }
     var raison = '';
     if (e && !e.ouverte) {
       raison = d.parcours.deblocage === 'validation'
@@ -167,7 +172,7 @@
       info = await etapeSuivante();
       if (!info) return false;
     }
-    if (info.fin) return retour();
+    if (info.fin || info.portail) return retour();
     if (info.raison) return false;
     if (!depose) await avantDeQuitter();
     toutEnvoyer();
@@ -195,6 +200,8 @@
       try {
         var d = await etape();
         var e = d && d.etapes[d.numero - 1];
+        // réglage de l'enseignant (parcours ou étape) : « ← » ramène à la Centrale plutôt qu'à l'étape précédente
+        if (d && d.etape && d.etape.avant === 'portail') e = null;
         if (e && e.url) {
           return { parcours: true, numero: d.numero - 1, etape: e, parcoursId: d.parcours.id,
                    libelle: 'Étape ' + d.numero + ' : ' + e.titre, court: 'Étape précédente',
@@ -315,8 +322,10 @@
     // Verrou affiché seulement si le clic ne peut pas le lever (dépôt des fichiers en partant)
     var verrou = !!info.raison && !peutSeDebloquerEnPartant(info);
     b.textContent = info.fin ? 'Parcours terminé → Mes ateliers'
+      : info.portail ? 'Mes ateliers →'
       : (verrou ? '🔒 ' : '') + 'Étape ' + (info.numero + 1) + ' : ' + info.etape.titre + (verrou ? '' : ' →');
     b.title = info.fin ? 'Dernière étape : revenir à la liste de tes ateliers'
+      : info.portail ? 'Enregistrer et revenir à tes ateliers : la suite du parcours (« ' + info.etape.titre + ' ») y est'
       : verrou ? info.raison : 'Enregistrer et ouvrir l’étape suivante du parcours';
     b.style.cssText = 'position:fixed;bottom:12px;left:' + gauche + 'px;z-index:2147483000;'
       + 'max-width:min(420px,calc(100vw - ' + (gauche + 12) + 'px));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'

@@ -63,6 +63,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'consigne' => $et['consigne'], 'entrees' => $e['entrees'], 'sorties' => $e['sorties'], 'deposees' => $e['deposees'],
             'statut' => $e['statut'], 'taux' => round($e['taux'], 3), 'texte' => $e['texte'],
             'ouverte' => $e['ouverte'], 'validee' => $e['validee'] !== null,
+            // boutons des applications à cette étape : « ← » et bouton du bas ('etape' ou 'portail')
+            'avant' => navigation_etape($parcours, $et, 'avant'), 'apres' => navigation_etape($parcours, $et, 'apres'),
         ];
     }
     $liste = array_map(fn($f) => description_fichier($f, $auteurs), array_values($fichiers));
@@ -74,7 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     envoyer_json(200, [
         'ok' => true,
         'parcours' => ['id' => $pid, 'nom' => $parcours['nom'], 'description' => $parcours['description'],
-                       'mode' => $parcours['mode'], 'deblocage' => $parcours['deblocage']],
+                       'mode' => $parcours['mode'], 'deblocage' => $parcours['deblocage'],
+                       'avant' => navigation_etape($parcours, [], 'avant'), 'apres' => navigation_etape($parcours, [], 'apres')],
         'proprietaire' => [
             'type' => $proprio['type'],
             'equipe' => $proprio['equipe']['nom'] ?? null,

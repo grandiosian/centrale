@@ -385,6 +385,12 @@ function creer_tables(PDO $pdo): void
     // Ateliers transversaux : parcours individuel ou en équipe, étapes qui reçoivent / produisent des fichiers
     ajouter_colonne($pdo, 'parcours', 'mode', "TEXT NOT NULL DEFAULT 'individuel'");      // individuel | equipe
     ajouter_colonne($pdo, 'parcours', 'deblocage', "TEXT NOT NULL DEFAULT 'libre'");      // libre | ordre | validation
+    // Boutons des applications dans un parcours : « ← » (avant) et bouton du bas (après) mènent à l'étape d'à côté
+    // ('etape') ou à la Centrale ('portail') ; une étape peut changer le réglage du parcours ('' = celui du parcours)
+    ajouter_colonne($pdo, 'parcours', 'avant', "TEXT NOT NULL DEFAULT 'etape'");
+    ajouter_colonne($pdo, 'parcours', 'apres', "TEXT NOT NULL DEFAULT 'etape'");
+    ajouter_colonne($pdo, 'parcours_etapes', 'avant', "TEXT NOT NULL DEFAULT ''");
+    ajouter_colonne($pdo, 'parcours_etapes', 'apres', "TEXT NOT NULL DEFAULT ''");
     ajouter_colonne($pdo, 'parcours_etapes', 'consigne', "TEXT NOT NULL DEFAULT ''");
     ajouter_colonne($pdo, 'parcours_etapes', 'entrees', "TEXT NOT NULL DEFAULT ''");      // « cahier.json, chassis.glb »
     ajouter_colonne($pdo, 'parcours_etapes', 'sorties', "TEXT NOT NULL DEFAULT ''");

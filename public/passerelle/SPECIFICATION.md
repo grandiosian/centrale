@@ -174,6 +174,7 @@ widget.prepend(prec.bouton);                                       // avant le n
 
 - dans un parcours, à partir de la 2ᵉ étape : **« ← Étape précédente »** — enregistre tout (`avantDeQuitter`), puis rouvre l'étape précédente, dans son application (même dossier de projet) ;
 - sinon : **« ← Mes ateliers »** (retour au portail) ; caché si l'application n'a pas été ouverte depuis la Centrale ;
+- l'enseignant peut choisir, pour un parcours ou une étape, que « ← » ramène à la Centrale plutôt qu'à l'étape précédente, et que le bouton du bas devienne **« Mes ateliers → »** au lieu de « Étape suivante » (champs `avant` / `apres` = `etape` ou `portail` de chaque étape dans `api/projet.php` ; `Centrale.etapeSuivante()` renvoie alors `portail: true`, et `Centrale.allerEtapeSuivante()` revient au portail). Une application qui dessine son propre bouton suivant teste `info.portail` ;
 - il se met à jour tout seul (connexion, retour sur l'onglet) ; `maj()` le force. Sans interface : `await Centrale.precedent()` (`{ parcours, libelle, court, titre }` ou `null`) et `await Centrale.allerPrecedent()`.
 - Le portail élève a la même barre ; son widget du centre (l'atelier en cours, « Continuer → ») sert à reprendre.
 

@@ -17,6 +17,8 @@ function action_suivi(string $action): bool
             $classes = implode(',', array_filter(array_map('trim', explode(',', (string) ($_POST['classes'] ?? '')))));
             $mode = isset(MODES_PARCOURS[$_POST['mode'] ?? '']) ? $_POST['mode'] : 'individuel';
             $deblocage = isset(DEBLOCAGES[$_POST['deblocage'] ?? '']) ? $_POST['deblocage'] : 'libre';
+            $avant = isset(NAVIGATION_AVANT[$_POST['avant'] ?? '']) ? $_POST['avant'] : 'etape';
+            $apres = isset(NAVIGATION_APRES[$_POST['apres'] ?? '']) ? $_POST['apres'] : 'etape';
             [$etapes, $erreurs] = lire_etapes((string) ($_POST['etapes'] ?? ''));
             if ($nom === '') {
                 $erreurs[] = 'Donnez un nom au parcours.';
@@ -33,17 +35,18 @@ function action_suivi(string $action): bool
             }
             $pdo->beginTransaction();
             if ($id) {
-                $pdo->prepare('UPDATE parcours SET nom = ?, description = ?, classes = ?, mode = ?, deblocage = ? WHERE id = ?')
-                    ->execute([$nom, $description, $classes, $mode, $deblocage, $id]);
+                $pdo->prepare('UPDATE parcours SET nom = ?, description = ?, classes = ?, mode = ?, deblocage = ?, avant = ?, apres = ? WHERE id = ?')
+                    ->execute([$nom, $description, $classes, $mode, $deblocage, $avant, $apres, $id]);
                 $pdo->prepare('DELETE FROM parcours_etapes WHERE parcours_id = ?')->execute([$id]);
             } else {
-                $pdo->prepare('INSERT INTO parcours (nom, description, classes, mode, deblocage, cree_le) VALUES (?, ?, ?, ?, ?, ?)')
-                    ->execute([$nom, $description, $classes, $mode, $deblocage, time()]);
+                $pdo->prepare('INSERT INTO parcours (nom, description, classes, mode, deblocage, avant, apres, cree_le) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$nom, $description, $classes, $mode, $deblocage, $avant, $apres, time()]);
                 $id = (int) $pdo->lastInsertId();
             }
-            $ins = $pdo->prepare('INSERT INTO parcours_etapes (parcours_id, ordre, titre, app, activite, url, consigne, entrees, sorties, competences) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $ins = $pdo->prepare('INSERT INTO parcours_etapes (parcours_id, ordre, titre, app, activite, url, consigne, entrees, sorties, competences, avant, apres) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             foreach ($etapes as $i => $et) {
-                $ins->execute([$id, $i, $et['titre'], $et['app'], $et['activite'], $et['url'], $et['consigne'], $et['entrees'], $et['sorties'], $et['competences']]);
+                $ins->execute([$id, $i, $et['titre'], $et['app'], $et['activite'], $et['url'], $et['consigne'], $et['entrees'], $et['sorties'], $et['competences'],
+                               $et['avant'], $et['apres']]);
             }
             $pdo->commit();
             flash("Parcours « $nom » enregistré (" . count($etapes) . ' étapes).');
@@ -350,6 +353,18 @@ function lire_etapes(string $texte): array
             }
             continue;
         }
+        if (preg_match('/^(avant|retour|pr[ée]c[ée]dent)\s*:\s*(.*)$/iu', $ligne, $m)) {   // bouton « ← » à cette étape
+            if ($dernier >= 0) {
+                $etapes[$dernier]['avant'] = navigation_lue($m[2]);
+            }
+            continue;
+        }
+        if (preg_match('/^(apr[èe]s|suivant)\s*:\s*(.*)$/iu', $ligne, $m)) {   // bouton du bas à cette étape
+            if ($dernier >= 0) {
+                $etapes[$dernier]['apres'] = navigation_lue($m[2]);
+            }
+            continue;
+        }
         if (preg_match('/^(comp[ée]tences?|[ée]value)\s*:\s*(.*)$/iu', $ligne, $m)) {
             if ($dernier >= 0) {
                 $etapes[$dernier]['competences'] = implode(', ', liste_codes_competences($m[2]));
@@ -369,7 +384,8 @@ function lire_etapes(string $texte): array
             $erreurs[] = 'Ligne ' . ($n + 1) . ' : l\'adresse doit commencer par https://';
             continue;
         }
-        $etapes[] = ['titre' => $titre, 'app' => $app, 'activite' => $activite, 'url' => $url, 'consigne' => '', 'entrees' => '', 'sorties' => '', 'competences' => ''];
+        $etapes[] = ['titre' => $titre, 'app' => $app, 'activite' => $activite, 'url' => $url, 'consigne' => '', 'entrees' => '', 'sorties' => '', 'competences' => '',
+                     'avant' => '', 'apres' => ''];
     }
     if (count($etapes) > 100) {
         $erreurs[] = '100 étapes maximum.';
@@ -393,6 +409,11 @@ function etapes_en_texte(array $etapes): string
         }
         if (($e['competences'] ?? '') !== '') {
             $lignes[] = '  compétences : ' . $e['competences'];
+        }
+        foreach (['avant' => 'avant', 'apres' => 'après'] as $champ => $mot) {
+            if (($e[$champ] ?? '') !== '') {
+                $lignes[] = '  ' . $mot . ' : ' . ($e[$champ] === 'portail' ? 'mes ateliers' : 'étape');
+            }
         }
     }
     return implode("\n", $lignes);
@@ -877,7 +898,8 @@ function page_parcours(): void
     unset($_SESSION['brouillon_parcours']);
     $catalogue = catalogue_pour_parcours();
 
-    $courant = ['id' => 0, 'nom' => '', 'description' => '', 'classes' => '', 'etapes' => '', 'mode' => 'individuel', 'deblocage' => 'libre'];
+    $courant = ['id' => 0, 'nom' => '', 'description' => '', 'classes' => '', 'etapes' => '', 'mode' => 'individuel', 'deblocage' => 'libre',
+                'avant' => 'etape', 'apres' => 'etape'];
     if ($modifier) {
         $st = $pdo->prepare('SELECT * FROM parcours WHERE id = ?');
         $st->execute([$modifier]);
@@ -885,14 +907,16 @@ function page_parcours(): void
             $se = $pdo->prepare('SELECT * FROM parcours_etapes WHERE parcours_id = ? ORDER BY ordre, id');
             $se->execute([$modifier]);
             $courant = ['id' => (int) $p['id'], 'nom' => $p['nom'], 'description' => $p['description'],
-                        'classes' => $p['classes'], 'etapes' => etapes_en_texte($se->fetchAll()), 'mode' => $p['mode'], 'deblocage' => $p['deblocage']];
+                        'classes' => $p['classes'], 'etapes' => etapes_en_texte($se->fetchAll()), 'mode' => $p['mode'], 'deblocage' => $p['deblocage'],
+                        'avant' => $p['avant'] ?? 'etape', 'apres' => $p['apres'] ?? 'etape'];
         }
     }
     if ($brouillon) {
         $courant = ['id' => (int) ($brouillon['parcours_id'] ?? 0), 'nom' => (string) ($brouillon['nom'] ?? ''),
                     'description' => (string) ($brouillon['description'] ?? ''), 'classes' => (string) ($brouillon['classes'] ?? ''),
                     'etapes' => (string) ($brouillon['etapes'] ?? ''), 'mode' => (string) ($brouillon['mode'] ?? 'individuel'),
-                    'deblocage' => (string) ($brouillon['deblocage'] ?? 'libre')];
+                    'deblocage' => (string) ($brouillon['deblocage'] ?? 'libre'),
+                    'avant' => (string) ($brouillon['avant'] ?? 'etape'), 'apres' => (string) ($brouillon['apres'] ?? 'etape')];
     }
     $afficher_form = $nouveau || $modifier || $brouillon;
 
@@ -927,13 +951,21 @@ function page_parcours(): void
                     <label>Ouverture des étapes
                         <select name="deblocage"><?= options_html(DEBLOCAGES, $courant['deblocage']) ?></select></label>
                 </div>
+                <div class="deux-colonnes">
+                    <label>Bouton « ← » des applications (en haut, dès la 2ᵉ étape)
+                        <select name="avant"><?= options_html(NAVIGATION_AVANT, $courant['avant']) ?></select></label>
+                    <label>Bouton du bas des applications
+                        <select name="apres"><?= options_html(NAVIGATION_APRES, $courant['apres']) ?></select>
+                        <span class="aide">Pour une seule étape : ajoutez sous elle <code>avant : mes ateliers</code> ou <code>après : mes ateliers</code> (ou <code>étape</code>).</span></label>
+                </div>
                 <label>Consigne générale (facultative)<input name="description" maxlength="500" value="<?= h($courant['description']) ?>"></label>
                 <label>Étapes, une par ligne
                     <span class="aide"><code>Titre | atelier | activité | adresse</code> — l'activité est facultative (vide = tout l'atelier),
                         l'adresse est celle du logiciel à ouvrir. Sous une étape, facultatif :
                         <code>&gt; consigne</code>, <code>reçoit : fichier1, fichier2</code> (ce que l'étape lit dans le dossier de projet),
                         <code>produit : fichier</code> (ce qu'elle doit y déposer ; l'étape est terminée quand tout est déposé),
-                        <code>compétences : SFC15.5.1, CCRI16.5.1</code> (ce que vous évaluez à cette étape : codes de l'onglet <a href="./?p=competences" target="_blank">Compétences</a>).</span>
+                        <code>compétences : SFC15.5.1, CCRI16.5.1</code> (ce que vous évaluez à cette étape : codes de l'onglet <a href="./?p=competences" target="_blank">Compétences</a>),
+                        <code>avant : mes ateliers</code> / <code>après : mes ateliers</code> (à cette étape, le bouton « ← » ou celui du bas ramène à la Centrale ; <code>étape</code> pour l’étape d’à côté).</span>
                     <textarea name="etapes" rows="12" class="mono" placeholder="Câbler le réseau de la salle | netsim | e5-1 | https://grandiosian.github.io/NetSim/
   > Branche les ordinateurs de la salle.
 Modéliser le support de la lampe | etabli3d | | https://grandiosian.github.io/etabli3d/

@@ -10,6 +10,33 @@
 declare(strict_types=1);
 
 const MODES_PARCOURS = ['individuel' => 'Individuel', 'equipe' => 'En équipe'];
+/** Où mènent les boutons des applications dans un parcours : « ← » en haut (avant) et le bouton du bas (après). */
+const NAVIGATION_AVANT = [
+    'etape'   => '« ← Étape précédente » : revient à l’étape d’avant',
+    'portail' => '« ← Mes ateliers » : revient à la Centrale',
+];
+const NAVIGATION_APRES = [
+    'etape'   => '« Étape suivante → » : ouvre l’étape d’après',
+    'portail' => '« Mes ateliers → » : revient à la Centrale (la suite y est)',
+];
+
+/** « avant : ateliers », « après : étape »… → 'portail', 'etape' ou '' (valeur inconnue : réglage du parcours). */
+function navigation_lue(string $texte): string
+{
+    $t = mb_strtolower(trim($texte));
+    if (preg_match('/atelier|portail|centrale|accueil/u', $t)) {
+        return 'portail';
+    }
+    return preg_match('/[ée]tape|pr[ée]c[ée]dent|suivant/u', $t) ? 'etape' : '';
+}
+
+/** Réglage effectif d'une étape : le sien, sinon celui du parcours. $sens = 'avant' ou 'apres'. */
+function navigation_etape(array $parcours, array $etape, string $sens): string
+{
+    $v = (string) ($etape[$sens] ?? '');
+    return $v !== '' ? $v : (((string) ($parcours[$sens] ?? '')) === 'portail' ? 'portail' : 'etape');
+}
+
 const DEBLOCAGES = [
     'libre'      => 'Toutes les étapes sont ouvertes',
     'ordre'      => 'Dans l’ordre : une étape s’ouvre quand la précédente est terminée',
