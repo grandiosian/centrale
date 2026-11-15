@@ -157,6 +157,23 @@ function supprimer_eleves(string $condition, array $params): void
     }
 }
 
+/**
+ * Remet un élève à zéro : ses données et leur historique, ses fichiers, son avancement (suivi), ses connexions, son
+ * dossier de projet individuel, ses étapes validées et les constats de compétences des applications. Son code reste
+ * valable. $avec_prof : efface aussi les évaluations notées par l'enseignant.
+ * Les dossiers de projet d'équipe ne sont pas touchés (ils appartiennent aussi aux coéquipiers).
+ */
+function effacer_travail_eleve(int $eleve_id, bool $avec_prof = false): void
+{
+    $pdo = db();
+    supprimer_eleves('id = ?', [$eleve_id]);   // fichiers stockés et dossier de projet individuel
+    foreach (['donnees', 'donnees_versions', 'fichiers', 'progression', 'connexions'] as $table) {
+        $pdo->prepare("DELETE FROM $table WHERE eleve_id = ?")->execute([$eleve_id]);
+    }
+    $pdo->prepare('DELETE FROM evaluations WHERE eleve_id = ?' . ($avec_prof ? '' : " AND source <> 'prof'"))->execute([$eleve_id]);
+    $pdo->prepare('DELETE FROM parcours_validations WHERE proprietaire = ?')->execute(['e' . $eleve_id]);
+}
+
 /** Efface le travail et l'avancement d'une classe (données, fichiers, progression, dossiers de projet, validations). Les codes restent valables. */
 function effacer_travail_classe(int $classe_id): void
 {
@@ -524,6 +541,12 @@ if ($action !== null) {
             rediriger($retour_classe . '#form-generer');
 
         /* ----- Travail d'un élève ----- */
+
+        case 'effacer_travail_eleve':
+            effacer_travail_eleve($eleve_id, !empty($_POST['avec_prof']));
+            flash('Élève remis à zéro : son avancement, ses données et ses fichiers sont effacés. Son code reste valable.'
+                . (!empty($_POST['avec_prof']) ? ' Vos évaluations aussi.' : ' Vos évaluations sont gardées.'));
+            rediriger($retour_eleve);
 
         case 'supprimer_donnee':
             foreach (['donnees', 'donnees_versions'] as $table) {
@@ -1354,6 +1377,22 @@ function page_eleve(int $id): void
                 <?php endif; ?>
             </section>
         <?php endforeach; ?>
+
+        <section class="carte remise-zero" id="remise-zero">
+            <h2>Remettre l’élève à zéro</h2>
+            <p class="aide">Efface son avancement (tableau de suivi, ateliers, parcours), ses données et leur historique, ses fichiers,
+                son dossier de projet individuel, ses connexions et les constats de compétences envoyés par les applications.
+                Son code reste valable. Utile après un essai « Tester à la place d’un élève ».</p>
+            <p class="aide">Une application peut aussi garder une copie dans le navigateur où l’on a travaillé (par exemple le vôtre, pendant un essai) :
+                elle peut la renvoyer à la prochaine ouverture. Dans ce cas, videz-la dans l’application (Fichier → Nouveau) avant de la rouvrir.</p>
+            <form method="post" data-confirmer="Effacer tout le travail et l’avancement de cet élève ? C’est définitif.">
+                <?= csrf() ?>
+                <input type="hidden" name="action" value="effacer_travail_eleve">
+                <input type="hidden" name="eleve_id" value="<?= $id ?>">
+                <label class="case"><input type="checkbox" name="avec_prof" value="1"> Effacer aussi mes évaluations de compétences</label>
+                <button class="danger">Remettre à zéro</button>
+            </form>
+        </section>
     </main>
     <?php
     pied();
