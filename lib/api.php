@@ -68,7 +68,7 @@ function eleve_connecte(): array
     if ($jeton === '') {
         envoyer_json(401, ['ok' => false, 'erreur' => 'Non connecté.', 'session' => 'absente']);
     }
-    $st = db()->prepare('SELECT e.id, e.etiquette, e.classe_id, e.groupe_id, c.nom AS classe
+    $st = db()->prepare('SELECT e.id, e.etiquette, e.classe_id, e.groupe_id, e.remis_le, c.nom AS classe
                          FROM sessions s
                          JOIN eleves e ON e.id = s.eleve_id
                          JOIN classes c ON c.id = e.classe_id
@@ -79,7 +79,19 @@ function eleve_connecte(): array
         envoyer_json(401, ['ok' => false, 'erreur' => 'Session expirée : retape ton code.', 'session' => 'expiree']);
     }
     $eleve['id'] = (int) $eleve['id'];
+    $eleve['remis_le'] = (int) $eleve['remis_le'];
     return $eleve;
+}
+
+/**
+ * Un envoi a-t-il été préparé dans le navigateur AVANT la dernière remise à zéro de l'élève ?
+ * $age : âge de l'envoi en millisecondes, donné par le module (copie de secours, file des avancements) :
+ * pas d'heure du poste de l'élève, qui peut être fausse. Sans âge (ancien module) : accepté.
+ */
+function prepare_avant_remise(array $eleve, $age): bool
+{
+    $r = (int) ($eleve['remis_le'] ?? 0);
+    return $r > 0 && is_numeric($age) && (microtime(true) - max(0.0, (float) $age) / 1000) < $r;
 }
 
 /**

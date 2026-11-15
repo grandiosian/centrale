@@ -666,7 +666,9 @@
     var donnees = {};
     try { donnees = await reponse.json(); } catch (e) { /* rien */ }
     if (!reponse.ok || donnees.ok === false) {
-      throw ErreurCentrale(donnees.erreur || ('Erreur du serveur (' + reponse.status + ').'), reponse.status);
+      var err = ErreurCentrale(donnees.erreur || ('Erreur du serveur (' + reponse.status + ').'), reponse.status);
+      err.donnees = donnees;
+      throw err;
     }
     if (donnees.espace) majEspace(donnees.espace);
     return donnees;
@@ -761,6 +763,11 @@
     try {
       var d = await requeteJSON('donnees.php', { method: 'GET' }, { cle: cle });
       bases[cle] = d.maj || 0;
+      // Copie gardée d'avant une remise à zéro par le professeur (heure du serveur, sans se fier à celle du poste) : oubliée
+      if (local && d.remis_le && d.maintenant && d.maintenant - (Date.now() - (local.t || 0)) / 1000 < d.remis_le) {
+        effacerSecours(cle);
+        local = null;
+      }
       // Copie locale non envoyée : on la reprend, sauf si le travail a été modifié
       // depuis sur un autre poste (le serveur a alors une version plus récente).
       if (local && (!d.existe || (local.base || 0) >= (d.maj || 0))) {
@@ -802,6 +809,7 @@
   function corpsSauvegarde(cle, local) {
     var corps = { app: config.app, cle: cle, valeur: local.valeur };
     if (cle in bases) corps.base = local.base || 0;
+    if (local.t) corps.age = Math.max(0, Date.now() - local.t);   // le serveur refuse une copie d'avant une remise à zéro
     return JSON.stringify(corps);
   }
 
@@ -828,6 +836,11 @@
       if (e.horsLigne) {
         changerEtat('hors-ligne');
         planifier(cle, DELAI_REESSAI);
+      } else if (e.statut === 410 && e.donnees && e.donnees.remis) {
+        // ancienne version, d'avant une remise à zéro par le professeur : on l'oublie
+        effacerSecours(cle, local.t);
+        changerEtat('enregistre');
+        terminer(cle, null, { ok: false, remis: true });
       } else if (e.statut === 409) {
         changerEtat('conflit', e.message);
         terminer(cle, e);
@@ -984,7 +997,9 @@
   function progression(activite, infos) {
     var envoi = Object.assign({ statut: 'commence' }, infos || {}, { activite: activite });
     var file = lireFile();
+    var depuis = (file[activite] && file[activite].t) || Date.now();   // le plus ancien envoi en attente pour cette activité
     file[activite] = fusionner(file[activite], envoi);
+    file[activite].t = depuis;
     ecrireFile(file);
     return viderFileProgression();
   }
@@ -1002,7 +1017,8 @@
         try {
           await requeteJSON('progression.php', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(Object.assign({ app: config.app }, envoye)),
+            // age : le serveur ignore un avancement resté en file d'avant une remise à zéro par le professeur
+            body: JSON.stringify(Object.assign({ app: config.app }, envoye, envoye.t ? { t: undefined, age: Math.max(0, Date.now() - envoye.t) } : {})),
           });
           var actuelle = lireFile();
           if (JSON.stringify(actuelle[ids[i]]) === JSON.stringify(envoye)) delete actuelle[ids[i]];

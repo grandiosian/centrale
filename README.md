@@ -69,7 +69,7 @@ Sur un autre ordinateur, ou après avoir vidé le navigateur : **Charger mon fic
 
 Code perdu : **Nouveau code** sur la ligne de l'élève (l'ancien cesse de fonctionner).
 
-Remettre un élève à zéro (page de l'élève, en bas : **Remettre à zéro**) : son avancement (tableau de suivi, ateliers, parcours), ses données et leur historique, ses fichiers, son dossier de projet individuel, ses connexions et les constats des applications sont effacés ; son code reste valable. Une case efface aussi vos évaluations. Utile après un essai « Tester à la place d'un élève ». Une application peut garder une copie dans le navigateur où l'on a travaillé et la renvoyer : la vider dans l'application avant de la rouvrir. Pour toute une classe : **Effacer le travail de la classe**.
+Remettre un élève à zéro (page de l'élève, en bas : **Remettre à zéro**) : son avancement (tableau de suivi, ateliers, parcours), ses données et leur historique, ses fichiers, son dossier de projet individuel, ses connexions et les constats des applications sont effacés ; son code reste valable. Une case efface aussi vos évaluations. Utile après un essai « Tester à la place d'un élève ». La date de la remise à zéro est notée (`eleves.remis_le`, aussi pour « Effacer le travail de la classe ») : ce que le navigateur avait gardé d'avant (copie de secours d'une donnée, avancements en file) n'est plus accepté. Le module envoie l'âge de chaque copie (`age`, en ms, sans se fier à l'heure du poste) ; `charger()` oublie une copie plus ancienne, `donnees.php` la refuse (410 `remis`) et `progression.php` l'ignore. Pour toute une classe : **Effacer le travail de la classe**.
 
 Code et identifiant : le **code** (« 5F-LHA-2345-abcd-efgh », sur la fiche) sert à se connecter ; l'**identifiant** (« 5F-LHA-BaleineLucide », affiché sur le portail) n'est qu'un nom visible. Si un élève tape son identifiant, la connexion le lui dit ; le code d'un élève désactivé est signalé comme tel. Un ancien code remplacé par **Nouveau code** est simplement inconnu (`api/login.php`).
 
@@ -679,13 +679,13 @@ Toutes les requêtes, sauf `login.php`, `catalogue.php` et `compilation.php` (é
 | `POST deconnexion.php` | Invalide le jeton |
 | `GET donnees.php?app=&cle=` | → `{existe, valeur, maj}` |
 | `GET donnees.php?app=` | → `{cles: [{cle, taille, maj}]}` |
-| `POST donnees.php` `{app, cle, valeur, base?}` | Enregistre (2 Mo max par clé). 409 si `base` est plus ancien que le serveur |
+| `POST donnees.php` `{app, cle, valeur, base?, age?}` | Enregistre (2 Mo max par clé). 409 si `base` est plus ancien que le serveur ; 410 `{remis: true}` si la version (`age` en ms) date d'avant une remise à zéro de l'élève |
 | `POST donnees.php` `{app, cle, supprimer: true}` | Efface |
 | `GET fichiers.php?app=` / `?app=&nom=` | Liste / télécharge |
 | `POST fichiers.php` (multipart `app`, `fichier`, `nom?`) | Envoie (remplace le fichier du même nom) |
 | `POST fichiers.php` `{app, nom, supprimer: 1}` | Supprime |
 | `GET ressources.php?app=` / `?app=&nom=` | Ressources de l'atelier |
-| `POST progression.php` `{app, activite, titre?, statut?, faites?, total?, score?, score_max?, details?}` | Avancement (le meilleur est gardé) |
+| `POST progression.php` `{app, activite, titre?, statut?, faites?, total?, score?, score_max?, details?, age?}` | Avancement (le meilleur est gardé) ; ignoré (`ignore: true`) s'il date d'avant une remise à zéro de l'élève |
 | `GET progression.php?app=` | Avancement de l'élève (`app=*` : tous les ateliers) |
 | `POST activites.php` `{app, activites: [{id, titre, groupe?, total?}]}` | Catalogue des activités de l'atelier |
 | `GET parcours.php` | Parcours de la classe avec l'avancement de l'élève |

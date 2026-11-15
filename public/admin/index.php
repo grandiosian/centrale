@@ -172,6 +172,8 @@ function effacer_travail_eleve(int $eleve_id, bool $avec_prof = false): void
     }
     $pdo->prepare('DELETE FROM evaluations WHERE eleve_id = ?' . ($avec_prof ? '' : " AND source <> 'prof'"))->execute([$eleve_id]);
     $pdo->prepare('DELETE FROM parcours_validations WHERE proprietaire = ?')->execute(['e' . $eleve_id]);
+    // ce que son navigateur avait gardé d'avant (copie de secours, avancements en attente) ne sera plus accepté
+    $pdo->prepare('UPDATE eleves SET remis_le = ? WHERE id = ?')->execute([time(), $eleve_id]);
 }
 
 /** Efface le travail et l'avancement d'une classe (données, fichiers, progression, dossiers de projet, validations). Les codes restent valables. */
@@ -188,6 +190,7 @@ function effacer_travail_classe(int $classe_id): void
     foreach (['donnees', 'donnees_versions', 'fichiers', 'progression', 'connexions'] as $table) {
         $pdo->prepare("DELETE FROM $table WHERE eleve_id IN (SELECT id FROM eleves WHERE classe_id = ?)")->execute([$classe_id]);
     }
+    $pdo->prepare('UPDATE eleves SET remis_le = ? WHERE classe_id = ?')->execute([time(), $classe_id]);   // voir effacer_travail_eleve
     $st = $pdo->prepare('SELECT id FROM equipes WHERE classe_id = ?');
     $st->execute([$classe_id]);
     foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $q) {
@@ -1383,8 +1386,8 @@ function page_eleve(int $id): void
             <p class="aide">Efface son avancement (tableau de suivi, ateliers, parcours), ses données et leur historique, ses fichiers,
                 son dossier de projet individuel, ses connexions et les constats de compétences envoyés par les applications.
                 Son code reste valable. Utile après un essai « Tester à la place d’un élève ».</p>
-            <p class="aide">Une application peut aussi garder une copie dans le navigateur où l’on a travaillé (par exemple le vôtre, pendant un essai) :
-                elle peut la renvoyer à la prochaine ouverture. Dans ce cas, videz-la dans l’application (Fichier → Nouveau) avant de la rouvrir.</p>
+            <p class="aide">Ce que le navigateur où l’on a travaillé gardait encore (par exemple le vôtre, pendant un essai) n’est plus accepté :
+                copie de secours ou avancement en attente d’avant la remise à zéro sont oubliés à la prochaine ouverture.</p>
             <form method="post" data-confirmer="Effacer tout le travail et l’avancement de cet élève ? C’est définitif.">
                 <?= csrf() ?>
                 <input type="hidden" name="action" value="effacer_travail_eleve">

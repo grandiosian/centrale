@@ -64,6 +64,11 @@ if ($activite === '') {
     envoyer_json(400, ['ok' => false, 'erreur' => "Identifiant d'activité manquant."]);
 }
 
+// Avancement resté en file dans le navigateur d'avant une remise à zéro par le professeur : ignoré (le module l'oublie)
+if (prepare_avant_remise($eleve, $e['age'] ?? null)) {
+    envoyer_json(200, ['ok' => true, 'ignore' => true, 'remis' => true]);
+}
+
 $statut = (string) ($e['statut'] ?? 'commence');
 if (!in_array($statut, ['commence', 'en-cours', 'termine'], true)) {
     envoyer_json(400, ['ok' => false, 'erreur' => 'Statut attendu : commence ou termine.']);

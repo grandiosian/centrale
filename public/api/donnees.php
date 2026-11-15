@@ -9,6 +9,7 @@
  *      base = date "maj" de la version sur laquelle on travaillait : si le serveur a plus récent,
  *      réponse 409 (conflit) et rien n'est écrasé.
  * POST { app, cle, supprimer: true }  → { ok }                   (efface)
+ *      age (ms) : âge de la version envoyée ; préparée avant une remise à zéro de l'élève (eleves.remis_le) → 410 { remis: true }
  */
 declare(strict_types=1);
 
@@ -34,8 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $st->execute([$eleve['id'], $app, $cle]);
     $ligne = $st->fetch();
     envoyer_json(200, $ligne
-        ? ['ok' => true, 'existe' => true, 'valeur' => json_decode($ligne['valeur']), 'maj' => (int) $ligne['maj']]
-        : ['ok' => true, 'existe' => false, 'valeur' => null, 'maj' => null]);
+        ? ['ok' => true, 'existe' => true, 'valeur' => json_decode($ligne['valeur']), 'maj' => (int) $ligne['maj'],
+           'remis_le' => $eleve['remis_le'], 'maintenant' => time()]
+        : ['ok' => true, 'existe' => false, 'valeur' => null, 'maj' => null,
+           'remis_le' => $eleve['remis_le'], 'maintenant' => time()]);   // le module jette sa copie d'avant la remise à zéro
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -56,6 +59,10 @@ if (!empty($entree['supprimer'])) {
 
 if (!array_key_exists('valeur', $entree)) {
     envoyer_json(400, ['ok' => false, 'erreur' => 'Valeur manquante.']);
+}
+// Copie gardée par le navigateur d'avant une remise à zéro par le professeur : refusée (410), le module l'efface
+if (prepare_avant_remise($eleve, $entree['age'] ?? null)) {
+    envoyer_json(410, ['ok' => false, 'remis' => true, 'erreur' => 'Ton travail a été remis à zéro par ton professeur : cette ancienne version n’est pas reprise.']);
 }
 $json = json_encode($entree['valeur'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION);
 $taille = strlen($json);
