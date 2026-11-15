@@ -82,6 +82,21 @@
   }
 
   /**
+   * Va sur le portail de la Centrale (« Mes ateliers ») : l'adresse de retour si l'application en vient, sinon la page
+   * d'accueil du serveur de la Centrale. Comme retour(), ce qui n'est pas encore enregistré part d'abord.
+   */
+  function allerPortail() {
+    if (retour()) return true;
+    var racine = String(config.api || '').replace(/api\/?$/, '');
+    if (!racine) return false;
+    avantDeQuitter().then(function () {
+      toutEnvoyer();
+      return Promise.resolve(viderFileProgression()).catch(function () { /* renvoyée à la prochaine connexion */ });
+    }).then(function () { location.href = racine; });
+    return true;
+  }
+
+  /**
    * Option avantDeQuitter de Centrale.init : fonction (éventuellement asynchrone) appelée avant de quitter
    * l'application par « ← Mes ateliers » ou « Étape suivante », pour déposer ce qui attend encore
    * (ex. le projet dans le dossier de projet, un aperçu à calculer). 15 s au plus : au-delà, on part quand même.
@@ -1157,7 +1172,8 @@
     return d;
   }
 
-  /** Affiche « Ton identifiant : 4C-LHA-LoutreAgile [Changer mon surnom] » dans `element`. */
+  /** Affiche « Ton identifiant : 4C-LHA-LoutreAgile » dans `element`, avec [Changer mon surnom] seulement si
+   *  options.modifiable === true : le portail le demande, les applications non (le surnom se change sur le portail). */
   function afficherIdentifiant(element, options) {
     options = options || {};
     ajouterStyle();
@@ -1170,7 +1186,7 @@
       var code = document.createElement('code');
       code.textContent = s.identifiant;
       element.appendChild(code);
-      if (!s.surnom_modifiable) return;
+      if (!s.surnom_modifiable || options.modifiable !== true) return;
       var b = document.createElement('button');
       b.type = 'button';
       b.textContent = 'Changer mon surnom';
@@ -1288,6 +1304,8 @@
     aide.textContent = 'Ton travail est enregistré automatiquement sur le serveur de la classe.';
     m.appendChild(aide);
     var liens = (options.liens || []).slice();
+    // dans une application : un lien vers le portail de la Centrale (le surnom ne se change que là-bas)
+    if (options.centrale !== false) liens.unshift({ texte: 'Aller sur la Centrale', action: allerPortail });
     if (options.deconnexion !== false) {
       liens.push({ texte: 'Se déconnecter', classe: 'cme-sortir', action: function () {
         deconnexion();
@@ -1365,6 +1383,7 @@
     lien: lien,
     ouvrir: ouvrir,
     retour: retour,
+    allerPortail: allerPortail,
     activiteDemandee: activiteDemandee,
     etapeSuivante: etapeSuivante,
     allerEtapeSuivante: allerEtapeSuivante,

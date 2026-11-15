@@ -5,7 +5,9 @@
  *
  * → { ok, ateliers: [ { app, nom, description, url, icone, taux, terminees, total, maj,
  *        activites: [ { id, titre, groupe, statut: a_faire|commence|termine, texte, propose,
- *                       disponible, ouvre_le, jusqu_au } ] } ] }
+ *                       disponible, ouvre_le, jusqu_au, revision } ] } ] }
+ *   revision : atelier remis en avant par l'enseignant dans le Calendrier (section « Révisions » du portail).
+ *   atelier_ouvrir : lien propre à l'atelier (« #atelier=premiers-pas »), ajouté à l'adresse de l'application.
  *
  * Périodes de disponibilité des ateliers (Ateliers des applications → Disponibilité) : une activité d'un atelier
  * pas encore ouvert est listée avec disponible = false et ouvre_le (AAAA-MM-JJ) ; celle d'un atelier fermé n'est plus
@@ -41,8 +43,12 @@ foreach ($avec_progression ? progression_classe($cid) : [] as $i => $r) {
     $rang[$r['app']][$r['atelier']] = $i;
 }
 $titres = [];  // titres des ateliers du catalogue (une carte par atelier sur le portail, avec une progression)
+$ouvertures = [];   // lien propre à l'atelier dans son application (#atelier=premiers-pas…), s'il en a un
 foreach ($avec_progression ? catalogue_ateliers() : [] as $r) {
     $titres[$r['app']][$r['atelier']] = $r['titre'] ?: $r['atelier'];
+    if (preg_match('/^#[A-Za-z0-9_.\/%=&+-]+$/', (string) $r['ouvrir'])) {
+        $ouvertures[$r['app']][$r['atelier']] = (string) $r['ouvrir'];
+    }
 }
 
 $res = [];
@@ -82,7 +88,7 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
         $activites[] = ['id' => $id, 'titre' => $c['titre'] ?: $id, 'groupe' => $c['groupe'],
                         'statut' => $etat['statut'], 'texte' => $etat['texte'], 'propose' => $propose,
                         'disponible' => $d['etat'] === 'ouvert' || ($avec_progression && $propose),
-                        'ouvre_le' => $d['ouvre_le'], 'jusqu_au' => $d['jusqu_au']];
+                        'ouvre_le' => $d['ouvre_le'], 'jusqu_au' => $d['jusqu_au'], 'revision' => !empty($d['revision'])];
     }
     foreach ($lignes as $id => $l) { // commencées mais absentes de la liste déclarée
         if (!isset($cat[$id]) && !($avec_progression && disponibilite_activite($dispos, $app, (string) $id)['etat'] !== 'ouvert')) {
@@ -95,15 +101,18 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
     }
     if ($avec_progression) {
         // dans l'ordre de la progression, puis étapes une à une dans chaque atelier
-        $place = fn($x) => $rang[$app][atelier_de_activite($app, (string) $x['id']) ?? ''] ?? PHP_INT_MAX;
+        $place = fn($x) => $rang[$app][atelier_de_activite_classe($dispos, $app, (string) $x['id']) ?? ''] ?? PHP_INT_MAX;
         $num = array_flip(array_keys($activites));
         uksort($activites, fn($i, $j) => $place($activites[$i]) <=> $place($activites[$j]) ?: $num[$i] <=> $num[$j]);
-        $activites = verrouiller_etapes($app, array_values($activites));
+        $activites = verrouiller_etapes($app, array_values($activites), $dispos);
         foreach ($activites as $k => $x) {   // l'atelier de chaque étape : le portail fait une carte par atelier
-            $at = atelier_de_activite($app, (string) $x['id']);
+            $at = atelier_de_activite_classe($dispos, $app, (string) $x['id']);
             if ($at !== null) {
                 $activites[$k]['atelier'] = $at;
                 $activites[$k]['atelier_titre'] = $titres[$app][$at] ?? $at;
+                if (isset($ouvertures[$app][$at])) {
+                    $activites[$k]['atelier_ouvrir'] = $ouvertures[$app][$at];   // le portail ouvre l'atelier entier (ex. NetSim « Premiers pas »)
+                }
             }
         }
     }

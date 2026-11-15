@@ -16,17 +16,17 @@ function ateliers_catalogue_par_cle(): array
     return $res;
 }
 
-/** Remplace la progression d'une classe par $lignes (dans l'ordre) : [ {app, atelier, seances, ouvre_le} ]. */
+/** Remplace la progression d'une classe par $lignes (dans l'ordre) : [ {app, atelier, seances, ouvre_le, revision} ]. */
 function ecrire_progression(int $classe_id, array $lignes): void
 {
     $pdo = db();
     $pdo->beginTransaction();
     $pdo->prepare('DELETE FROM progression_ateliers WHERE classe_id = ?')->execute([$classe_id]);
-    $ins = $pdo->prepare('INSERT OR IGNORE INTO progression_ateliers (classe_id, ordre, app, atelier, seances, ouvre_le) VALUES (?, ?, ?, ?, ?, ?)');
+    $ins = $pdo->prepare('INSERT OR IGNORE INTO progression_ateliers (classe_id, ordre, app, atelier, seances, ouvre_le, revision) VALUES (?, ?, ?, ?, ?, ?, ?)');
     foreach (array_values($lignes) as $i => $l) {
         $d = (string) ($l['ouvre_le'] ?? '');
         $ins->execute([$classe_id, $i, (string) $l['app'], (string) $l['atelier'], max(1, min(30, (int) ($l['seances'] ?? 1))),
-                       date_valide($d) ? $d : '']);
+                       date_valide($d) ? $d : '', empty($l['revision']) ? 0 : 1]);
     }
     $pdo->commit();
 }
@@ -37,13 +37,15 @@ function lire_lignes_progression(): array
     $cles = (array) ($_POST['cle'] ?? []);
     $seances = (array) ($_POST['seances'] ?? []);
     $dates = (array) ($_POST['ouvre_le'] ?? []);
+    $revisions = array_flip(array_map('strval', (array) ($_POST['revision'] ?? [])));   // cases cochées : clés app|atelier
     $res = [];
     foreach ($cles as $i => $cle) {
         [$app, $atelier] = array_pad(explode('|', (string) $cle, 2), 2, '');
         if ($app === '' || $atelier === '') {
             continue;
         }
-        $res[] = ['app' => $app, 'atelier' => $atelier, 'seances' => (int) ($seances[$i] ?? 1), 'ouvre_le' => trim((string) ($dates[$i] ?? ''))];
+        $res[] = ['app' => $app, 'atelier' => $atelier, 'seances' => (int) ($seances[$i] ?? 1), 'ouvre_le' => trim((string) ($dates[$i] ?? '')),
+                  'revision' => isset($revisions[(string) $cle])];
     }
     return $res;
 }
@@ -205,7 +207,7 @@ function corps_progression(array $classe, array $classes): void
             <input type="hidden" name="action" value="enregistrer_calendrier">
             <input type="hidden" name="classe_id" value="<?= $cid ?>">
             <table class="table-progression">
-                <thead><tr><th class="pg-n">#</th><th>Atelier</th><th class="pg-s">Séances</th><th class="pg-d">Ouvre le</th><th>Pour les élèves</th><th class="pg-a"></th></tr></thead>
+                <thead><tr><th class="pg-n">#</th><th>Atelier</th><th class="pg-s">Séances</th><th class="pg-d">Ouvre le</th><th class="pg-r" title="Remettre en avant un atelier déjà passé : il apparaît dans « Révisions » chez les élèves, rouvert même s’il est terminé">Révision</th><th>Pour les élèves</th><th class="pg-a"></th></tr></thead>
                 <tbody>
                 <?php $avant = ''; foreach ($lignes as $i => $l):
                     $cle = $l['app'] . '|' . $l['atelier'];
@@ -226,7 +228,8 @@ function corps_progression(array $classe, array $classes): void
                         <td class="pg-s"><input type="number" name="seances[]" min="1" max="30" value="<?= (int) $l['seances'] ?>" aria-label="Nombre de séances"></td>
                         <td class="pg-d"><input type="date" name="ouvre_le[]" value="<?= h($d) ?>" aria-label="Date d’ouverture">
                             <?php if ($desordre): ?><span class="pg-alerte" title="Cet atelier s’ouvre avant le précédent : la progression n’est plus pas à pas">⚠ avant le précédent</span><?php endif; ?></td>
-                        <td><span class="pastille-dispo <?= $etat[0] ?>"><?= $etat[1] ?></span><?php if ($etat[0] === 'bientot'): ?> <span class="discret"><?= h(date_lisible($d, false)) ?></span><?php endif; ?></td>
+                        <td class="pg-r"><input type="checkbox" name="revision[]" value="<?= h($cle) ?>"<?= !empty($l['revision']) ? ' checked' : '' ?> aria-label="Révision"></td>
+                        <td><span class="pastille-dispo <?= $etat[0] ?>"><?= $etat[1] ?></span><?php if (!empty($l['revision'])): ?> <span class="pastille-dispo revision">Révision</span><?php endif; ?><?php if ($etat[0] === 'bientot'): ?> <span class="discret"><?= h(date_lisible($d, false)) ?></span><?php endif; ?></td>
                         <td class="pg-a">
                             <button type="button" class="petit secondaire" data-pg="haut" title="Monter" aria-label="Monter">↑</button>
                             <button type="button" class="petit secondaire" data-pg="bas" title="Descendre" aria-label="Descendre">↓</button>

@@ -1357,6 +1357,7 @@ a.dash-widget { text-decoration: none; color: inherit; }
 .pastille-dispo { display: inline-block; padding: 0 8px; border-radius: 6px; font-weight: 700; font-size: .78rem; color: #fff; background: #2e7d32; }
 .pastille-dispo.bientot { background: #b26a00; }
 .pastille-dispo.ferme { background: #8a8f98; }
+.pastille-dispo.revision { background: #6a3fb5; }
 .liste-periodes { margin: 4px 0; padding-left: 16px; }
 .liste-periodes li form { display: inline; }
 .liste-periodes li button.lien { padding: 0 4px; min-height: 0; }
@@ -2526,6 +2527,7 @@ body.plan-apercu .zone-plan .plan-svg, body.plan-apercu .zone-plan .plan-trois {
 .table-progression .pg-s { width: 80px; }
 .table-progression .pg-s input { width: 64px; }
 .table-progression .pg-d { width: 190px; }
+.table-progression .pg-r { width: 80px; text-align: center; }
 .table-progression .pg-a { width: 120px; white-space: nowrap; text-align: right; }
 .table-progression .pg-a button { padding: 2px 8px; }
 .pg-icone { margin-right: 4px; }

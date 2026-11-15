@@ -613,18 +613,7 @@ function disponibilites_classe(?int $classe_id): array
 /** Atelier du catalogue auquel appartient une activité (« atelier/P1 », ou l'atelier lui-même), ou null. */
 function atelier_de_activite(string $app, string $activite): ?string
 {
-    static $carte = null;
-    if ($carte === null) {
-        $carte = [];
-        foreach (db()->query('SELECT app, atelier, activites FROM catalogue_ateliers') as $r) {
-            $carte[$r['app']][$r['atelier']] = $r['atelier'];
-            foreach (json_decode((string) $r['activites'], true) ?: [] as $x) {
-                if (isset($x['id']) && is_string($x['id'])) {
-                    $carte[$r['app']][$x['id']] ??= $r['atelier'];
-                }
-            }
-        }
-    }
+    $carte = carte_activites_ateliers()[0];
     if ($activite === '') {
         return null;
     }
@@ -635,6 +624,49 @@ function atelier_de_activite(string $app, string $activite): ?string
     return isset($carte[$app][$avant]) ? $carte[$app][$avant] : null;
 }
 
+/** [atelier principal de chaque activité, tous les ateliers qui la contiennent] : [app][activite] => atelier / [ateliers]. */
+function carte_activites_ateliers(): array
+{
+    static $res = null;
+    if ($res === null) {
+        $carte = [];
+        $tous = [];
+        foreach (db()->query('SELECT app, atelier, activites FROM catalogue_ateliers') as $r) {
+            $carte[$r['app']][$r['atelier']] = $r['atelier'];
+            foreach (json_decode((string) $r['activites'], true) ?: [] as $x) {
+                if (isset($x['id']) && is_string($x['id'])) {
+                    $carte[$r['app']][$x['id']] ??= $r['atelier'];
+                    $tous[$r['app']][$x['id']][] = $r['atelier'];
+                }
+            }
+        }
+        $res = [$carte, $tous];
+    }
+    return $res;
+}
+
+/**
+ * Atelier d'une activité pour une classe qui a un calendrier : une même activité peut être dans plusieurs ateliers
+ * (un exercice seul, et un atelier qui en enchaîne plusieurs, comme « Premiers pas » de NetSim). On prend celui qui est
+ * au calendrier de la classe (ouvert d'abord, puis bientôt), sinon l'atelier principal.
+ */
+function atelier_de_activite_classe(array $dispos, string $app, string $activite): ?string
+{
+    $principal = atelier_de_activite($app, $activite);
+    $prog = $dispos['*progression'][$app] ?? null;
+    if ($prog === null || ($principal !== null && ($prog[$principal]['etat'] ?? '') === 'ouvert')) {
+        return $principal;
+    }
+    $choix = isset($prog[$principal ?? '']) ? $principal : null;
+    $ordre = ['ouvert' => 0, 'bientot' => 1, 'ferme' => 2];
+    foreach (carte_activites_ateliers()[1][$app][$activite] ?? [] as $at) {
+        if (isset($prog[$at]) && ($choix === null || $ordre[$prog[$at]['etat']] < $ordre[$prog[$choix]['etat']])) {
+            $choix = $at;
+        }
+    }
+    return $choix ?? $principal;
+}
+
 /**
  * État de l'atelier d'une activité pour une classe (ouvert sans limite si l'activité n'est rattachée à aucun atelier).
  * Classe avec une progression : c'est elle qui décide (hors progression = fermé), sauf $avec_progression = false
@@ -642,7 +674,7 @@ function atelier_de_activite(string $app, string $activite): ?string
  */
 function disponibilite_activite(array $dispos, string $app, string $activite, bool $avec_progression = true): array
 {
-    $at = atelier_de_activite($app, $activite);
+    $at = $avec_progression ? atelier_de_activite_classe($dispos, $app, $activite) : atelier_de_activite($app, $activite);
     if ($avec_progression && isset($dispos['*progression'])) {
         return ($at !== null ? ($dispos['*progression'][$app][$at] ?? null) : null)
             ?? ['etat' => 'ferme', 'ouvre_le' => null, 'jusqu_au' => null, 'limite' => true, 'source' => 'progression'];

@@ -177,7 +177,37 @@ widget.prepend(prec.bouton);                                       // avant le n
 - il se met à jour tout seul (connexion, retour sur l'onglet) ; `maj()` le force. Sans interface : `await Centrale.precedent()` (`{ parcours, libelle, court, titre }` ou `null`) et `await Centrale.allerPrecedent()`.
 - Le portail élève a la même barre ; son widget du centre (l'atelier en cours, « Continuer → ») sert à reprendre.
 
-**Le menu de l'élève.** Un clic sur l'identifiant de l'élève connecté ouvre le même petit menu dans toutes les applications, fourni par le module : « Connecté », classe et numéro, identifiant et « Changer mon surnom », une ligne d'aide, les liens propres à l'application, puis « Se déconnecter ». Ce clic ne doit pas changer de page.
+**Charte graphique de chaque application.** Chaque application publie un `CHARTE-GRAPHIQUE.md` à la racine de son dépôt : logo en SVG, couleur principale en clair et en sombre, polices. Le portail affiche le logo de l'application sur une tuile teintée de sa couleur, et un liseré de cette couleur sur la carte de l'atelier. Une application sans charte garde l'icône `icone` de son `centrale.json`.
+
+**La pastille de l'atelier** (au centre de la barre) : quand l'application a été ouverte depuis le portail, un clic ramène au portail avec `Centrale.allerPortail()` (repli : `Centrale.retour()`). Utilisée seule, l'application garde son propre comportement (sa bibliothèque d'ateliers).
+
+**Mode atelier : ouverte depuis le portail, l'application reste sur l'atelier demandé.**
+- L'élève ne peut pas changer d'atelier en cours de route. Les menus se limitent à ce dont l'atelier a besoin.
+- Règles par défaut, dans toutes les applications :
+
+| Règle (`interface`) | Par défaut | Ce qui est fermé quand elle vaut `false` |
+|---|---|---|
+| `menu` | `false` | Le menu du logo (Fichier : nouveau, ouvrir, enregistrer, importer, exporter) et ses raccourcis clavier |
+| `bibliotheque` | `false` | La bibliothèque, la liste des ateliers et tout bouton qui mène à un autre atelier (onglets du guide, « Tous les tutos », « Autres exemples »…) |
+| `niveau` | `false` | Le changement de niveau (l'atelier fixe le sien) |
+
+- **Règles propres à un atelier** : chaque atelier peut rouvrir une partie de l'interface avec un champ `interface` dans `ateliers.json`. Exemples : `{"menu": true}` pour un atelier qui fait exporter un STL, ou tout à `true` pour une session libre.
+  - L'application publie pour chaque atelier ses règles complètes (valeurs par défaut comprises), produites depuis son code.
+  - Une application peut ajouter ses propres clés ; les clés inconnues sont ignorées.
+- **Hors du portail** (application ouverte seule, ou lien d'essai), l'application garde toute son interface.
+- **Ce que ferme chaque application** (fonction `regleAtelier()`, règles publiées dans `ateliers.json`) :
+
+| Application | `menu` | `bibliotheque` | `niveau` |
+|---|---|---|---|
+| Établi 3D | menu Fichier, Ctrl+S | onglets et boutons du Guide, bibliothèque | niveau dans les Réglages |
+| NetSim | menu du logo | liste des ateliers, « Quitter l'atelier », autres exercices | barre de niveau |
+| TechnoStudio | menu du logo | « Mes ateliers », Ctrl+O, bouton « Bibliothèque » de fin d'atelier (ramènent au portail) | — |
+
+  La session libre de NetSim (`#libre`) a tout à `true`.
+
+**Clic sur l'identifiant de l'élève connecté** : retour sur la Centrale avec `Centrale.allerPortail()` (le compte, le surnom et la déconnexion se gèrent sur le portail). Avec un module plus ancien, sans `allerPortail`, l'application ouvre le menu de l'élève décrit ci-dessous.
+
+**Le menu de l'élève (repli).** Un clic sur l'identifiant de l'élève connecté ouvre le même petit menu dans toutes les applications, fourni par le module : « Connecté », classe et numéro, identifiant (le surnom se change seulement sur le portail, pas dans une application), une ligne d'aide, « Aller sur la Centrale » (`Centrale.allerPortail()`), les liens propres à l'application, puis « Se déconnecter ».
 
 ```js
 bouton.onclick = (e) => {
@@ -186,7 +216,6 @@ bouton.onclick = (e) => {
   if (!Centrale.menuEleve || !Centrale.menuEleve(bouton, {
         liens: [{ texte: 'Mon compte et mes réglages…', action: () => ouvrirCompte() }],   // facultatif
         onDeconnexion: () => majWidget(),                         // après « Se déconnecter »
-        onChange: () => majWidget(),                              // après un changement de surnom
       })) ancienComportement();                                  // module plus ancien
 };
 ```

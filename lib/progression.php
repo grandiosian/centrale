@@ -27,9 +27,11 @@ function creer_tables_progression(PDO $pdo): void
         UNIQUE (classe_id, app, atelier)
     )");
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_progression_classe ON progression_ateliers (classe_id, ordre)');
+    // révision : atelier déjà passé que l'enseignant remet en avant (section « Révisions » du portail, rouvert même terminé)
+    ajouter_colonne($pdo, 'progression_ateliers', 'revision', 'INTEGER NOT NULL DEFAULT 0');
 }
 
-/** Progression d'une classe, dans l'ordre : [ {id, ordre, app, atelier, seances, ouvre_le} ]. */
+/** Progression d'une classe, dans l'ordre : [ {id, ordre, app, atelier, seances, ouvre_le, revision} ]. */
 function progression_classe(int $classe_id): array
 {
     static $cache = [];
@@ -38,12 +40,12 @@ function progression_classe(int $classe_id): array
     }
     $st = db()->prepare('SELECT * FROM progression_ateliers WHERE classe_id = ? ORDER BY ordre, id');
     $st->execute([$classe_id]);
-    return $cache[$classe_id] = array_map(fn($r) => $r + ['seances' => (int) $r['seances']], $st->fetchAll());
+    return $cache[$classe_id] = array_map(fn($r) => ['seances' => (int) $r['seances'], 'revision' => (int) ($r['revision'] ?? 0)] + $r, $st->fetchAll());
 }
 
 /**
  * États des ateliers d'une classe d'après sa progression : [app][atelier] => ['etat', 'ouvre_le', 'jusqu_au', 'limite',
- * 'source' => 'progression'], ou null si la classe n'a pas de progression.
+ * 'source' => 'progression', 'revision'], ou null si la classe n'a pas de progression.
  */
 function disponibilites_progression(int $classe_id, ?string $date = null): ?array
 {
@@ -57,7 +59,7 @@ function disponibilites_progression(int $classe_id, ?string $date = null): ?arra
         $d = (string) $r['ouvre_le'];
         $etat = $d === '' ? 'ferme' : ($d <= $date ? 'ouvert' : 'bientot');
         $res[$r['app']][$r['atelier']] = ['etat' => $etat, 'ouvre_le' => $etat === 'bientot' ? $d : null, 'jusqu_au' => null,
-                                          'limite' => true, 'source' => 'progression'];
+                                          'limite' => true, 'source' => 'progression', 'revision' => !empty($r['revision'])];
     }
     return $res;
 }
@@ -154,14 +156,14 @@ function calculer_dates_progression(int $classe_id, array $lignes, string $debut
  * $activites : liste de l'API (id, titre, statut, propose, disponible…) d'une application → la même, les étapes
  * verrouillées ayant disponible = false, verrou = true et apres = titre de l'étape à terminer avant.
  */
-function verrouiller_etapes(string $app, array $activites): array
+function verrouiller_etapes(string $app, array $activites, ?array $dispos = null): array
 {
     $precedente = [];   // atelier => [terminee, titre]
     foreach ($activites as $k => $x) {
         if ($x['disponible'] === false) {
             continue;
         }
-        $at = atelier_de_activite($app, (string) $x['id']) ?? '';
+        $at = ($dispos !== null ? atelier_de_activite_classe($dispos, $app, (string) $x['id']) : atelier_de_activite($app, (string) $x['id'])) ?? '';
         $p = $precedente[$at] ?? null;
         $libre = $p === null || $p[0] || $x['statut'] !== 'a_faire' || !empty($x['propose']);
         if (!$libre) {

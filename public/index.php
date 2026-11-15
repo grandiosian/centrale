@@ -1,7 +1,7 @@
 <?php
 /**
  * Centrale élèves — portail élève.
- * L'élève tape son code une fois, voit ses ateliers et ses parcours avec son avancement,
+ * L'élève tape son code une fois, voit ses ateliers avec son avancement,
  * ouvre un atelier (déjà connecté) puis revient ici avec le bouton « ← Mes ateliers ».
  */
 declare(strict_types=1);
@@ -22,7 +22,7 @@ $v = @filemtime(__DIR__ . '/js/centrale-client.js') ?: 1;
     --surface: #ffffff; --texte: #22262c; --doux: #66707c; --bord: #cfd6dd;
     --encre: #1d4f91; --encre-texte: #ffffff; --surligneur: #f4c542; --surligneur-texte: #22262c;
     --ok: #1f6b3a; --ok-fond: #e3f1e7; --encours: #8a5300; --encours-fond: #fbefd6; --erreur: #b3261e;
-    --code-fond: #eef1f4;
+    --code-fond: #eef1f4; --violet: #6a3fb5;
     color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -31,7 +31,7 @@ $v = @filemtime(__DIR__ . '/js/centrale-client.js') ?: 1;
         --surface: #12283f; --texte: #e7eef5; --doux: #9db0c4; --bord: #2a4a6b;
         --encre: #8ec1ff; --encre-texte: #0b1a2a; --surligneur: #f4c542; --surligneur-texte: #1a1a1a;
         --ok: #8fd3a5; --ok-fond: #17362a; --encours: #f0b35a; --encours-fond: #3a2f1b; --erreur: #ff8a7a;
-        --code-fond: #183350;
+        --code-fond: #183350; --violet: #c2a8ff;
         color-scheme: dark;
     }
 }
@@ -108,6 +108,25 @@ body.barre-serree .brand { margin-right: 0; }
 .tb-centre:hover { border-color: var(--encre); }
 .tb-centre[hidden] { display: none; }
 .tb-icone { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); font-size: .85rem; flex: none; }
+/* Couleurs des applications : celles de leur charte graphique (CHARTE-GRAPHIQUE.md de chaque dépôt), en clair et en sombre */
+.app-netsim { --app: #1c3268; --app-2: #178a4c; --app-3: #d98a00; --app-trait: #4a5b82; }
+.app-etabli3d { --app: #1d7656; }
+.app-technostudio { --app: #2F57A1; }
+@media (prefers-color-scheme: dark) {
+  .app-netsim { --app: #9db4f2; --app-2: #4cc584; --app-3: #f0b03a; --app-trait: #6c7a99; }
+  .app-etabli3d { --app: #4cb889; }
+  .app-technostudio { --app: #8fa9ff; }
+}
+/* bande de repère des cartes d'atelier (charte de chaque application) : NetSim bleu marine, Établi 3D vert, TechnoStudio bleu clair */
+.app-netsim { --app-bande: #1c3268; } .app-etabli3d { --app-bande: #1d7656; } .app-technostudio { --app-bande: #6f9bff; }
+@media (prefers-color-scheme: dark) {
+  .app-netsim { --app-bande: #3f62b8; } .app-etabli3d { --app-bande: #4cb889; } .app-technostudio { --app-bande: #8fb4ff; }
+}
+.logo-app { background: color-mix(in srgb, var(--app) 13%, var(--surface)) !important; }
+.logo-app svg { width: 64%; height: 64%; display: block; }
+.app-technostudio.logo-app svg { width: 74%; height: 74%; }
+.tb-icone.logo-app { border-radius: 7px; }
+.carte.atelier[class*="app-"] { border-left: 5px solid var(--app-bande, var(--app)); }
 .tb-titre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .tb-barres { display: inline-flex; gap: 2px; align-items: flex-end; flex: none; }
 .tb-barres i { width: 5px; height: 14px; border-radius: 2px; background: var(--bord); }
@@ -130,7 +149,7 @@ body.barre-serree .brand { margin-right: 0; }
   .tbid-nom, .tb-compte { display: none; }
   .tbid-moi { padding: 0 10px; }
 }
-main { flex: 1; width: 100%; max-width: 900px; margin: 0 auto; padding: 12px 16px 12px; }
+main { flex: 1; width: 100%; max-width: 1080px; margin: 0 auto; padding: 12px 16px 12px; }
 h1 { margin: 0 0 6px; font-size: 1.75rem; line-height: 1.2; letter-spacing: -.015em; }
 h2.section { font-size: 1.25rem; margin: 32px 0 12px; }
 .sous { color: var(--doux); margin: 0 0 20px; }
@@ -228,9 +247,32 @@ button[disabled] { opacity: .45; cursor: default; }
 .atelier .pied { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: auto; padding-top: 10px; }
 .atelier .pied > button:last-child { margin-left: auto; }
 .atelier.bientot { opacity: .62; filter: grayscale(1); background: color-mix(in srgb, var(--bord) 18%, var(--surface)); }
-/* Mes ateliers : l'atelier en cours en avant, puis À faire, Prochainement (gris), Déjà fait (replié) */
+/* Mes ateliers : « Mon atelier en cours » en haut (un seul, en grand), puis quatre colonnes */
+.colonnes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; margin-top: 32px; }
+@media (max-width: 1000px) { .colonnes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .colonnes { grid-template-columns: 1fr; } }
+.colonne { border: 1px solid var(--bord); border-top: 4px solid var(--col); border-radius: 14px; padding: 14px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.col-encours { --col: var(--surligneur); }
+.col-encours h2.section .nb, .col-encours .col-ico { color: var(--surligneur-texte); background: var(--surligneur); } .col-complete { --col: var(--ok); } .col-bientot { --col: var(--doux); } .col-revision { --col: var(--violet); }
+.colonne h2.section { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 1.05rem; }
+.colonne h2.section .nb { margin-left: auto; background: color-mix(in srgb, var(--col) 16%, var(--surface)); color: var(--col); }
+.col-ico { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: .85rem;
+  background: color-mix(in srgb, var(--col) 16%, var(--surface)); color: var(--col); }
+.pile { display: flex; flex-direction: column; gap: 10px; }
+.colonne .atelier { padding: 12px 14px; }
+.colonne .atelier .icone { width: 36px; height: 36px; font-size: 1.2rem; border-radius: 8px; }
+.colonne .atelier h3 { font-size: 1rem; }
+.colonne .atelier .desc { display: none; }
+.colonne .atelier .barre-prog { height: 6px; margin: 8px 0 2px; }
+.col-complete .atelier .barre-prog i { background: var(--ok); }
+.col-revision .atelier .barre-prog i { background: var(--violet); }
+.col-revision .atelier .pied > button:last-child { background: var(--violet); border-color: var(--violet); }
+.col-vide { margin: 0; padding: 8px 2px; color: var(--doux); font-size: .9rem; }
 h2.section .nb { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--code-fond); color: var(--doux); font-size: .78rem; vertical-align: middle; }
-.atelier.courant { border: 2px solid var(--encre); box-shadow: 0 10px 30px color-mix(in srgb, var(--encre) 16%, transparent); padding: 20px 22px; }
+/* l'atelier en cours : liseré jaune tout autour, la bande de gauche garde la couleur de son application */
+.atelier.courant { border: 2px solid var(--surligneur); box-shadow: 0 10px 30px color-mix(in srgb, var(--surligneur) 22%, transparent); padding: 20px 22px; }
+.carte.atelier.courant[class*="app-"] { border-left: 7px solid var(--app-bande, var(--app)); }
 .atelier.courant .icone { width: 60px; height: 60px; font-size: 2rem; }
 .atelier.courant h3 { font-size: 1.35rem; }
 .courant-suite { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 12px; padding: 12px 14px; border-radius: 12px;
@@ -257,9 +299,8 @@ details.fait .atelier { opacity: .85; }
 .act.commence .puce { border-color: var(--encours); }
 .act .etat { font-size: .8rem; color: var(--doux); }
 .act.commence .etat { color: var(--encours); }
-.act.hors-periode { opacity: .65; }
-.act.verrou { opacity: .6; }
-.act.verrou .puce { background: none; border: 0; }
+.act.bloquee { opacity: .5; filter: grayscale(1); }   /* étapes pas encore débloquées : grisées, avec un cadenas */
+.act.bloquee .puce { background: none; border: 0; font-size: .8rem; }
 .afaire { padding: 4px 16px; margin-bottom: 14px; }
 .afaire ol { list-style: none; margin: 0; padding: 0; }
 .afaire li { display: grid; grid-template-columns: 46px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--bord); }
@@ -273,38 +314,6 @@ details.fait .atelier { opacity: .85; }
 .afaire li.termine { opacity: .7; }
 .afaire li.termine .pour { color: var(--ok); }
 .afaire li.commence .de::after { content: ' · en cours'; color: var(--encours); }
-.parcours { margin-bottom: 14px; }
-.parcours-tete { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
-.parcours-tete h3 { margin: 0; font-size: 1.15rem; }
-.pct { font-weight: 700; color: var(--encre); }
-.consigne { color: var(--doux); margin: 6px 0 0; font-size: .95rem; }
-ol.etapes { list-style: none; margin: 14px 0 0; padding: 0; }
-ol.etapes li { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 10px 6px; border-top: 1px solid var(--bord); }
-.num { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .9rem;
-       border: 2px solid var(--bord); color: var(--doux); }
-li.termine .num { background: var(--ok); border-color: var(--ok); color: var(--surface); }
-li.commence .num { border-color: var(--encours); color: var(--encours); }
-li.suivante .num { border-color: var(--encre); color: var(--encre); }
-.etape-titre { font-weight: 600; }
-.etape-info { font-size: .85rem; color: var(--doux); }
-li.termine .etape-info { color: var(--ok); }
-li.commence .etape-info { color: var(--encours); }
-li.suivante { background: color-mix(in srgb, var(--encre) 7%, transparent); border-radius: 8px; }
-li.verrouillee { opacity: .62; }
-li.verrouillee .num { border-style: dashed; font-size: .8rem; }
-.etape-consigne { font-size: .92rem; margin: 2px 0; white-space: pre-line; }
-.fichiers-etape { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.puce-fichier { font: 600 .78rem ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; padding: 2px 7px; border-radius: 5px;
-                background: var(--code-fond); color: var(--doux); }
-.puce-fichier.sortie { border: 1px dashed var(--bord); background: transparent; }
-.puce-fichier.sortie.fait { border: 1px solid var(--ok); color: var(--ok); background: var(--ok-fond); }
-.parcours-tete .mode { font-size: .82rem; font-weight: 600; color: var(--doux); margin-left: auto; }
-.equipe { margin: 6px 0 0; font-size: .92rem; }
-.equipe.attente { color: var(--encours); }
-.pied-parcours { margin-top: 10px; }
-.dossier { margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: var(--code-fond); }
-.dossier ul { margin: 0; padding-left: 18px; }
-.dossier li { margin: 4px 0; }
 #chargement { position: fixed; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--papier) 85%, transparent);
               font-weight: 600; font-size: 1.1rem; z-index: 10; }
 [hidden] { display: none !important; }
@@ -384,10 +393,6 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
         <div id="bloc-afaire" hidden>
             <h2 class="section">Demandé par ton professeur</h2>
             <div class="carte afaire"><ol id="liste-afaire"></ol></div>
-        </div>
-        <div id="bloc-parcours" hidden>
-            <h2 class="section">Mes parcours</h2>
-            <div id="liste-parcours"></div>
         </div>
         <div id="liste-ateliers"></div>
     </section>
@@ -470,6 +475,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     $('qui').replaceChildren(moi, menu);
     Centrale.afficherIdentifiant(identite, {
       libelle: 'Ton identifiant',
+      modifiable: true,   // le surnom ne se change que sur le portail, pas dans les applications
       onChange: (id) => { nomEleve.textContent = id; ajusterBarre(); },
     });
     const sortir = el('button', { type: 'button', class: 'tb-bouton', title: 'Se déconnecter de la Centrale' },
@@ -488,6 +494,26 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     return e;
   }
 
+  /*
+   * Logo de chaque application, repris de sa charte graphique (NetSim/CHARTE-GRAPHIQUE.md, etabli3d/…, TechnoStudio/…) ;
+   * la couleur de l'application est dans la feuille de style (.app-netsim…, variable --app). Une application inconnue
+   * garde l'icône déclarée dans son centrale.json.
+   */
+  const LOGOS = {
+    netsim: '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M7 20L14 7l7 13z" fill="none" stroke="var(--app-trait)" stroke-width="2"/>'
+      + '<circle cx="14" cy="7" r="4" fill="var(--app)"/><circle cx="7" cy="20" r="4" fill="var(--app-2)"/><circle cx="21" cy="20" r="4" fill="var(--app-3)"/></svg>',
+    etabli3d: '<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="var(--app)" stroke-width="2.4" stroke-linejoin="round">'
+      + '<path d="M16 3 28 9.5v13L16 29 4 22.5v-13z"/><path d="M4 9.5 16 16l12-6.5M16 16v13"/></svg>',
+    technostudio: '<svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#2F57A1"/>'
+      + '<path d="M120 176h272M256 176v208" stroke="#fff" stroke-width="28" stroke-linecap="round"/><circle cx="120" cy="176" r="30" fill="#F5C400"/>'
+      + '<circle cx="392" cy="176" r="30" fill="#fff"/><circle cx="256" cy="384" r="34" fill="#fff"/></svg>',
+  };
+  function iconeApp(app, secours, classe) {
+    const d = el('div', { class: (classe || 'icone') + (LOGOS[app] ? ' logo-app app-' + app : '') });
+    if (LOGOS[app]) d.innerHTML = LOGOS[app]; else d.textContent = secours || '🧩';
+    return d;
+  }
+
   /* Ce que l'élève a ouvert en dernier depuis ce portail : le bouton « ← Reprendre » du widget le rouvre. */
   // (déclarations de fonctions : utilisables dès le démarrage, avant cette ligne)
   function lireDernier() { try { return JSON.parse(localStorage.getItem('portail-dernier') || 'null'); } catch (e) { return null; } }
@@ -498,9 +524,10 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
   }
 
   async function rafraichir() {
-    let ateliers = [], parcours = [], propositions = [];
+    // plus de parcours pour les élèves : on travaille par ateliers, qui peuvent enchaîner plusieurs applications
+    let ateliers = [], propositions = [];
     try {
-      [ateliers, parcours, propositions] = await Promise.all([Centrale.ateliers(), Centrale.parcours(),
+      [ateliers, propositions] = await Promise.all([Centrale.ateliers(),
         Centrale.propositions().catch(() => [])]);   // serveur plus ancien : pas de propositions
     } catch (e) {
       $('liste-ateliers').replaceChildren(el('p', { class: 'vide' }, e.message));
@@ -508,9 +535,8 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     }
     ateliers = parAtelier(ateliers);
     afficherAFaire(propositions);
-    afficherEnCours(parcours, ateliers);
+    afficherEnCours(ateliers);
     ajusterBarre();
-    afficherParcours(parcours, ateliers);
     afficherAteliers(ateliers);
   }
 
@@ -533,9 +559,12 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
         const faites = compte.filter((x) => x.statut === 'termine').length;
         const avant = liste.every((x) => x.disponible === false && !x.verrou);
         const dates = liste.map((x) => x.ouvre_le).filter(Boolean).sort();
+        // atelier qui a son propre lien dans l'application (ex. NetSim « Premiers pas » : #atelier=premiers-pas)
+        const o = liste[0].atelier_ouvrir, url = o && a.url ? String(a.url).split('#')[0] + o : a.url;
         res.push(Object.assign({}, a, {
-          cle: a.app + '|' + k, nom: (liste[0].atelier_titre || a.nom), appli: a.nom, activites: liste,
+          cle: a.app + '|' + k, nom: (liste[0].atelier_titre || a.nom), appli: a.nom, activites: liste, url,
           total: compte.length, terminees: faites, taux: compte.length ? faites / compte.length : 0,
+          revision: liste.some((x) => x.revision),   // remis en avant par le professeur (Calendrier) : section « Révisions »
           disponible: !(avant && dates.length), disponible_le: avant && dates.length ? Math.floor(new Date(dates[0] + 'T00:00').getTime() / 1000) : null,
           description: '',
         }));
@@ -544,7 +573,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     return res;
   }
 
-  /* ---------- Barre du haut, au centre : le parcours en cours (ou la dernière activité ouverte) ---------- */
+  /* ---------- Barre du haut, au centre : l'atelier en cours (ou la dernière activité ouverte) ---------- */
   function iconeEleve() {
     const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('class', 'i'); svg.setAttribute('aria-hidden', 'true');
@@ -556,7 +585,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
    * des ateliers commencés, sinon le premier à faire. null s'il n'y a rien d'ouvert à faire.
    */
   function atelierCourant(ateliers) {
-    const ouverts = ateliers.filter((a) => ['encours', 'afaire'].includes(statutAtelier(a)));
+    const ouverts = ateliers.filter((a) => !enRevision(a) && ['encours', 'afaire'].includes(statutAtelier(a)));
     const dernier = lireDernier();
     const meme = dernier && (ouverts.find((a) => dernier.activite && (a.activites || []).some((x) => x.id === dernier.activite && x.disponible !== false))
       || ouverts.find((a) => a.url && dernier.url && a.url.split('#')[0] === String(dernier.url).split('#')[0]));
@@ -588,26 +617,27 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
   window.addEventListener('resize', () => { clearTimeout(ajusterBarre.t); ajusterBarre.t = setTimeout(ajusterBarre, 80); });
 
   /* ---------- Barre du haut, au centre : l'atelier en cours — un clic le reprend ---------- */
-  function afficherEnCours(parcours, ateliers) {
+  function afficherEnCours(ateliers) {
     const w = $('en-cours');
     w.replaceChildren();
     const a = atelierCourant(ateliers || []);
     const dernier = lireDernier();
     if (a) {
-      const x = prochaineActivite(a), n = a.total || 0, faites = a.terminees || 0;
+      const x = prochaineActivite(a), av = avancement(a), n = av.total, faites = av.faites;
       const barres = n && n <= 12 ? el('span', { class: 'tb-barres', 'aria-hidden': 'true' },
-        ...(a.activites || []).map((y) => el('i', { class: y.statut === 'termine' ? 'fait' : y.statut === 'commence' ? 'encours' : '' }))) : null;
-      w.append(...[el('span', { class: 'tb-icone' }, a.icone || '🧩'), el('strong', { class: 'tb-titre' }, a.nom),
+        ...((a.activites || []).length === n ? a.activites.map((y) => el('i', { class: y.statut === 'termine' ? 'fait' : y.statut === 'commence' ? 'encours' : '' }))
+          : Array.from({ length: n }, (_, i) => el('i', { class: i < faites ? 'fait' : '' })))) : null;
+      w.append(...[iconeApp(a.app, a.icone, 'tb-icone'), el('strong', { class: 'tb-titre' }, a.nom),
         barres, n ? el('span', { class: 'tb-compte' }, faites + '/' + n) : null,
-        el('span', { class: 'tb-reprendre' }, el('span', { class: 'tbid-txt' }, faites ? 'Continuer' : 'Commencer'), ' →')].filter(Boolean));
-      w.title = (faites ? 'Continuer ' : 'Commencer ') + a.nom + (x ? ' : ' + (x.titre || x.id) : '');
+        el('span', { class: 'tb-reprendre' }, el('span', { class: 'tbid-txt' }, av.commence ? 'Continuer' : 'Commencer'), ' →')].filter(Boolean));
+      w.title = (av.commence ? 'Continuer ' : 'Commencer ') + a.nom + (x ? ' : ' + (x.titre || x.id) : '');
       w.onclick = () => reprendreAtelier(a);
       w.hidden = false;
     } else if (dernier && dernier.titre) {
       w.append(el('span', { class: 'tb-icone' }, '🧩'), el('strong', { class: 'tb-titre' }, dernier.titre),
         el('span', { class: 'tb-reprendre' }, el('span', { class: 'tbid-txt' }, 'Reprendre'), ' →'));
       w.title = 'Reprendre : ' + dernier.titre;
-      w.onclick = () => ouvrir(dernier.url, dernier.activite, dernier.parcours, dernier.etape, dernier.titre);
+      w.onclick = () => ouvrir(dernier.url, dernier.activite, undefined, undefined, dernier.titre);
       w.hidden = false;
     } else w.hidden = true;
   }
@@ -627,7 +657,7 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
       b.onclick = () => ouvrir(p.url, p.activite, undefined, undefined, p.titre || p.activite || '');
       const retard = !fini && p.pour_le && p.pour_le < aujourdhui;
       return el('li', { class: p.statut },
-        el('div', { class: 'icone' }, p.icone || '🧩'),
+        iconeApp(p.app, p.icone),
         el('div', {},
           el('div', { class: 'titre-act' }, p.titre),
           el('div', { class: 'de' }, p.atelier + (p.groupe ? ' · ' + p.groupe : '') + (p.texte && !fini ? ' · ' + p.texte : '')),
@@ -638,8 +668,25 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     }));
   }
 
-  /* ---------- Ateliers (onglets : Complété · À faire · En cours · Bientôt) ---------- */
+  /* ---------- Ateliers (En cours · Révisions · À venir · Déjà fait) ---------- */
   let minuterieBientot = null;
+
+  /**
+   * Avancement d'un atelier tel que l'élève le voit. Un atelier d'une seule activité (un tuto d'Établi 3D, un exercice
+   * de NetSim) compte les étapes faites dans l'activité (« 2/6 », texte envoyé par l'application) ; sinon, les activités
+   * terminées de l'atelier. commence : l'élève y a déjà travaillé (« Continuer » plutôt que « Commencer »).
+   */
+  function avancement(a) {
+    const acts = a.activites || [], commence = acts.some((x) => x.statut !== 'a_faire');
+    if (acts.length === 1 && acts[0].statut !== 'termine') {
+      const m = /(\d+)\s*\/\s*(\d+)/.exec(acts[0].texte || '');
+      if (m && +m[2] > 0) return { faites: +m[1], total: +m[2], taux: Math.min(1, +m[1] / +m[2]), unite: 'étape', commence };
+    }
+    return { faites: a.terminees || 0, total: a.total || 0, taux: a.taux || 0, unite: a.appli ? 'étape' : 'activité', commence };
+  }
+
+  /** Atelier remis en avant par le professeur (Calendrier → Révision), déjà ouvert : il va dans « Révisions ». */
+  function enRevision(a) { return !!a.revision && a.disponible !== false; }
 
   function statutAtelier(a) {
     if (a.disponible === false) return 'bientot';                      // calendrier : pas encore ouvert
@@ -670,8 +717,8 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
   function carteAtelier(a, ouverts) {
     const statut = statutAtelier(a);
     if (statut === 'bientot') {
-      const node = el('div', { class: 'carte atelier bientot' },
-        el('div', { class: 'atelier-tete' }, el('div', { class: 'icone' }, a.icone || '🧩'),
+      const node = el('div', { class: 'carte atelier bientot app-' + a.app },
+        el('div', { class: 'atelier-tete' }, iconeApp(a.app, a.icone),
           el('div', {}, a.appli ? el('div', { class: 'appli' }, a.appli) : null, el('h3', {}, a.nom), el('div', { class: 'compte' }, 'Pas encore ouvert'))),
         a.description ? el('p', { class: 'desc' }, a.description) : null,
         el('div', { class: 'pied' },
@@ -679,8 +726,8 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
           el('button', { disabled: 'disabled', title: "Cet atelier s'ouvrira automatiquement le jour venu" }, 'Bientôt')));
       return { statut, node };
     }
-    const pct = Math.round(a.taux * 100);
-    const libelle = a.terminees === a.total && a.total ? 'Revoir' : pct > 0 ? 'Continuer' : 'Ouvrir';
+    const av = avancement(a), pct = Math.round(av.taux * 100);
+    const libelle = enRevision(a) ? 'Réviser' : a.terminees === a.total && a.total ? 'Revoir' : av.commence ? 'Continuer' : 'Ouvrir';
     const bouton = el('button', {}, libelle);
     // progression de la classe (étapes une à une) : le bouton ouvre la prochaine étape, pas toute l'application
     const pasAPas = (a.activites || []).some((x) => x.verrou);
@@ -688,41 +735,44 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
     const liste = el('ul', { class: 'activites', 'data-app': a.cle || a.app });
     liste.hidden = !ouverts.has(a.cle || a.app);
     let groupe = null;
+    // « Voir les étapes » : ce qui est débloqué, puis les suivantes grisées avec un cadenas (sans bouton)
     a.activites.forEach((x) => {
       if (x.groupe && x.groupe !== groupe) { groupe = x.groupe; liste.append(el('li', { class: 'groupe' }, groupe)); }
       // Périodes de disponibilité de l'atelier : pas encore ouvert (date) ou fermé
       // étape verrouillée (progression de la classe) : elle s'ouvre quand la précédente est terminée
-      const ferme = x.disponible === false;
-      const b = el('button', { class: 'petit secondaire' }, x.verrou ? '🔒' : ferme ? (x.ouvre_le ? 'Bientôt' : 'Fermé')
-        : x.statut === 'termine' ? 'Revoir' : x.statut === 'commence' ? 'Continuer' : 'Ouvrir');
-      if (ferme) { b.disabled = true; if (x.verrou) b.title = 'Termine d’abord « ' + (x.apres || 'l’étape précédente') + ' »'; }
-      else b.onclick = () => ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom);
-      const etat = x.verrou ? 'S’ouvre quand tu as terminé « ' + (x.apres || 'l’étape précédente') + ' »'
-        : ferme ? (x.ouvre_le ? 'S’ouvre le ' + dateCourte(x.ouvre_le) : 'Fermé par ton professeur')
+      const bloquee = !!x.verrou || x.disponible === false;
+      let b = el('span');
+      if (!bloquee) {
+        b = el('button', { class: 'petit secondaire' }, x.statut === 'termine' ? 'Revoir' : x.statut === 'commence' ? 'Continuer' : 'Ouvrir');
+        b.onclick = () => ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom);
+      }
+      const etat = x.verrou ? 'Après « ' + (x.apres || 'l’étape précédente') + ' »'
+        : x.disponible === false ? (x.ouvre_le ? 'S’ouvre le ' + dateCourte(x.ouvre_le) : 'Pas encore ouvert')
         : (x.statut === 'termine' ? 'Terminé' : x.statut === 'commence' ? 'En cours' + (x.texte ? ' · ' + x.texte : '') : 'À faire')
           + (x.jusqu_au ? ' · ouvert jusqu’au ' + dateCourte(x.jusqu_au) : '');
-      liste.append(el('li', { class: 'act ' + x.statut + (x.verrou ? ' verrou' : ferme ? ' hors-periode' : '') },
-        el('span', { class: 'puce' }, ferme ? '🔒' : x.statut === 'termine' ? '✓' : ''),
+      liste.append(el('li', { class: 'act ' + x.statut + (bloquee ? ' bloquee' : ''), title: bloquee ? 'Verrouillé : ' + etat : '' },
+        el('span', { class: 'puce' }, bloquee ? '🔒' : x.statut === 'termine' ? '✓' : ''),
         el('div', {}, el('div', {}, x.titre), el('div', { class: 'etat' }, etat)),
         b));
     });
     const mot = a.appli ? 'les étapes' : 'les activités';
-    const voir = el('button', { class: 'lien' }, liste.hidden ? `Voir ${mot} (${a.total})` : `Masquer ${mot}`);
-    voir.onclick = () => { liste.hidden = !liste.hidden; voir.textContent = liste.hidden ? `Voir ${mot} (${a.total})` : `Masquer ${mot}`; };
-    const node = el('div', { class: 'carte atelier' },
-      el('div', { class: 'atelier-tete' }, el('div', { class: 'icone' }, a.icone || '🧩'),
+    const nv = a.activites.length;
+    const voir = el('button', { class: 'lien' }, liste.hidden ? `Voir ${mot} (${nv})` : `Masquer ${mot}`);
+    voir.onclick = () => { liste.hidden = !liste.hidden; voir.textContent = liste.hidden ? `Voir ${mot} (${nv})` : `Masquer ${mot}`; };
+    const node = el('div', { class: 'carte atelier app-' + a.app },
+      el('div', { class: 'atelier-tete' }, iconeApp(a.app, a.icone),
         el('div', {}, a.appli ? el('div', { class: 'appli' }, a.appli) : null, el('h3', {}, a.nom),
-          a.total ? el('div', { class: 'compte' }, `${a.terminees}/${a.total} ${a.appli ? (a.total > 1 ? 'étapes terminées' : 'étape terminée') : a.total > 1 ? 'activités terminées' : 'activité terminée'}`) : null)),
+          av.total ? el('div', { class: 'compte' }, `${av.faites}/${av.total} ${av.unite}${av.total > 1 ? 's faites' : ' faite'}`) : null)),
       a.description ? el('p', { class: 'desc' }, a.description) : null,
       a.total ? el('div', { class: 'barre-prog' }, el('i', { style: `width:${pct}%` })) : null,
-      a.total ? liste : null,
-      el('div', { class: 'pied' }, a.total ? voir : el('span'), bouton));
+      nv ? liste : null,
+      el('div', { class: 'pied' }, nv ? voir : el('span'), bouton));
     return { statut, node };
   }
 
   /**
-   * Mes ateliers : l'atelier courant mis en avant (en haut de la page), puis À faire (commencés d'abord), Prochainement
-   * (en gris, avec le compte à rebours) et Déjà fait (replié).
+   * Mes ateliers : « Mon atelier en cours » en haut (un seul, en grand), puis quatre colonnes : En cours (les autres
+   * ateliers ouverts), Déjà fait, À venir (en gris, avec le compte à rebours) et Révisions (remis en avant par le professeur).
    */
   function afficherAteliers(ateliers) {
     const zone = $('liste-ateliers'), haut = $('bloc-courant');
@@ -741,103 +791,31 @@ li.verrouillee .num { border-style: dashed; font-size: .8rem; }
       const suite = el('div', { class: 'courant-suite' },
         el('span', { class: 'courant-etiquette' }, statutAtelier(courant) === 'encours' ? 'Tu en es là' : 'Pour commencer'),
         el('strong', {}, x ? (x.titre || x.id) : 'Toutes les activités'));
-      const go = el('button', { class: 'courant-go' }, (courant.terminees ? 'Continuer' : 'Commencer') + ' →');
+      const go = el('button', { class: 'courant-go' }, (avancement(courant).commence ? 'Continuer' : 'Commencer') + ' →');
       go.onclick = () => reprendreAtelier(courant);
       suite.append(go);
       c.querySelector('.atelier-tete').after(suite);
-      haut.replaceChildren(el('h2', { class: 'section' }, 'Mon atelier en cours'), c);
+      haut.replaceChildren(el('h2', { class: 'section' }, 'Mon atelier en cours'), c);   // un seul, en grand
       haut.hidden = false;
     } else haut.hidden = true;
     // les autres, rangés
-    const reste = ateliers.filter((a) => a !== courant);
-    const groupes = [
-      ['afaire', 'À faire', reste.filter((a) => ['encours', 'afaire'].includes(statutAtelier(a)))
-        .sort((u, v) => (statutAtelier(u) === 'encours' ? 0 : 1) - (statutAtelier(v) === 'encours' ? 0 : 1) || (v.taux || 0) - (u.taux || 0))],
-      ['bientot', 'Prochainement', reste.filter((a) => statutAtelier(a) === 'bientot')
-        .sort((u, v) => (u.disponible_le || 0) - (v.disponible_le || 0))],
-      ['complete', 'Déjà fait', reste.filter((a) => statutAtelier(a) === 'complete')],
+    const reste = ateliers.filter((a) => a !== courant && !['encours', 'afaire'].includes(statutAtelier(a)) || enRevision(a));
+    // dessous, quatre colonnes côte à côte (deux sous 1000 px, une seule sous 640 px) : En cours (les autres ateliers
+    // ouverts, commencés d'abord), Déjà fait, À venir, Révisions
+    const colonnes = [
+      ['encours', 'En cours', '▶', ateliers.filter((a) => a !== courant && !enRevision(a) && ['encours', 'afaire'].includes(statutAtelier(a)))
+        .sort((u, v) => (statutAtelier(u) === 'encours' ? 0 : 1) - (statutAtelier(v) === 'encours' ? 0 : 1) || (v.taux || 0) - (u.taux || 0)),
+        'Pas d’autre atelier ouvert.'],
+      ['complete', 'Déjà fait', '✓', reste.filter((a) => !enRevision(a) && statutAtelier(a) === 'complete'), 'Rien de terminé pour l’instant.'],
+      ['bientot', 'À venir', '⏳', reste.filter((a) => !enRevision(a) && statutAtelier(a) === 'bientot')
+        .sort((u, v) => (u.disponible_le || 0) - (v.disponible_le || 0)), 'Rien de prévu pour l’instant.'],
+      ['revision', 'Révisions', '↺', reste.filter(enRevision), 'Pas de révision demandée.'],
     ];
-    const blocs = groupes.filter((g) => g[2].length).map(([k, titre, liste]) => {
-      const grille = el('div', { class: 'grille' }, ...liste.map((a) => carteAtelier(a, ouverts).node));
-      const tete = el('h2', { class: 'section' }, titre, ' ', el('small', { class: 'nb' }, String(liste.length)));
-      if (k === 'complete') {   // déjà fait : replié, pour laisser la place à ce qui reste à faire
-        const d = el('details', { class: 'bloc-ateliers fait' }, el('summary', {}, tete), grille);
-        return d;
-      }
-      return el('section', { class: 'bloc-ateliers groupe-' + k }, tete, grille);
-    });
-    zone.replaceChildren(...blocs);
+    zone.replaceChildren(el('div', { class: 'colonnes' }, ...colonnes.map(([k, titre, ico, liste, vide]) =>
+      el('section', { class: 'colonne col-' + k, 'aria-label': titre },
+        el('h2', { class: 'section' }, el('span', { class: 'col-ico', 'aria-hidden': 'true' }, ico), titre, el('small', { class: 'nb' }, String(liste.length))),
+        liste.length ? el('div', { class: 'pile' }, ...liste.map((a) => carteAtelier(a, ouverts).node)) : el('p', { class: 'col-vide' }, vide)))));
     lancerReboursBientot();
-  }
-
-  /* ---------- Parcours (ateliers transversaux, individuels ou en équipe) ---------- */
-  function afficherParcours(parcours) {
-    $('bloc-parcours').hidden = !parcours.length;
-    $('liste-parcours').replaceChildren(...parcours.map((p) => {
-      const pct = Math.round(p.taux * 100);
-      const suivante = p.etapes.findIndex((e) => e.statut !== 'termine' && e.ouverte);
-      const ol = el('ol', { class: 'etapes' });
-      p.etapes.forEach((e, i) => {
-        const verrou = !e.ouverte;
-        const info = verrou
-          ? e.ouvre_le ? 'S’ouvre le ' + dateCourte(e.ouvre_le) : e.fermee ? 'Fermé par ton professeur' : (p.deblocage === 'validation' ? 'Ton professeur ouvrira cette étape après avoir validé la précédente' : 'S’ouvre quand l’étape précédente est terminée')
-          : e.statut === 'termine' ? 'Terminé ✓' : e.statut === 'commence' ? 'En cours' + (e.texte ? ' · ' + e.texte : '') : 'À faire';
-        const b = el('button', { class: e.statut === 'termine' ? 'secondaire' : '' },
-          verrou ? 'Pas encore' : e.statut === 'termine' ? 'Revoir' : e.statut === 'commence' ? 'Continuer' : 'Commencer');
-        if (verrou) b.disabled = true;
-        else if (e.url) b.onclick = () => ouvrir(e.url, e.activite, p.id, e.ordre, e.titre + ' · ' + p.nom);
-        else { b.disabled = true; b.title = "Pas d'adresse pour cette étape"; }
-        const fichiers = (e.entrees.length || e.sorties.length) ? el('div', { class: 'fichiers-etape' },
-          ...e.entrees.map((n) => el('span', { class: 'puce-fichier', title: 'Cette étape utilise ce fichier de ton dossier' }, '↘ ' + n)),
-          ...e.sorties.map((n) => {
-            const fait = e.deposees.includes(n);
-            return el('span', { class: 'puce-fichier sortie' + (fait ? ' fait' : ''), title: fait ? 'Déposé dans ton dossier' : 'À produire à cette étape' }, (fait ? '✓ ' : '↗ ') + n);
-          })) : null;
-        ol.append(el('li', { class: e.statut + (i === suivante ? ' suivante' : '') + (verrou ? ' verrouillee' : '') },
-          el('span', { class: 'num' }, verrou ? '🔒' : e.statut === 'termine' ? '✓' : String(i + 1)),
-          el('div', {},
-            el('div', { class: 'etape-titre' }, e.titre),
-            e.consigne ? el('div', { class: 'etape-consigne' }, e.consigne) : null,
-            el('div', { class: 'etape-info' }, info),
-            fichiers),
-          el('div', { class: 'action' }, b)));
-      });
-      let equipe = null;
-      if (p.mode === 'equipe') {
-        equipe = el('p', { class: 'equipe' + (p.sans_equipe ? ' attente' : '') }, p.sans_equipe
-          ? 'Atelier en équipe : ton professeur n’a pas encore formé les équipes. Tu travailles seul pour l’instant.'
-          : [el('strong', {}, p.equipe), p.coequipiers.length ? ' · avec ' + p.coequipiers.join(', ') : ' · seul dans l’équipe pour l’instant']);
-      }
-      const dossier = el('div', { class: 'dossier', hidden: '' });
-      const voir = el('button', { class: 'lien' }, `Mon dossier de projet (${p.fichiers})`);
-      voir.onclick = async () => {
-        if (!dossier.hidden) { dossier.hidden = true; return; }
-        dossier.replaceChildren(el('p', { class: 'vide' }, 'Chargement…'));
-        dossier.hidden = false;
-        try {
-          const liste = await Centrale.projet.liste(p.id);
-          dossier.replaceChildren(liste.length ? el('ul', {}, ...liste.map((f) => {
-            const t = el('button', { class: 'lien' }, f.nom);
-            t.onclick = async () => {
-              const blob = await Centrale.projet.charger(f.nom, { parcours: p.id, format: 'blob' });
-              const a = el('a', { href: URL.createObjectURL(blob), download: f.nom });
-              document.body.append(a); a.click(); a.remove();
-            };
-            return el('li', {}, t, ' ', el('span', { class: 'etape-info' },
-              f.fourni ? 'fourni par ton professeur' : (f.auteur ? 'par ' + f.auteur + ' · ' : '') + new Date(f.maj * 1000).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })));
-          })) : el('p', { class: 'vide' }, 'Ton dossier est vide pour l’instant : il se remplit au fil des étapes.'));
-        } catch (e) { dossier.replaceChildren(el('p', { class: 'vide' }, e.message)); }
-      };
-      return el('div', { class: 'carte parcours' },
-        el('div', { class: 'parcours-tete' }, el('h3', {}, p.nom),
-          el('span', { class: 'mode' }, p.mode === 'equipe' ? 'En équipe' : 'Individuel'), el('span', { class: 'pct' }, pct + ' %')),
-        equipe,
-        el('div', { class: 'barre-prog' }, el('i', { style: `width:${pct}%` })),
-        p.description ? el('p', { class: 'consigne' }, p.description) : null,
-        ol,
-        el('div', { class: 'pied-parcours' }, voir),
-        dossier);
-    }));
   }
 </script>
 </body>
