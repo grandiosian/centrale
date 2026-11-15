@@ -22,6 +22,7 @@ require __DIR__ . '/../../lib/simulation.php';
 require __DIR__ . '/../../lib/reperes.php';
 require __DIR__ . '/../../lib/admin_competences.php';
 require __DIR__ . '/../../lib/admin_catalogue.php';
+require __DIR__ . '/../../lib/admin_inspecter.php';
 require __DIR__ . '/../../lib/admin_progression.php';
 
 header('X-Frame-Options: DENY');

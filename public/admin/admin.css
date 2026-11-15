@@ -2635,3 +2635,16 @@ button.calat-epingle { border: 0; padding: 0 2px; }
   .calat-actions { grid-row: 3; grid-column: 3; }
   .calat-jour { text-align: left; min-width: 0; }
 }
+
+/* Inspecter un atelier (lib/admin_inspecter.php, inspecter.js) */
+.inspecteur h1 { display: flex; align-items: center; gap: 10px; }
+.inspecteur h2 { font-size: 1.1rem; margin: 0 0 8px; }
+.inspecteur h3 { font-size: 1rem; margin: 18px 0 6px; }
+.inspect-dl { display: grid; grid-template-columns: minmax(130px, max-content) 1fr; gap: 6px 16px; margin: 0; }
+.inspect-dl dt { color: var(--doux); font-weight: 600; }
+.inspect-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.inspect-liste { margin: 0; padding-left: 18px; }
+.inspect-json { max-height: 480px; overflow: auto; background: var(--fond); border: 1px solid var(--bord); border-radius: 8px; padding: 10px; font-size: .8rem; white-space: pre; }
+.inspect-brut { margin-top: 8px; }
+.inspecteur table td, .inspecteur table th { vertical-align: top; }
+@media (max-width: 640px) { .inspect-dl { grid-template-columns: 1fr; } .inspect-dl dd { margin-bottom: 6px; } }

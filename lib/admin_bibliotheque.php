@@ -194,6 +194,7 @@ function ateliers_bibliotheque(array $items, array $props): array
             'atelier' => $r['atelier'], 'titre' => $r['titre'], 'niveau' => $niveaux[$r['niveau']] ?? '', 'theme' => $r['theme'],
             'resume' => $r['resume'], 'duree' => $r['duree'], 'version' => $r['version'], 'auteur' => $r['auteur'],
             'source' => SOURCES_CATALOGUE[$r['source']] ?? $r['source'], 'ouvrir' => adresse_ouvrir_atelier($r), 'fichier' => $r['fichier'],
+            'inspecter' => lien_inspecter_atelier((string) $r['app'], (string) $r['atelier']),
             'competences' => $r['codes'], 'activites' => $acts, 'ressources' => $ressources[$r['app']] ?? []];
     }
     // Activités hors catalogue (application sans ateliers importés) : un atelier par groupe

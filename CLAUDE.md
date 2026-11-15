@@ -28,6 +28,7 @@ avec les applications, dans [public/passerelle/](public/passerelle/). Vue d'ense
 | Logos des applications (chartes graphiques) | espace enseignant : `LOGOS_APPS` et `icone_app()` (lib/commun.php), `logoApp()` (admin.js), couleurs `.app-…` (admin.css) ; portail élève : `LOGOS` dans `public/index.php`. Les deux à modifier ensemble | ../CLAUDE.md §6 |
 | Emploi du temps (séances, semaines A/B, vacances) | `lib/organisation.php` (`semaine_emploi_du_temps`, `seances_classe` dans progression.php) | README §5 |
 | Essai de l'enseignant (« Tester à la place d'un élève ») : tous les élèves, session `essai`, interrupteur Élève \| Enseignant | `lib/admin_tester.php`, `sessions.essai` / `sessions.vue`, `api/session.php` (POST vue), `session_essai()` (lib/api.php), `api/ateliers.php` (vue enseignant sans calendrier), `Centrale.boutonVue()` | SPECIFICATION §2.6 |
+| Inspecter un atelier (fiche du catalogue, activités, où il sert, fichier publié par l'application) ; procédure de création | `lib/admin_inspecter.php`, `public/admin/inspecter.js` ; `public/passerelle/CREER-UN-ATELIER.md` (`?doc=creer-atelier`) | README §Imports et disponibilité |
 | Contrat passerelle (lu par les applications) | `public/passerelle/*.md`, schémas JSON | — |
 | Copies des applications servies par la Centrale | `miroirs.txt` (construit au déploiement dans `public/miroir/`, `prive/miroir/`) | README §1 |
 

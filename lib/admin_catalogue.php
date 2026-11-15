@@ -114,10 +114,11 @@ function aide_creation_atelier(): void
 {
     ?>
     <ol class="etapes-atelier" aria-label="Créer un atelier">
-        <li><strong>Sur papier</strong> : fiches et présentation dans <a href="appli.php/fichestudio/#nouveau" target="_blank" rel="noopener">FicheStudio</a> (ou Affinity, puis ouvert dans FicheStudio).</li>
-        <li><strong>Converti pour TechnoStudio</strong> : l’atelier numérique, avec ses activités et ses compétences.</li>
-        <li><strong>Importé ici</strong> : « Importer les ateliers… », puis proposé aux classes, mis dans les parcours et suivi.</li>
+        <li><strong>Sur papier</strong> : fiches et présentation dans <a href="appli.php/fichestudio/#nouveau" target="_blank" rel="noopener">FicheStudio</a> (ou Affinity), exportées en PDF.</li>
+        <li><strong>Construit dans TechnoStudio</strong> : « Convertir une fiche papier » (le PDF), puis feuilles, blocs et compétences ; « Publier », puis le fichier déposé dans <code>ateliers/</code> sur GitHub.</li>
+        <li><strong>Importé ici</strong> : « Mettre à jour », « Inspecter » pour vérifier, puis proposé aux classes, mis au calendrier, dans les parcours et suivi.</li>
     </ol>
+    <p class="aide">Pas à pas, avec les règles qui protègent le travail des élèves : <a href="../passerelle/?doc=creer-atelier" target="_blank">procédure de création d’un atelier</a>.</p>
     <?php
 }
 
@@ -130,6 +131,10 @@ function page_ateliers(): void
 {
     if (isset($_GET['telecharger'], $_GET['app'])) {
         telecharger_contenu_atelier(normaliser_app((string) $_GET['app']), (string) $_GET['telecharger']);
+    }
+    if (isset($_GET['inspecter'], $_GET['app'])) {   // tout ce que la Centrale et l'application savent d'un atelier : lib/admin_inspecter.php
+        page_inspecter_atelier(normaliser_app((string) $_GET['app']), (string) $_GET['inspecter']);
+        return;
     }
     $gestion = !empty($_GET['gestion']) || ($_GET['vue'] ?? '') === 'catalogue';   // ancien lien « Ateliers des applications »
     if (($_GET['vue'] ?? '') === 'catalogue') unset($_GET['vue']);
@@ -297,6 +302,7 @@ function corps_catalogue_ateliers(): void
                         <td class="discret"><?= h(SOURCES_CATALOGUE[$r['source']] ?? $r['source']) ?><?= $r['version'] !== '' ? '<br>v' . h($r['version']) : '' ?>
                             <?php if ($r['source'] === 'fichier'): ?><br><span class="alerte" title="Il ne restera disponible sans serveur qu’une fois publié avec l’application">pas encore dans l’application</span><?php endif; ?></td>
                         <td class="actions">
+                            <a class="btn petit secondaire" href="<?= h(lien_inspecter_atelier((string) $r['app'], (string) $r['atelier'])) ?>" title="Voir comment cet atelier est rangé : fiche, activités, où il sert, fichier publié">Inspecter</a>
                             <?php if ($ouvrir !== ''): ?><a class="btn petit secondaire" href="<?= h($ouvrir) ?>" target="_blank" rel="noopener" title="Ouvrir l’atelier dans l’application, sans connexion">Ouvrir</a><?php endif; ?>
                             <?php if ($r['contenu'] !== ''): ?><a class="btn petit secondaire" href="./?p=ateliers&gestion=1&app=<?= rawurlencode($r['app']) ?>&telecharger=<?= rawurlencode($r['atelier']) ?>" title="Fichier à ajouter aux ateliers publiés par l’application">Fichier</a><?php endif; ?>
                             <?php if ($r['etat'] !== 'actif' || $r['source'] === 'fichier'): ?>

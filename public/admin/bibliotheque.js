@@ -235,6 +235,11 @@
       lien.rel = 'noopener';
       actions.appendChild(lien);
     }
+    if (at.inspecter) {   // fiche du catalogue, activités, où il sert, fichier publié par l'application (lib/admin_inspecter.php)
+      var insp = el('a', 'btn petit secondaire', 'Inspecter les données');
+      insp.href = at.inspecter;
+      actions.appendChild(insp);
+    }
     if (choisis.length > 1) actions.appendChild(bouton('Comparer la sélection', 'petit secondaire', comparer));
     corps.appendChild(actions);
 
