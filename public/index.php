@@ -289,6 +289,14 @@ h2.section .nb { display: inline-grid; place-items: center; min-width: 24px; hei
 .courant-etiquette { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--encre); flex-basis: 100%; }
 .courant-suite strong { font-size: 1.05rem; flex: 1 1 200px; }
 .courant-go { font-size: 1rem; padding: 10px 20px; border-radius: 999px; }
+/* « Tu en es là » : jusqu'à quand (ou permanent) et, pour un parcours, ses applications */
+.courant-infos { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 4px; font-size: .88rem; color: var(--doux); }
+.courant-validite { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--surface); }
+.courant-validite.limite { color: var(--encre); font-weight: 600; }
+.courant-validite.proche { color: #b3261e; }
+.courant-apps { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.courant-app { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 3px; border-radius: 999px; background: var(--surface); color: var(--texte, inherit); }
+.courant-app .icone-mini { width: 22px; height: 22px; border-radius: 6px; font-size: .8rem; display: grid; place-items: center; flex: none; background: var(--code-fond); }
 .atelier.courant .pied > button:last-child { display: none; }   /* le grand bouton « Continuer » suffit */
 details.bloc-ateliers > summary { list-style: none; cursor: pointer; }
 details.bloc-ateliers > summary::-webkit-details-marker { display: none; }
@@ -592,6 +600,7 @@ details.fait .atelier { opacity: .85; }
           revision: liste.some((x) => x.revision),   // remis en avant par le professeur (Calendrier) : section « Révisions »
           disponible: !(avant && dates.length), disponible_le: avant && dates.length ? Math.floor(new Date(dates[0] + 'T00:00').getTime() / 1000) : null,
           description: '',
+          a_completer: liste[0].a_completer || null,   // jusqu'à quand compléter l'atelier (calendrier), null = sans date
         }));
       });
     });
@@ -804,6 +813,37 @@ details.fait .atelier { opacity: .85; }
     return { statut, node };
   }
 
+  /** Nom affiché d'une application (icônes d'un parcours) : celui du portail, sinon un nom connu, sinon l'identifiant. */
+  const NOMS_APPS = { netsim: 'NetSim', etabli3d: 'Établi 3D', technostudio: 'TechnoStudio', fichestudio: 'FicheStudio' };
+  /**
+   * Infos de « Tu en es là » : jusqu'à quand compléter l'atelier ou le parcours (date du calendrier, ou fin de son
+   * ouverture), sinon « permanent » ; pour un parcours, les icônes de ses applications, dans l'ordre des étapes.
+   */
+  function infosCourant(a, ateliers) {
+    const acts = a.activites || [];
+    const fins = acts.map((x) => x.jusqu_au).filter(Boolean).sort();
+    const date = a.a_completer || acts.map((x) => x.a_completer).find(Boolean) || fins[fins.length - 1] || null;
+    const parcours = a.app === 'parcours';
+    let validite;
+    if (date) {
+      const jours = Math.round((new Date(date + 'T12:00:00') - new Date(new Date().toLocaleDateString('sv') + 'T12:00:00')) / 864e5);
+      validite = el('span', { class: 'courant-validite limite' + (jours <= 2 ? ' proche' : ''), title: 'Ton professeur a prévu cet atelier jusqu’au ' + dateCourte(date) },
+        el('span', { 'aria-hidden': 'true' }, '📅'), jours < 0 ? 'À compléter : c’était jusqu’au ' + dateCourte(date) : jours > 1 ? 'À compléter jusqu’au ' + dateCourte(date) : 'À compléter ' + (jours ? 'd’ici demain' : 'aujourd’hui'));
+    } else {
+      validite = el('span', { class: 'courant-validite', title: 'Pas de date limite : tu peux le faire à ton rythme' },
+        el('span', { 'aria-hidden': 'true' }, '♾'), parcours ? 'Parcours permanent' : 'Atelier permanent');
+    }
+    const infos = el('div', { class: 'courant-infos' }, validite);
+    const apps = parcours ? (a.apps || [...new Set(acts.map((x) => x.app).filter(Boolean))]) : [];
+    if (apps.length) {
+      const noms = {};
+      ateliers.forEach((b) => { if (b.app !== 'parcours') noms[b.app] = b.appli || b.nom; });
+      infos.append(el('span', { class: 'courant-apps', 'aria-label': 'Applications du parcours' }, 'Avec',
+        ...apps.map((k) => el('span', { class: 'courant-app app-' + k }, iconeApp(k, '🧩', 'icone-mini'), NOMS_APPS[k] || noms[k] || k))));
+    }
+    return infos;
+  }
+
   /**
    * Mes ateliers : « Mon atelier en cours » en haut (un seul, en grand), puis quatre colonnes : En cours (les autres
    * ateliers ouverts), Déjà fait, À venir (en gris, avec le compte à rebours) et Révisions (remis en avant par le professeur).
@@ -827,7 +867,7 @@ details.fait .atelier { opacity: .85; }
         el('strong', {}, x ? (x.titre || x.id) : 'Toutes les activités'));
       const go = el('button', { class: 'courant-go' }, (avancement(courant).commence ? 'Continuer' : 'Commencer') + ' →');
       go.onclick = () => reprendreAtelier(courant);
-      suite.append(go);
+      suite.append(go, infosCourant(courant, ateliers));
       c.querySelector('.atelier-tete').after(suite);
       haut.replaceChildren(el('h2', { class: 'section' }, 'Mon atelier en cours'), c);   // un seul, en grand
       haut.hidden = false;

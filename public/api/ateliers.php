@@ -22,9 +22,12 @@
  * Classe avec une progression (page Calendrier, lib/progression.php) : seuls les ateliers de la progression sont
  * listés (ouverts à leur date, « bientôt » avant), dans son ordre. Chaque activité porte alors atelier et
  * atelier_titre : le portail fait une carte par atelier (sans calendrier : une carte par application).
+ * a_completer : jusqu'à quand compléter l'atelier (AAAA-MM-JJ, sa dernière séance prévue ; null = sans date limite).
+ * Le portail l'affiche dans « Tu en es là » (« À compléter jusqu'au … »), ou « permanent » sans aucune date.
  *
  * Parcours placés dans le calendrier : une carte chacun (app « parcours », icône 🧭), ouverte à sa date ; chaque étape
- * porte url, activite, parcours et etape (le portail l'ouvre comme une étape de parcours). Voir cartes_parcours_calendrier().
+ * porte url, activite, parcours, etape et app (le portail l'ouvre comme une étape de parcours) ; la carte porte apps
+ * (les applications des étapes, dans l'ordre, sans doublon). Voir cartes_parcours_calendrier().
  *
  * Vue enseignant d'un essai (« Tester à la place d'un élève », interrupteur Élève | Enseignant) : tout le catalogue
  * des ateliers de la classe, ouverts, sans calendrier ni étapes verrouillées (vue = 'enseignant' dans la réponse).
@@ -50,6 +53,7 @@ $rang = [];   // atelier du catalogue => place dans la progression
 foreach ($avec_progression ? progression_classe($cid) : [] as $i => $r) {
     $rang[$r['app']][$r['atelier']] = $i;
 }
+$echeances = $avec_progression ? echeances_progression($cid) : [];   // [app][atelier] => à compléter jusqu'au
 $titres = [];  // titres des ateliers du catalogue (une carte par atelier sur le portail, avec une progression)
 $ouvertures = [];   // lien propre à l'atelier dans son application (#atelier=premiers-pas…), s'il en a un
 foreach ($avec_progression ? catalogue_ateliers() : [] as $r) {
@@ -129,6 +133,7 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
         if ($at !== null) {
             $activites[$k]['atelier'] = $at;
             $activites[$k]['atelier_titre'] = $titres[$app][$at] ?? $at;
+            $activites[$k]['a_completer'] = $echeances[$app][$at] ?? null;
             if (isset($ouvertures[$app][$at])) {
                 $activites[$k]['atelier_ouvrir'] = $ouvertures[$app][$at];   // le portail ouvre l'atelier entier (ex. NetSim « Premiers pas »)
             }

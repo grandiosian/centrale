@@ -72,6 +72,40 @@ function disponibilites_progression(int $classe_id, ?string $date = null): ?arra
     return $res;
 }
 
+/**
+ * Jusqu'à quand compléter chaque atelier (ou parcours) daté du calendrier : [app][atelier] => AAAA-MM-JJ.
+ * C'est sa dernière séance prévue (date d'ouverture + nombre de séances, d'après l'emploi du temps) ; sans emploi
+ * du temps, la veille de l'atelier daté suivant. Absent : pas de date (pas daté, ou dernier atelier sans emploi du temps).
+ * L'atelier ne se ferme pas à cette date : c'est un repère pour l'élève (« À compléter jusqu'au … » sur le portail).
+ */
+function echeances_progression(int $classe_id): array
+{
+    $dates = array_values(array_filter(progression_classe($classe_id), fn($r) => (string) $r['ouvre_le'] !== ''));
+    if (!$dates) {
+        return [];
+    }
+    usort($dates, fn($u, $v) => strcmp($u['ouvre_le'], $v['ouvre_le']));
+    $seances = seances_annee_classe($classe_id, $dates[0]['ouvre_le']);
+    $res = [];
+    foreach ($dates as $i => $r) {
+        $d = (string) $r['ouvre_le'];
+        $apres = array_values(array_filter($seances, fn($s) => $s >= $d));
+        $fin = $apres[max(1, (int) $r['seances']) - 1] ?? null;
+        if ($fin === null) {   // pas d'emploi du temps (ou fin d'année) : veille de l'atelier suivant
+            foreach (array_slice($dates, $i + 1) as $s) {
+                if ($s['ouvre_le'] > $d) {
+                    $fin = (new DateTimeImmutable($s['ouvre_le']))->modify('-1 day')->format('Y-m-d');
+                    break;
+                }
+            }
+        }
+        if ($fin !== null) {
+            $res[$r['app']][$r['atelier']] = $fin;
+        }
+    }
+    return $res;
+}
+
 /** Nombre de séances d'un atelier d'après sa durée annoncée (« 3 séances », « 2 h », « 220 min »…), pour des séances d'1 h 30 ; 1 par défaut. */
 function seances_d_apres_duree(string $duree): int
 {
@@ -347,6 +381,7 @@ function cartes_parcours_calendrier(array $eleve, array $prog, bool $vue_prof): 
         return [];
     }
     $dispos = disponibilites_progression($cid)[APP_PARCOURS] ?? [];
+    $echeances = echeances_progression($cid)[APP_PARCOURS] ?? [];
     $ateliers = db()->query('SELECT * FROM ateliers')->fetchAll();
     $catalogue = catalogue_activites();
     $res = [];
@@ -375,7 +410,8 @@ function cartes_parcours_calendrier(array $eleve, array $prog, bool $vue_prof): 
                   'disponible' => $ouvert && $libre, 'ouvre_le' => $ouvert ? null : $d['ouvre_le'], 'jusqu_au' => null,
                   'revision' => !empty($d['revision']), 'atelier' => $pid, 'atelier_titre' => $p['nom'],
                   'url' => lien_vers_meilleure_adresse((string) $et['url'], $ateliers), 'activite' => (string) $et['activite'],
-                  'parcours' => (int) $pid, 'etape' => $i];
+                  'parcours' => (int) $pid, 'etape' => $i, 'app' => (string) $et['app'],
+                  'a_completer' => $echeances[$pid] ?? null];
             if ($ouvert && !$libre) {
                 $x['verrou'] = true;
                 $x['apres'] = ($precedente ?: 'l’étape précédente') . ($p['deblocage'] === 'validation' ? ', validée par ton professeur' : '');
@@ -387,6 +423,7 @@ function cartes_parcours_calendrier(array $eleve, array $prog, bool $vue_prof): 
         $res[] = [
             'app' => 'parcours', 'nom' => 'Parcours', 'description' => (string) $p['description'], 'icone' => '🧭',
             'url' => $acts[0]['url'], 'parcours' => (int) $pid,
+            'apps' => array_values(array_unique(array_filter(array_column($acts, 'app')))),   // icônes des applications du parcours
             'taux' => round(array_sum(array_column($etats, 'taux')) / count($etats), 3),
             'terminees' => $faites, 'total' => count($acts), 'maj' => null, 'activites' => $acts,
             'disponible' => $ouvert,
