@@ -263,3 +263,60 @@ function verrouiller_etapes(string $app, array $activites, ?array $dispos = null
     }
     return $activites;
 }
+
+/**
+ * Ce que voient aujourd'hui les élèves d'une classe SANS calendrier (même règles que api/ateliers.php) :
+ *  - les applications ouvertes à la classe (onglet Ateliers : classes concernées, fenêtres d'activation) ;
+ *  - dans chacune, les ateliers du catalogue qui ne sont pas fermés par une période de disponibilité ;
+ *  - réglage « activités proposées » (par défaut) : seulement les ateliers où une étape a été proposée à la classe
+ *    ou à un de ses groupes (plus, pour chaque élève, ce qu'il a déjà commencé : non compté ici).
+ * → ['mode' => 'proposees'|'toutes', 'apps' => [ {app, nom, icone, etat, ouvre_le,
+ *      ateliers => [ {cle, titre, etat: ouvert|bientot, ouvre_le, proposees} ] } ] ]
+ */
+function vue_classe_sans_calendrier(int $classe_id, string $classe): array
+{
+    $proposees_seulement = portail_seulement_proposees();
+    $dispos = disponibilites_classe($classe_id);
+    unset($dispos['*progression']);
+    $proposees = [];   // [app][atelier] => nombre d'étapes proposées à la classe ou à un de ses groupes
+    $st = db()->prepare('SELECT app, activite FROM propositions WHERE classe_id = ?');
+    $st->execute([$classe_id]);
+    foreach ($st->fetchAll() as $p) {
+        $at = atelier_de_activite((string) $p['app'], (string) $p['activite']);
+        if ($at !== null) {
+            $proposees[$p['app']][$at] = ($proposees[$p['app']][$at] ?? 0) + 1;
+        }
+    }
+    $par_app = [];
+    foreach (catalogue_ateliers(null, true) as $r) {
+        if ($r['etat'] === 'actif') {
+            $par_app[$r['app']][] = $r;
+        }
+    }
+    $apps = [];
+    foreach (ateliers_pour_classe($classe) as $a) {
+        $app = (string) $a['app'];
+        $ouvre_app = null;
+        if (!atelier_disponible_maintenant($app, $classe_id)) {
+            $t = prochaine_disponibilite($app, $classe_id);
+            if ($t === null) {
+                continue;   // application fermée à la classe
+            }
+            $ouvre_app = (new DateTimeImmutable('@' . $t))->setTimezone(fuseau())->format('Y-m-d');
+        }
+        $ateliers = [];
+        foreach ($par_app[$app] ?? [] as $r) {
+            $d = $dispos[$app][$r['atelier']] ?? ['etat' => 'ouvert', 'ouvre_le' => null];
+            $n = $proposees[$app][$r['atelier']] ?? 0;
+            if ($d['etat'] === 'ferme' || ($proposees_seulement && !$n)) {
+                continue;
+            }
+            $ouvre = $ouvre_app !== null ? max($ouvre_app, (string) $d['ouvre_le']) : $d['ouvre_le'];
+            $ateliers[] = ['cle' => $app . '|' . $r['atelier'], 'titre' => $r['titre'] ?: $r['atelier'],
+                           'etat' => $ouvre_app !== null || $d['etat'] === 'bientot' ? 'bientot' : 'ouvert', 'ouvre_le' => $ouvre, 'proposees' => $n];
+        }
+        $apps[] = ['app' => $app, 'nom' => $a['nom'], 'icone' => $a['icone'], 'etat' => $ouvre_app !== null ? 'bientot' : 'ouvert',
+                   'ouvre_le' => $ouvre_app, 'ateliers' => $ateliers];
+    }
+    return ['mode' => $proposees_seulement ? 'proposees' : 'toutes', 'apps' => $apps];
+}

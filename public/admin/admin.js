@@ -2293,7 +2293,62 @@
   cherche.addEventListener('input', rendreCatalogue);
   debut.addEventListener('change', function () { if (debut.value) { appliquer(); marquer(); rendre(); } });
 
-  function rendre() { rendreTete(); rendreListe(); rendreCatalogue(); majEtat(); }
+  /* ----- Classe sans calendrier : ce que ses élèves voient aujourd'hui (vue_classe_sans_calendrier) ----- */
+  var actuel = document.getElementById('calat-actuel');
+  function rendreActuel() {
+    var v = D.sans_calendrier;
+    actuel.hidden = !v || lignes.length > 0;
+    if (actuel.hidden || actuel.childNodes.length) return;
+    var tous = [];
+    actuel.appendChild(el('h4', { texte: 'Aujourd’hui, sans calendrier, les élèves de ' + D.classe.nom + ' voient :' }));
+    if (!v.apps.length) {
+      actuel.appendChild(el('p', { classe: 'calat-info', texte: 'Aucune application ouverte à cette classe (onglet Ateliers).' }));
+    }
+    v.apps.forEach(function (a) {
+      var ul = el('ul', {});
+      a.ateliers.forEach(function (x) {
+        tous.push(x);
+        ul.appendChild(el('li', {}, [
+          el('span', { texte: x.titre }),
+          el('span', { classe: 'pastille-dispo ' + x.etat, texte: x.etat === 'ouvert' ? 'Ouvert' : 'À venir' + (x.ouvre_le ? ' · ' + lisible(x.ouvre_le) : '') }),
+          x.proposees ? el('span', { classe: 'calat-info', texte: x.proposees + ' étape' + (x.proposees > 1 ? 's proposées' : ' proposée') }) : null
+        ]));
+      });
+      if (!a.ateliers.length) {
+        ul.appendChild(el('li', { classe: 'calat-info', texte: v.mode === 'proposees'
+          ? 'Aucune étape proposée : la carte de l’application reste quand même dans « En cours », avec « Ouvrir » et ce que chaque élève a déjà commencé.'
+          : 'Aucun atelier ouvert dans cette application.' }));
+      }
+      actuel.appendChild(el('div', { classe: 'calat-actuel-app' }, [
+        el('strong', { texte: (a.icone ? a.icone + ' ' : '') + a.nom + (a.etat === 'bientot' && a.ouvre_le ? ' (à partir du ' + lisible(a.ouvre_le) + ')' : '') }),
+        el('span', { classe: 'calat-info', texte: ' · ' + a.ateliers.length + ' atelier' + (a.ateliers.length > 1 ? 's' : '') }), ul]));
+    });
+    var regle = el('p', { classe: 'calat-info' }, [
+      v.mode === 'proposees'
+        ? 'Réglage « activités proposées » : seulement les ateliers où une étape a été proposée à la classe, plus ce que chaque élève a déjà commencé (travail gardé). Une carte par application. '
+        : 'Tous les ateliers des applications ouvertes à la classe, plus ce que chaque élève a déjà commencé (travail gardé). Une carte par application. ',
+      el('a', { href: './?p=ateliers', texte: 'Régler dans Ateliers →' })]);
+    actuel.appendChild(regle);
+    // tout le catalogue montré (réglage « toutes ») : on ne reprend que les ateliers du niveau de la classe
+    var parNiveau = v.mode === 'toutes' && D.classe.niveau;
+    var repris = tous.filter(function (x) {
+      return cat[x.cle] && (!parNiveau || (cat[x.cle].niveau || '').indexOf(D.classe.niveau) === 0);
+    });
+    if (repris.length) {
+      var b = el('button', { type: 'button', classe: 'petit', texte: (repris.length > 1 ? 'Partir de ces ' + repris.length + ' ateliers' : 'Partir de cet atelier') + (parNiveau ? ' de ' + D.classe.niveau + 'e' : '') });
+      b.addEventListener('click', function () {
+        lignes = repris.map(function (x) {
+          var r = cat[x.cle];
+          return { app: r.app, atelier: r.atelier, seances: r.seances, ouvre_le: '', date_fixe: false, revision: false };
+        });
+        appliquer(); marquer(); rendre();
+        etat.textContent = 'Ateliers repris : rangez-les, vérifiez les dates, puis enregistrez.';
+      });
+      actuel.appendChild(el('div', {}, [b, el('span', { classe: 'calat-info', texte: ' pour en faire le calendrier de la classe (rien n’est enregistré avant « Enregistrer »).' })]));
+    }
+  }
+
+  function rendre() { rendreTete(); rendreListe(); rendreActuel(); rendreCatalogue(); majEtat(); }
 
   /* ----- Enregistrer ----- */
   form.addEventListener('submit', function (e) {

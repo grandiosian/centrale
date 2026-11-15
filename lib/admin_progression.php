@@ -184,6 +184,7 @@ function corps_calendrier(array $classe, array $classes): void
                                          'date_fixe' => $l['date_fixe'], 'revision' => $l['revision']], $lignes),
         'catalogue' => $catalogue,
         'autres' => $autres,
+        'sans_calendrier' => $lignes ? null : vue_classe_sans_calendrier($cid, (string) $classe['nom']),   // ce que la classe voit aujourd'hui
     ];
     ?>
     <script type="application/json" id="calat-donnees"><?= json_encode($donnees, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
@@ -224,6 +225,7 @@ function corps_calendrier(array $classe, array $classes): void
                     Changez une date à la main : elle est fixée (📌) et les suivantes repartent de là.</p>
                 <ol class="calat-liste" id="calat-liste"></ol>
                 <p class="calat-vide" id="calat-vide" hidden>Aucun atelier pour l’instant : ajoutez-en avec « + » à gauche<span id="calat-vide-reprendre">, ou reprenez le calendrier d’une autre classe</span>.</p>
+                <div class="calat-actuel" id="calat-actuel" hidden></div>
             </section>
         </div>
     </form>
