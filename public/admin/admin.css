@@ -601,7 +601,23 @@ pre.json { background: var(--code-fond); padding: 12px; border-radius: 8px; over
 .puces-niveaux button.niv.actif { background: var(--niv); color: #13294b; border-color: var(--niv); box-shadow: none; }
 .biblio-app { margin-top: 22px; }
 .biblio-app h2 { display: flex; align-items: center; gap: 8px; font-size: 1.15rem; margin: 0 0 8px; }
-.biblio-app .icone-app { font-size: 1.4rem; }
+.biblio-app .logo-app, .biblio-app .icone-app-secours { font-size: 1.4rem; }
+
+/* Logos des applications (charte graphique de chaque dépôt) : icone_app() en PHP, logoApp() dans admin.js.
+   Mêmes couleurs que le portail élève (public/index.php), en clair et en sombre. */
+.app-netsim { --app: #1c3268; --app-2: #178a4c; --app-3: #d98a00; --app-trait: #4a5b82; }
+.app-etabli3d { --app: #1d7656; }
+.app-technostudio { --app: #2F57A1; }
+@media (prefers-color-scheme: dark) {
+  .app-netsim { --app: #9db4f2; --app-2: #4cc584; --app-3: #f0b03a; --app-trait: #6c7a99; }
+  .app-etabli3d { --app: #4cb889; }
+  .app-technostudio { --app: #8fa9ff; }
+}
+.logo-app { display: inline-grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: .35em; vertical-align: middle; flex: none;
+  background: color-mix(in srgb, var(--app) 13%, var(--surface)); }
+.logo-app svg { width: 68%; height: 68%; display: block; }
+.app-technostudio.logo-app svg { width: 80%; height: 80%; }
+.icone-grande .logo-app, .icone-grande .icone-app-secours { font-size: 1.4rem; }
 .badge-alerte { font-size: .75rem; font-weight: 600; background: var(--err-fond); color: var(--danger); padding: 2px 8px; border-radius: 999px; }
 .petit-lien { font-size: .8rem; font-weight: 500; margin-left: auto; }
 .biblio-liste { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; overflow: hidden; }

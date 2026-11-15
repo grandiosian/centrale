@@ -1998,6 +1998,23 @@
   });
 })();
 
+/* ---------- Logos des applications (chartes graphiques), pour toutes les pages de l'espace enseignant ----------
+ * logoApp(app, secours) → élément : le logo de la charte (LOGOS_APPS de lib/commun.php, envoyé par pied()),
+ * sinon l'icône déclarée par l'application, sinon 🧩. Même rendu que icone_app() en PHP.
+ */
+(function () {
+  'use strict';
+  var logos = {};
+  try { logos = JSON.parse(document.getElementById('json-logos-apps').textContent) || {}; } catch (e) { /* pas de logos */ }
+  window.logoApp = function (app, secours) {
+    var s = document.createElement('span');
+    s.setAttribute('aria-hidden', 'true');
+    if (logos[app]) { s.className = 'logo-app app-' + app; s.innerHTML = logos[app]; }
+    else { s.className = 'icone-app-secours'; s.textContent = secours || '🧩'; }
+    return s;
+  };
+})();
+
 /* ---------- Calendrier des ateliers d'une classe (?p=calendrier, lib/admin_progression.php) ----------
  * Catalogue à gauche (recherche, niveau, application, « + »), ateliers de la classe à droite (glisser, ↑ ↓),
  * dates calculées en direct d'après les séances de la classe. Même règle que dates_progression (lib/progression.php) :
@@ -2175,7 +2192,7 @@
         el('span', { classe: 'calat-poignee', title: 'Glisser pour ranger', 'aria-hidden': 'true', texte: '⠿' }),
         el('span', { classe: 'calat-num', texte: String(k + 1) }),
         el('span', { classe: 'calat-titre' }, [
-          el('strong', {}, [(r ? r.icone + ' ' : '') + titre]),
+          el('strong', {}, [window.logoApp(l.app, r && r.icone), ' ' + titre]),
           el('span', { classe: 'calat-info', texte: info.join(' · ') }),
           alerte ? el('span', { classe: 'calat-alerte', texte: '⚠ ' + alerte }) : null
         ]),
@@ -2278,7 +2295,7 @@
         ? el('span', { classe: 'calat-deja', texte: '✓ ajouté' })
         : el('button', { type: 'button', classe: 'calat-ajouter', 'data-cle': r.cle, title: 'Ajouter à la fin', 'aria-label': 'Ajouter « ' + r.titre + ' »', texte: '+' });
       catListe.appendChild(el('li', { classe: dans[r.cle] ? 'deja' : '' }, [
-        el('span', { classe: 'calat-titre' }, [el('span', { texte: r.icone + ' ' + r.titre }), el('span', { classe: 'calat-info', texte: info })]), b]));
+        el('span', { classe: 'calat-titre' }, [el('span', {}, [window.logoApp(r.app, r.icone), ' ' + r.titre]), el('span', { classe: 'calat-info', texte: info })]), b]));
     });
     if (!n) catListe.appendChild(el('li', { classe: 'calat-rien', texte: 'Aucun atelier ne correspond.' }));
   }
@@ -2320,7 +2337,7 @@
           : 'Aucun atelier ouvert dans cette application.' }));
       }
       actuel.appendChild(el('div', { classe: 'calat-actuel-app' }, [
-        el('strong', { texte: (a.icone ? a.icone + ' ' : '') + a.nom + (a.etat === 'bientot' && a.ouvre_le ? ' (à partir du ' + lisible(a.ouvre_le) + ')' : '') }),
+        el('strong', {}, [window.logoApp(a.app, a.icone), ' ' + a.nom + (a.etat === 'bientot' && a.ouvre_le ? ' (à partir du ' + lisible(a.ouvre_le) + ')' : '')]),
         el('span', { classe: 'calat-info', texte: ' · ' + a.ateliers.length + ' atelier' + (a.ateliers.length > 1 ? 's' : '') }), ul]));
     });
     var regle = el('p', { classe: 'calat-info' }, [

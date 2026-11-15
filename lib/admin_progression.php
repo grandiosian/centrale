@@ -162,7 +162,7 @@ function corps_calendrier(array $classe, array $classes): void
     $catalogue = [];
     foreach ($cat as $cle => $r) {
         $catalogue[] = ['cle' => $cle, 'app' => $r['app'], 'atelier' => $r['atelier'], 'nom_app' => $r['nom_app'] ?: $r['app'],
-                        'icone' => $r['icone_app'] ?: '🧩', 'titre' => $r['titre'] ?: $r['atelier'], 'niveau' => (string) $r['niveau'],
+                        'icone' => (string) $r['icone_app'], 'titre' => $r['titre'] ?: $r['atelier'], 'niveau' => (string) $r['niveau'],
                         'duree' => (string) $r['duree'], 'seances' => seances_d_apres_duree((string) $r['duree']),
                         'etapes' => count($r['activites']), 'actif' => $r['etat'] === 'actif'];
     }

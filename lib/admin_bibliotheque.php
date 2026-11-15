@@ -325,7 +325,7 @@ function corps_bibliotheque(): void
             <div class="panneau-ateliers-apps">
             <?php foreach ($par_app_b as $app => $liste): ?>
                 <section data-app="<?= h($app) ?>">
-                    <h3><?= h($liste[0]['icone'] ?: '🧩') ?> <?= h($liste[0]['nom_app']) ?></h3>
+                    <h3><?= icone_app((string) $liste[0]['app'], $liste[0]['icone']) ?> <?= h($liste[0]['nom_app']) ?></h3>
                     <ul>
                     <?php foreach ($liste as $at): $nb = count($at['activites']); ?>
                         <li class="ligne-atelier" data-cle="<?= h($at['cle']) ?>">
@@ -363,7 +363,7 @@ function corps_bibliotheque(): void
                     $groupe_courant = null;
                     $a = $x['atelier']; ?>
                     <section class="biblio-app" data-app="<?= h($x['app']) ?>">
-                        <h2><span class="icone-app"><?= h($a['icone'] ?? '') ?: '🧩' ?></span> <?= h($a['nom'] ?? $x['app']) ?>
+                        <h2><?= icone_app((string) $x['app'], $a['icone'] ?? '') ?> <?= h($a['nom'] ?? $x['app']) ?>
                             <?php if (!$a): ?><span class="badge-alerte" title="Les élèves ne peuvent pas l'ouvrir depuis le portail">pas sur le portail</span>
                             <?php elseif (!$a['actif']): ?><span class="badge-alerte">masqué aux élèves</span><?php endif; ?>
                             <?php if (descripteur_de($x['app'])): ?><a class="discret petit-lien" href="./?p=passerelle&app=<?= rawurlencode($x['app']) ?>">passerelle</a><?php endif; ?></h2>

@@ -67,7 +67,7 @@ function page_passerelle(): void
     <main class="passerelle">
         <p class="fil"><a href="./?p=applications">← Applications</a></p>
         <div class="titre-section">
-            <h1><?= h($a['icone'] ?: ($at['icone'] ?? '')) ?> <?= h($at['nom']) ?> <code><?= h($app) ?></code></h1>
+            <h1><?= icone_app((string) $app, $a['icone'] ?: ($at['icone'] ?? '')) ?> <?= h($at['nom']) ?> <code><?= h($app) ?></code></h1>
             <div class="boutons">
                 <?= bouton('lire_passerelle', 'Relire', ['atelier_id' => $a['id']], 'secondaire') ?>
                 <a class="btn secondaire" href="./?p=applications&modifier=<?= (int) $a['id'] ?>">Modifier la fiche</a>

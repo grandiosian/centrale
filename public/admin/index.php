@@ -1650,5 +1650,7 @@ function pied(): void
         echo "\n<script type=\"application/json\" id=\"json-classes\">"
             . json_encode($classes, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';
     }
+    // Logos des applications (chartes graphiques) : logoApp() dans admin.js
+    echo "\n<script type=\"application/json\" id=\"json-logos-apps\">" . json_encode(LOGOS_APPS, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';
     echo "\n<script src=\"admin.js?v=$v\"></script>\n</body>\n</html>\n";
 }

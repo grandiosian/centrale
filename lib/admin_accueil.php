@@ -1580,7 +1580,7 @@ function section_connexions_accueil(): void
             <h3>Par atelier (7 jours)</h3>
             <p class="par-atelier">
                 <?php foreach ($apps as $a): ?>
-                    <span><?= h($a['icone'] ?: '🧩') ?> <?= h($a['nom'] ?: $a['app']) ?> <strong><?= (int) $a['n'] ?></strong> élève<?= $a['n'] > 1 ? 's' : '' ?></span>
+                    <span><?= icone_app((string) $a['app'], $a['icone']) ?> <?= h($a['nom'] ?: $a['app']) ?> <strong><?= (int) $a['n'] ?></strong> élève<?= $a['n'] > 1 ? 's' : '' ?></span>
                 <?php endforeach; ?>
             </p>
         <?php endif; ?>

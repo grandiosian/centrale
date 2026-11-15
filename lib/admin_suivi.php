@@ -1109,7 +1109,7 @@ function page_applications(): void
                 <tbody>
                 <?php foreach ($liste as $a): ?>
                     <tr class="<?= $a['actif'] ? '' : 'inactif' ?>">
-                        <td style="font-size:1.4rem"><?= h($a['icone']) ?></td>
+                        <td class="icone-grande"><?= icone_app((string) $a['app'], $a['icone']) ?></td>
                         <td><strong><?= h($a['nom']) ?></strong> <code><?= h($a['app']) ?></code>
                             <?php $choisie = meilleure_adresse($a);
                             foreach (emplacements_atelier($a) as $e): $u = $e['url']; $repond = $e['utilise'] && adresse_repond($u); ?>

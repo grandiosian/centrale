@@ -82,6 +82,10 @@
     });
     return e;
   }
+  /* logo de l'application (charte graphique), par logoApp() d'admin.js ; repli : son icône déclarée */
+  function icone(at) {
+    return window.logoApp ? window.logoApp(at.app, at.icone) : el('span', '', at.icone || '🧩');
+  }
   function bouton(texteBouton, cls, action) {
     var b = el('button', cls, texteBouton);
     b.type = 'button';
@@ -195,7 +199,7 @@
     var at = ateliers[cle];
     if (!at) return;
     var corps = el('div', 'detail-atelier');
-    var infos = el('div', 'detail-infos', [el('span', '', [at.icone || '🧩', ' ', at.nom_app]), puceNiveau(at.niveau)]);
+    var infos = el('div', 'detail-infos', [el('span', '', [icone(at), ' ', at.nom_app]), puceNiveau(at.niveau)]);
     if (at.theme) {
       var th = el('span', 'pastille-theme', at.theme);
       th.style.setProperty('--t', (donnees.themes || {})[at.theme] || '#888888');
@@ -273,7 +277,7 @@
     var table = el('table', 'table-comparer');
     var tr = el('tr', '', el('th', '', ''));
     liste.forEach(function (at) {
-      var th = el('th', '', [bouton(at.titre, 'lien-bouton', function () { detail(at.cle); }), el('div', 'discret', (at.icone || '🧩') + ' ' + at.nom_app)]);
+      var th = el('th', '', [bouton(at.titre, 'lien-bouton', function () { detail(at.cle); }), el('div', 'discret', [icone(at), ' ' + at.nom_app])]);
       var x = bouton('×', 'retirer', function () { basculer(at.cle, false); if (choisis.length > 1) comparer(); else dialogue.close(); });
       x.setAttribute('aria-label', 'Retirer ' + at.titre + ' de la comparaison');
       th.appendChild(x);

@@ -213,7 +213,7 @@ function corps_catalogue_ateliers(): void
             <?php foreach ($apps as $a): $l = $par_app[$a['app']] ?? []; $d = $derniers[$a['app']] ?? null;
                 $actifs = count(array_filter($l, fn($r) => $r['etat'] === 'actif')); ?>
                 <tr>
-                    <td><?= h($a['icone']) ?> <strong><?= h($a['nom']) ?></strong> <code><?= h($a['app']) ?></code></td>
+                    <td><?= icone_app((string) $a['app'], $a['icone']) ?> <strong><?= h($a['nom']) ?></strong> <code><?= h($a['app']) ?></code></td>
                     <td><?= $actifs ?: '<span class="discret">—</span>' ?><?= count($l) > $actifs ? ' <span class="discret">(+' . (count($l) - $actifs) . (count($l) - $actifs > 1 ? ' retirés' : ' retiré') . ')</span>' : '' ?></td>
                     <td class="discret"><?php if ($d): ?><?= quand((int) $d['ts']) ?> · <?= h(SOURCES_CATALOGUE[$d['source']] ?? $d['source']) ?>
                         <?php if ($d['source'] === 'descripteur'): ?><br><span class="alerte">pas encore de ateliers.json</span><?php endif; ?>
@@ -265,7 +265,7 @@ function corps_catalogue_ateliers(): void
                             <strong><?= h($r['titre']) ?></strong> <code class="discret"><?= h($r['atelier']) ?></code>
                             <?php if ($r['resume'] !== ''): ?><br><span class="discret"><?= h(mb_strimwidth($r['resume'], 0, 160, '…')) ?></span><?php endif; ?>
                             <?php if ($r['etat'] !== 'actif'): ?><br><span class="alerte">Retiré de l’application <?= quand((int) $r['modifie_le']) ?></span><?php endif; ?></td>
-                        <td><?= h($r['icone_app'] ?? '') ?> <?= h($r['nom_app'] ?? $r['app']) ?></td>
+                        <td><?= icone_app((string) $r['app'], $r['icone_app'] ?? '') ?> <?= h($r['nom_app'] ?? $r['app']) ?></td>
                         <td><?= $r['niveau'] !== '' ? h($r['niveau'] === 'lycee' ? 'Lycée' : $r['niveau']) : '<span class="discret">tous</span>' ?><?= $r['duree'] !== '' ? '<br><span class="discret">' . h($r['duree']) . '</span>' : '' ?></td>
                         <td><?= $r['codes'] ? implode(' ', array_map('puce_competence', $r['codes'])) : '<span class="discret" title="L’application ne déclare pas encore de compétences pour cet atelier">—</span>' ?></td>
                         <td><?php if ($nb > 1): ?><details><summary><?= $nb ?> activités</summary><ul class="liste-activites">

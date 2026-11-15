@@ -11,6 +11,30 @@ const DOSSIER_DATA = __DIR__ . '/../data';
 const VERSION_CENTRALE = '1.0';
 
 /** Connexion à la base SQLite (créée automatiquement au premier appel). */
+/**
+ * Logos des applications, repris de leur charte graphique (NetSim/CHARTE-GRAPHIQUE.md, etabli3d/…, TechnoStudio/…).
+ * Mêmes dessins que LOGOS dans public/index.php (le portail élève, sans PHP commun) : modifier les deux ensemble.
+ * Les couleurs viennent de la feuille de style (.app-netsim…, variables --app, --app-2, --app-3, --app-trait).
+ */
+const LOGOS_APPS = [
+    'netsim' => '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M7 20L14 7l7 13z" fill="none" stroke="var(--app-trait)" stroke-width="2"/>'
+        . '<circle cx="14" cy="7" r="4" fill="var(--app)"/><circle cx="7" cy="20" r="4" fill="var(--app-2)"/><circle cx="21" cy="20" r="4" fill="var(--app-3)"/></svg>',
+    'etabli3d' => '<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="var(--app)" stroke-width="2.4" stroke-linejoin="round">'
+        . '<path d="M16 3 28 9.5v13L16 29 4 22.5v-13z"/><path d="M4 9.5 16 16l12-6.5M16 16v13"/></svg>',
+    'technostudio' => '<svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#2F57A1"/>'
+        . '<path d="M120 176h272M256 176v208" stroke="#fff" stroke-width="28" stroke-linecap="round"/><circle cx="120" cy="176" r="30" fill="#F5C400"/>'
+        . '<circle cx="392" cy="176" r="30" fill="#fff"/><circle cx="256" cy="384" r="34" fill="#fff"/></svg>',
+];
+
+/** Icône d'une application pour l'espace enseignant : son logo de charte, sinon l'icône déclarée ($secours), sinon 🧩. */
+function icone_app(string $app, ?string $secours = ''): string
+{
+    if (isset(LOGOS_APPS[$app])) {
+        return '<span class="logo-app app-' . $app . '" aria-hidden="true">' . LOGOS_APPS[$app] . '</span>';
+    }
+    return '<span class="icone-app-secours" aria-hidden="true">' . htmlspecialchars((string) ($secours ?: '🧩'), ENT_QUOTES) . '</span>';
+}
+
 /** Logo de la Centrale : le mot « Centrale » entouré d'un rectangle arrondi relié à quatre nœuds. Dessiné en ligne (couleurs du thème). */
 function logo_centrale(int $hauteur = 40): string
 {

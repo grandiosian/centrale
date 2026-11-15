@@ -503,7 +503,8 @@ details.fait .atelier { opacity: .85; }
   }
 
   /*
-   * Logo de chaque application, repris de sa charte graphique (NetSim/CHARTE-GRAPHIQUE.md, etabli3d/…, TechnoStudio/…) ;
+   * Logo de chaque application, repris de sa charte graphique (NetSim/CHARTE-GRAPHIQUE.md, etabli3d/…, TechnoStudio/…),
+   * comme LOGOS_APPS (lib/commun.php) pour l'espace enseignant : modifier les deux ensemble ;
    * la couleur de l'application est dans la feuille de style (.app-netsim…, variable --app). Une application inconnue
    * garde l'icône déclarée dans son centrale.json.
    */
