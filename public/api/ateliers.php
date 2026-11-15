@@ -23,6 +23,9 @@
  * listés (ouverts à leur date, « bientôt » avant), dans son ordre. Chaque activité porte alors atelier et
  * atelier_titre : le portail fait une carte par atelier (sans calendrier : une carte par application).
  *
+ * Parcours placés dans le calendrier : une carte chacun (app « parcours », icône 🧭), ouverte à sa date ; chaque étape
+ * porte url, activite, parcours et etape (le portail l'ouvre comme une étape de parcours). Voir cartes_parcours_calendrier().
+ *
  * Vue enseignant d'un essai (« Tester à la place d'un élève », interrupteur Élève | Enseignant) : tout le catalogue
  * des ateliers de la classe, ouverts, sans calendrier ni étapes verrouillées (vue = 'enseignant' dans la réponse).
  */
@@ -159,6 +162,11 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
         'disponible'    => $disponible,
         'disponible_le' => $disponible_le,   // horodatage d'ouverture si « bientôt », sinon null
     ];
+}
+
+// parcours placés dans le calendrier de la classe : une carte chacun, ouverte à sa date (lib/progression.php)
+if ($avec_progression) {
+    $res = array_merge($res, cartes_parcours_calendrier($eleve, $prog, $vue_prof));
 }
 
 envoyer_json(200, ['ok' => true, 'ateliers' => $res, 'vue' => $vue_prof ? 'enseignant' : 'eleve']);

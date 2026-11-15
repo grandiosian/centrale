@@ -76,6 +76,8 @@ body.connecte .marque-bandeau { display: none; }
 .tbid[hidden] { display: none; }
 .tbid-moi { display: inline-flex; align-items: center; gap: 7px; padding: 0 14px 0 11px; font-weight: 600; white-space: nowrap; color: var(--texte); }
 .tbid-nom { font: 600 .86rem ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; }
+.tbid-nom.tbid-prof { font-family: inherit; font-size: .9rem; }
+.tbid-nom.tbid-sans-nom { font-style: italic; font-weight: 500; color: var(--doux); }
 .tbid { position: relative; }
 button.tbid-moi { height: 100%; border: 0; background: none; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 600; }
 button.tbid-moi:hover, button.tbid-moi[aria-expanded="true"] { color: var(--encre); }
@@ -112,7 +114,9 @@ body.barre-serree .brand { margin-right: 0; }
 .app-netsim { --app: #1c3268; --app-2: #178a4c; --app-3: #d98a00; --app-trait: #4a5b82; }
 .app-etabli3d { --app: #1d7656; }
 .app-technostudio { --app: #2F57A1; }
+.app-parcours { --app: #6a3fb5; }   /* parcours placé dans le calendrier : plusieurs applications à la suite */
 @media (prefers-color-scheme: dark) {
+  .app-parcours { --app: #b49af0; }
   .app-netsim { --app: #9db4f2; --app-2: #4cc584; --app-3: #f0b03a; --app-trait: #6c7a99; }
   .app-etabli3d { --app: #4cb889; }
   .app-technostudio { --app: #8fa9ff; }
@@ -460,7 +464,18 @@ details.fait .atelier { opacity: .85; }
     $('ecran-eleve').hidden = false;
     document.body.classList.add('connecte');
     // Widget de l'élève (comme dans NetSim, TechnoStudio, Établi 3D) : son identifiant
-    const nomEleve = el('span', { class: 'tbid-nom' }, Centrale.identifiant() || `${infos.classe} · ${infos.eleve}`);
+    const nomEleve = el('span', { class: 'tbid-nom' });
+    // Vue Enseignant d'un essai : le nom gardé sur cet ordinateur (« pas désanonymisé » sinon), jamais envoyé au serveur
+    const majNom = () => {
+      const id = Centrale.identifiant() || `${infos.classe} · ${infos.eleve}`;
+      const prof = Centrale.nomEnseignant ? Centrale.nomEnseignant() : null;
+      nomEleve.textContent = prof === null ? id : (prof || 'pas désanonymisé');
+      nomEleve.classList.toggle('tbid-prof', prof !== null);
+      nomEleve.classList.toggle('tbid-sans-nom', prof === '');
+      nomEleve.title = prof === null ? '' : `${id} · ${infos.classe} n° ${infos.eleve}`
+        + (prof ? '' : ' — chargez la liste des noms dans l’espace enseignant pour voir le nom ici');
+    };
+    majNom();
     const moi = el('button', { type: 'button', class: 'tbid-moi', 'aria-haspopup': 'true', 'aria-expanded': 'false',
       title: 'Ton compte : ton identifiant, changer ton surnom' }, iconeEleve(), nomEleve, el('span', { class: 'tbid-fleche', 'aria-hidden': 'true' }, '▾'));
     // Menu du widget : l'identifiant et « Changer mon surnom » (reprendre : c'est le widget du centre)
@@ -481,7 +496,7 @@ details.fait .atelier { opacity: .85; }
     Centrale.afficherIdentifiant(identite, {
       libelle: 'Ton identifiant',
       modifiable: true,   // le surnom ne se change que sur le portail, pas dans les applications
-      onChange: (id) => { nomEleve.textContent = id; ajusterBarre(); },
+      onChange: () => { majNom(); ajusterBarre(); },
     });
     const sortir = el('button', { type: 'button', class: 'tb-bouton', title: 'Se déconnecter de la Centrale' },
       el('span', { 'aria-hidden': 'true' }, '⎋'), el('span', { class: 'tbid-txt' }, 'Se déconnecter'));
@@ -489,7 +504,7 @@ details.fait .atelier { opacity: .85; }
     $('tb-droite').hidden = false;
     // Essai de l'enseignant (« Tester à la place d'un élève ») : interrupteur Élève | Enseignant, juste après le centre.
     // Vue enseignant : tous les ateliers de la classe, ouverts, sans calendrier ni étapes verrouillées (api/ateliers.php).
-    const vue = Centrale.boutonVue ? Centrale.boutonVue({ classe: 'tb-vue', onChange: () => rafraichir() }) : null;
+    const vue = Centrale.boutonVue ? Centrale.boutonVue({ classe: 'tb-vue', onChange: () => { majNom(); ajusterBarre(); rafraichir(); } }) : null;
     $('tb-droite').replaceChildren(...(vue ? [vue.bouton] : []), sortir);
     rafraichir();
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Centrale.connecte()) rafraichir(); });
@@ -533,7 +548,7 @@ details.fait .atelier { opacity: .85; }
   }
 
   async function rafraichir() {
-    // plus de parcours pour les élèves : on travaille par ateliers, qui peuvent enchaîner plusieurs applications
+    // pas de section « parcours » : un parcours placé dans le calendrier de la classe arrive ici comme une carte d'atelier
     let ateliers = [], propositions = [];
     try {
       [ateliers, propositions] = await Promise.all([Centrale.ateliers(),
@@ -596,7 +611,8 @@ details.fait .atelier { opacity: .85; }
   function atelierCourant(ateliers) {
     const ouverts = ateliers.filter((a) => !enRevision(a) && ['encours', 'afaire'].includes(statutAtelier(a)));
     const dernier = lireDernier();
-    const meme = dernier && (ouverts.find((a) => dernier.activite && (a.activites || []).some((x) => x.id === dernier.activite && x.disponible !== false))
+    const meme = dernier && (ouverts.find((a) => dernier.parcours && (a.activites || []).some((x) => x.parcours === dernier.parcours))
+      || ouverts.find((a) => dernier.activite && (a.activites || []).some((x) => x.id === dernier.activite && x.disponible !== false))
       || ouverts.find((a) => a.url && dernier.url && a.url.split('#')[0] === String(dernier.url).split('#')[0]));
     if (meme) return meme;
     const commences = ouverts.filter((a) => statutAtelier(a) === 'encours').sort((u, v) => (v.taux || 0) - (u.taux || 0));
@@ -607,11 +623,19 @@ details.fait .atelier { opacity: .85; }
     return (a.activites || []).find((x) => x.statut === 'commence' && x.disponible !== false)
       || (a.activites || []).find((x) => x.statut !== 'termine' && x.disponible !== false) || null;
   }
+  /**
+   * Ouvre une activité d'une carte. Étape d'un parcours placé dans le calendrier (x.parcours) : sa propre application,
+   * son activité, le parcours et le rang de l'étape (les applications ajoutent alors « Étape suivante »).
+   */
+  function ouvrirActivite(a, x) {
+    if (x.parcours) ouvrir(x.url, x.activite || undefined, x.parcours, x.etape, (x.titre || x.id) + ' · ' + a.nom);
+    else ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom);
+  }
   /** Reprendre l'atelier courant : sa prochaine activité, ou l'atelier lui-même. */
   function reprendreAtelier(a) {
     // carte d'un atelier (calendrier) tout terminé : « Revoir » rouvre sa première étape, pas toute l'application
     const x = prochaineActivite(a) || (a.appli ? (a.activites || []).find((y) => y.disponible !== false) : null);
-    if (x) ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom);
+    if (x) ouvrirActivite(a, x);
     else ouvrir(a.url, undefined, undefined, undefined, a.nom);
   }
 
@@ -753,7 +777,7 @@ details.fait .atelier { opacity: .85; }
       let b = el('span');
       if (!bloquee) {
         b = el('button', { class: 'petit secondaire' }, x.statut === 'termine' ? 'Revoir' : x.statut === 'commence' ? 'Continuer' : 'Ouvrir');
-        b.onclick = () => ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom);
+        b.onclick = () => ouvrirActivite(a, x);
       }
       const etat = x.verrou ? 'Après « ' + (x.apres || 'l’étape précédente') + ' »'
         : x.disponible === false ? (x.ouvre_le ? 'S’ouvre le ' + dateCourte(x.ouvre_le) : 'Pas encore ouvert')

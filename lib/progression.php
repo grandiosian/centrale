@@ -11,9 +11,14 @@
  *    avant (avec la date) ; un atelier hors progression ou sans date n'est pas montré (sauf s'il est déjà commencé) ;
  *  - dans un atelier ouvert, les étapes s'ouvrent une à une : la suivante quand la précédente est terminée.
  * Une classe sans progression garde le fonctionnement d'avant (périodes de disponibilité, propositions).
- * Les parcours et ce que l'enseignant demande (propositions) restent ouverts : c'est une demande explicite.
+ * Ce que l'enseignant demande (propositions) reste ouvert : c'est une demande explicite.
+ * Un parcours (onglet Parcours) peut être placé dans le calendrier comme un atelier (app = APP_PARCOURS) : c'est
+ * ainsi qu'il arrive sur le portail, en une carte (cartes_parcours_calendrier).
  */
 declare(strict_types=1);
+
+/** « app » des lignes du calendrier qui sont des parcours (atelier = identifiant du parcours). */
+const APP_PARCOURS = '*parcours';
 
 function creer_tables_progression(PDO $pdo): void
 {
@@ -319,4 +324,74 @@ function vue_classe_sans_calendrier(int $classe_id, string $classe): array
                    'ouvre_le' => $ouvre_app, 'ateliers' => $ateliers];
     }
     return ['mode' => $proposees_seulement ? 'proposees' : 'toutes', 'apps' => $apps];
+}
+
+/**
+ * Parcours placés dans le calendrier d'une classe (lignes app = APP_PARCOURS) : une carte par parcours pour
+ * api/ateliers.php, au même format qu'un atelier (app « parcours »). Ouvert à sa date, « bientôt » avant, pas montré
+ * sans date. Ses étapes s'ouvrent selon son réglage (libre, dans l'ordre, après validation) ; chaque étape porte
+ * l'adresse de son application, son activité, le parcours et son rang (le portail l'ouvre comme une étape de parcours :
+ * bouton « Étape suivante » dans les applications). Vue enseignant d'un essai : tout ouvert.
+ * Un parcours hors du calendrier n'est pas montré sur le portail.
+ */
+function cartes_parcours_calendrier(array $eleve, array $prog, bool $vue_prof): array
+{
+    $cid = (int) $eleve['classe_id'];
+    $places = [];
+    foreach (progression_classe($cid) as $r) {
+        if ($r['app'] === APP_PARCOURS) {
+            $places[(string) $r['atelier']] = true;
+        }
+    }
+    if (!$places) {
+        return [];
+    }
+    $dispos = disponibilites_progression($cid)[APP_PARCOURS] ?? [];
+    $ateliers = db()->query('SELECT * FROM ateliers')->fetchAll();
+    $catalogue = catalogue_activites();
+    $res = [];
+    foreach (parcours_pour_classe((string) $eleve['classe']) as $p) {
+        $pid = (string) $p['id'];
+        if (!isset($places[$pid]) || !$p['etapes']) {
+            continue;
+        }
+        $d = $dispos[$pid] ?? ['etat' => 'ferme', 'ouvre_le' => null, 'revision' => false];
+        if ($vue_prof) {
+            $d = ['etat' => 'ouvert', 'ouvre_le' => null] + $d;
+        }
+        if ($d['etat'] === 'ferme') {
+            continue;   // pas encore daté
+        }
+        $ouvert = $d['etat'] === 'ouvert';
+        $proprio = proprietaire_projet($eleve, $p);
+        $etats = etapes_projet($p, $proprio, $proprio['type'] === 'eleve' ? [(int) $eleve['id'] => $prog] : null, $catalogue);
+        $acts = [];
+        $precedente = '';
+        foreach ($p['etapes'] as $i => $et) {
+            $e = $etats[$i];
+            $libre = $vue_prof || $e['ouverte'];
+            $x = ['id' => 'parcours-' . $pid . '-' . $i, 'titre' => $et['titre'] ?: ('Étape ' . ($i + 1)), 'groupe' => '',
+                  'statut' => $e['statut'], 'texte' => $e['texte'], 'propose' => false,
+                  'disponible' => $ouvert && $libre, 'ouvre_le' => $ouvert ? null : $d['ouvre_le'], 'jusqu_au' => null,
+                  'revision' => !empty($d['revision']), 'atelier' => $pid, 'atelier_titre' => $p['nom'],
+                  'url' => lien_vers_meilleure_adresse((string) $et['url'], $ateliers), 'activite' => (string) $et['activite'],
+                  'parcours' => (int) $pid, 'etape' => $i];
+            if ($ouvert && !$libre) {
+                $x['verrou'] = true;
+                $x['apres'] = ($precedente ?: 'l’étape précédente') . ($p['deblocage'] === 'validation' ? ', validée par ton professeur' : '');
+            }
+            $acts[] = $x;
+            $precedente = $x['titre'];
+        }
+        $faites = count(array_filter($acts, fn($x) => $x['statut'] === 'termine'));
+        $res[] = [
+            'app' => 'parcours', 'nom' => 'Parcours', 'description' => (string) $p['description'], 'icone' => '🧭',
+            'url' => $acts[0]['url'], 'parcours' => (int) $pid,
+            'taux' => round(array_sum(array_column($etats, 'taux')) / count($etats), 3),
+            'terminees' => $faites, 'total' => count($acts), 'maj' => null, 'activites' => $acts,
+            'disponible' => $ouvert,
+            'disponible_le' => $ouvert ? null : (new DateTimeImmutable($d['ouvre_le'] . ' 00:00', fuseau()))->getTimestamp(),
+        ];
+    }
+    return $res;
 }

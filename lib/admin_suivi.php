@@ -799,7 +799,8 @@ function page_parcours(): void
             <?php if (!$afficher_form): ?><a class="btn" href="./?p=parcours&nouveau=1">Nouveau parcours</a><?php endif; ?>
         </div>
         <p class="sous">Un parcours enchaîne des étapes, éventuellement dans plusieurs logiciels (modélisation → programmation → questionnaire…).
-            L'élève les retrouve sur la page d'accueil de la Centrale et passe de l'une à l'autre sans retaper son code.</p>
+            Pour que les élèves le voient sur leur portail, placez-le dans le <a href="./?p=calendrier">Calendrier</a> de leur classe, à sa date :
+            il y devient une carte, et l'élève passe d'une étape à l'autre sans retaper son code.</p>
         <?php messages(); ?>
 
         <?php if ($afficher_form): ?>

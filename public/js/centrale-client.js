@@ -1157,6 +1157,28 @@
     return s ? (s.identifiant || '') : '';
   }
 
+  /**
+   * Nom de l'élève tel que l'enseignant le connaît, en vue Enseignant d'un essai seulement (« Tester à la place d'un
+   * élève ») : lu dans les noms que l'espace enseignant garde SUR CET ORDINATEUR (localStorage « centrale-noms », même
+   * site que la Centrale). Jamais envoyé au serveur.
+   * → « Léa D. » ; '' si l'élève n'est pas désanonymisé ici ; null hors vue Enseignant.
+   */
+  function nomEnseignant() {
+    var s = session();
+    if (!s || !s.essai || s.vue !== 'enseignant') return null;
+    try {
+      var noms = JSON.parse(localStorage.getItem('centrale-noms')) || {};
+      return String(((noms[s.classe] || {})[s.eleve]) || '');
+    } catch (e) { return ''; }
+  }
+
+  /** Ce que la barre du haut affiche pour l'élève : son identifiant ; en vue Enseignant d'un essai, son nom (ou « pas désanonymisé »). */
+  function nomAffiche() {
+    var n = nomEnseignant();
+    if (n === null) return identifiant();
+    return n || 'pas désanonymisé';
+  }
+
   /** Change le surnom (fin de l'identifiant). Renvoie { identifiant, prefixe, surnom }. */
   async function changerSurnom(surnom) {
     var d = await requeteJSON('surnom.php', {
@@ -1510,6 +1532,8 @@
     reprendreSession: reprendreSession,
     afficherConnexion: afficherConnexion,
     identifiant: identifiant,
+    nomAffiche: nomAffiche,
+    nomEnseignant: nomEnseignant,
     etape: etape,
     contexteAtelier: contexteAtelier,
     projet: projet,

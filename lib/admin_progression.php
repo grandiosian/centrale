@@ -166,6 +166,15 @@ function corps_calendrier(array $classe, array $classes): void
                         'duree' => (string) $r['duree'], 'seances' => seances_d_apres_duree((string) $r['duree']),
                         'etapes' => count($r['activites']), 'actif' => $r['etat'] === 'actif'];
     }
+    // parcours de la classe (onglet Parcours) : une ligne du calendrier comme un atelier, ses étapes à la suite
+    $modes = ['libre' => 'étapes libres', 'ordre' => 'étapes dans l’ordre', 'validation' => 'étapes après validation'];
+    $noms_apps = db()->query('SELECT app, nom FROM ateliers')->fetchAll(PDO::FETCH_KEY_PAIR);
+    foreach (parcours_pour_classe((string) $classe['nom']) as $p) {
+        $apps = array_values(array_unique(array_map(fn($x) => $noms_apps[$x] ?? $x, array_column($p['etapes'], 'app'))));
+        $catalogue[] = ['cle' => APP_PARCOURS . '|' . $p['id'], 'app' => APP_PARCOURS, 'atelier' => (string) $p['id'], 'nom_app' => 'Parcours',
+                        'icone' => '🧭', 'titre' => $p['nom'], 'niveau' => '', 'duree' => ($modes[$p['deblocage']] ?? '') . ($apps ? ' · ' . implode(', ', $apps) : ''),
+                        'seances' => max(1, min(30, count($p['etapes']))), 'etapes' => count($p['etapes']), 'actif' => true];
+    }
     $autres = [];   // calendriers des autres classes, pour « Reprendre le calendrier de… »
     foreach ($classes as $c) {
         if ((int) $c['id'] !== $cid && (int) $c['nb']) {
