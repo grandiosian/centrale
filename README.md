@@ -251,7 +251,8 @@ Onglets **Ateliers** et **Parcours**, carte « Tester à la place d'un élève �
   - **Ouvrir son portail ↗** : nouvel onglet connecté comme cet élève (2 h, sans code), avec ses ateliers, ses parcours, son dossier de projet et « Étape suivante », comme en classe ;
   - **Tester ↗** sur une ligne d'atelier : l'atelier s'ouvre directement, connecté ;
   - **Tester ↗** sur une ligne de parcours : son portail, avec le parcours. Si le parcours n'est pas proposé à sa classe, la Centrale le dit.
-- L'élève choisi est gardé d'une page à l'autre. Seuls les élèves des classes de test sont proposés : on ne travaille jamais dans le dossier d'un vrai élève.
+- L'élève choisi est gardé d'une page à l'autre. Tous les élèves sont proposés : les classes de test et simulées d'abord, puis les vraies classes (marquées « vrais élèves : leur travail est modifié » : ce que l'enseignant fait à leur place s'enregistre dans leur dossier). Ces essais ne comptent pas dans les connexions de l'élève.
+- La session ouverte ainsi est marquée **essai** (`sessions.essai = 1`, renvoyé par `api/session.php`). Les applications y affichent, juste après l'atelier au centre de la barre du haut, l'interrupteur **Élève | Enseignant** : vue de l'élève (règles de l'atelier, fenêtres et fonctions de l'élève) ou vue enseignant (tous les modes), sans quitter la session de l'élève. TechnoStudio le fait depuis la v3.13.0 ; une session d'élève normale n'a jamais cet interrupteur.
 - **Remettre les élèves test à zéro** : efface leur travail, leur avancement, leurs dossiers de projet et les étapes validées, pour rejouer un parcours depuis le début. Les classes simulées ne sont pas touchées.
 
 ### Classes simulées : voir le suivi comme avec une vraie classe

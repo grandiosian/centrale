@@ -12,11 +12,15 @@ appliquer_cors();
 $eleve = eleve_connecte();
 $app = normaliser_app((string) ($_GET['app'] ?? '*'));
 
-$st = db()->prepare('SELECT expire FROM sessions WHERE jeton_hash = ?');
+$st = db()->prepare('SELECT expire, essai FROM sessions WHERE jeton_hash = ?');
 $st->execute([hash('sha256', (string) $_SERVER['HTTP_X_JETON'])]);
-$expire = (int) $st->fetchColumn();
+$ligne = $st->fetch() ?: ['expire' => 0, 'essai' => 0];
+$expire = (int) $ligne['expire'];
+$essai = (int) $ligne['essai'] === 1;   // l'enseignant teste à la place de l'élève (ouvert depuis l'espace enseignant)
 $depot = depot_pour((int) $eleve['classe_id'], $app);
-noter_connexion($eleve['id'], $app, 'portail');
+if (!$essai) {
+    noter_connexion($eleve['id'], $app, 'portail');   // les essais de l'enseignant ne comptent pas comme connexions de l'élève
+}
 
 envoyer_json(200, [
     'ok'     => true,
@@ -26,6 +30,7 @@ envoyer_json(200, [
     ...identite_eleve((int) $eleve['id']),   // identifiant « 4C-LHA-LoutreAgile », surnom modifiable
     'jeton'  => (string) $_SERVER['HTTP_X_JETON'],
     'expire' => $expire,
+    'essai'  => $essai,
     'espace' => ['utilise' => usage_eleve($eleve['id']), 'quota' => quota_eleve_octets()],
     'depot'  => $depot ? ['url' => $depot['url'], 'mot_de_passe' => $depot['mdp'] !== '' ? $depot['mdp'] : null] : null,
 ]);

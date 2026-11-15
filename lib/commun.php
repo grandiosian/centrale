@@ -324,6 +324,7 @@ function creer_tables(PDO $pdo): void
     ajouter_colonne($pdo, 'classes', 'etablissement_id', 'INTEGER REFERENCES etablissements(id) ON DELETE SET NULL');
     ajouter_colonne($pdo, 'etablissements', 'code', "TEXT NOT NULL DEFAULT ''");   // 3 lettres, dans les codes élèves
     ajouter_colonne($pdo, 'eleves', 'surnom', "TEXT NOT NULL DEFAULT ''");          // identifiant : 4C-LHA-<surnom>
+    ajouter_colonne($pdo, 'sessions', 'essai', 'INTEGER NOT NULL DEFAULT 0');     // 1 = ouverte par l'enseignant (« Tester à la place d'un élève »)
     // Groupes d'une classe (demi-groupes GR1 / GR2…) : un élève appartient à un groupe au plus
     $pdo->exec('CREATE TABLE IF NOT EXISTS groupes (
         id        INTEGER PRIMARY KEY AUTOINCREMENT,

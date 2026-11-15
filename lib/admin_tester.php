@@ -3,9 +3,11 @@
  * Centrale élèves — espace enseignant : élèves test.
  *
  * Des classes de test (5TEST, 4TEST…) contiennent des élèves fictifs. Depuis les onglets Ateliers et Parcours,
- * l'enseignant choisit l'un d'eux et « teste à sa place » : un nouvel onglet s'ouvre, connecté comme cet élève
- * (session de 2 h, sans code), sur son portail ou directement dans un atelier. Seuls les élèves des classes de test
- * sont proposés : on ne travaille jamais par erreur dans le dossier d'un vrai élève.
+ * l'enseignant choisit un élève et « teste à sa place » : un nouvel onglet s'ouvre, connecté comme cet élève
+ * (session de 2 h, sans code, marquée « essai »), sur son portail ou directement dans un atelier. Tous les élèves
+ * sont proposés : d'abord ceux des classes de test et simulées, puis ceux des vraies classes (le travail fait à leur
+ * place s'enregistre dans leur dossier, la liste le signale). Dans une session d'essai, les applications proposent
+ * un interrupteur « Élève | Enseignant » dans la barre du haut (TechnoStudio : Centrale.session().essai).
  * Inclus par public/admin/index.php (utilise ses fonctions d'affichage et jeton_session_eleve).
  */
 declare(strict_types=1);
@@ -19,21 +21,27 @@ function est_classe_test(string $nom): bool
     return (bool) preg_match('/^(?:[3-6][\s_-]?)?(?:TEST|SIM)$/i', trim($nom));
 }
 
-/** Élèves actifs des classes de test, rangés par classe : [ ['id', 'etiquette', 'classe', 'classe_id', 'identifiant'], … ] */
+/**
+ * Élèves actifs que l'enseignant peut tester, rangés par classe : classes de test et simulées d'abord, puis les vraies
+ * classes. [ ['id', 'etiquette', 'classe', 'classe_id', 'identifiant', 'test' => bool], … ]
+ */
 function eleves_test(): array
 {
     $lignes = db()->query('SELECT e.id, e.etiquette, e.surnom, c.id AS classe_id, c.nom, c.etablissement_id
                            FROM eleves e JOIN classes c ON c.id = e.classe_id WHERE e.actif = 1
                            ORDER BY c.nom DESC, e.etiquette')->fetchAll();
-    $res = [];
+    $tests = $vrais = [];
     foreach ($lignes as $l) {
-        if (!est_classe_test($l['nom'])) {
-            continue;
+        $test = est_classe_test($l['nom']);
+        $e = ['id' => (int) $l['id'], 'etiquette' => $l['etiquette'], 'classe' => $l['nom'], 'classe_id' => (int) $l['classe_id'], 'test' => $test,
+              'identifiant' => $l['surnom'] ? identifiant_eleve(['nom' => $l['nom'], 'etablissement_id' => $l['etablissement_id']], $l['surnom']) : ''];
+        if ($test) {
+            $tests[] = $e;
+        } else {
+            $vrais[] = $e;
         }
-        $res[] = ['id' => (int) $l['id'], 'etiquette' => $l['etiquette'], 'classe' => $l['nom'], 'classe_id' => (int) $l['classe_id'],
-                  'identifiant' => $l['surnom'] ? identifiant_eleve(['nom' => $l['nom'], 'etablissement_id' => $l['etablissement_id']], $l['surnom']) : ''];
     }
-    return $res;
+    return array_merge($tests, $vrais);
 }
 
 function action_tester(string $action): bool
@@ -50,7 +58,7 @@ function action_tester(string $action): bool
                 }
             }
             if (!$eleve) {
-                flash('Choisissez un élève d’une classe de test.', 'err');
+                flash('Choisissez un élève dans la liste.', 'err');
                 rediriger('./?p=applications#tester');
             }
             $_SESSION['eleve_teste'] = $eid;   // gardé pour les prochains essais
@@ -195,24 +203,26 @@ function carte_simulees(string $retour): void
 function carte_tester(string $retour): bool
 {
     $eleves = eleves_test();
+    $avec_tests = (bool) array_filter($eleves, fn($e) => $e['test']);
     $choisi = (int) ($_SESSION['eleve_teste'] ?? 0);
     $codes = $_SESSION['codes_test'] ?? [];
     unset($_SESSION['codes_test']);
     ?>
     <section class="carte" id="tester">
         <h2>Tester à la place d’un élève</h2>
-        <?php if (!$eleves): ?>
+        <?php if (!$avec_tests): ?>
             <p>Créez des élèves fictifs pour essayer les ateliers et les parcours comme vos élèves, sans toucher à leur travail :
                 classes <?= h(implode(', ', array_keys(CLASSES_TEST))) ?>, <?= (int) max(CLASSES_TEST) ?> élèves chacune.</p>
             <?= bouton('creer_classes_test', 'Créer les classes de test', ['retour' => $retour]) ?>
-        <?php else: ?>
+        <?php endif; ?>
+        <?php if ($eleves): ?>
             <form method="post" target="_blank" id="form-tester" class="formulaire-ligne">
                 <?= csrf() ?>
                 <input type="hidden" name="action" value="tester_comme">
-                <label>Élève test
+                <label>Élève
                     <select name="eleve_id" required>
                         <?php $classe = null; foreach ($eleves as $e):
-                            if ($e['classe'] !== $classe): ?><?= $classe !== null ? '</optgroup>' : '' ?><optgroup label="<?= h($e['classe']) ?>"><?php $classe = $e['classe']; endif; ?>
+                            if ($e['classe'] !== $classe): ?><?= $classe !== null ? '</optgroup>' : '' ?><optgroup label="<?= h($e['classe'] . ($e['test'] ? ' · test' : ' · vrais élèves : leur travail est modifié')) ?>"><?php $classe = $e['classe']; endif; ?>
                             <option value="<?= $e['id'] ?>" <?= $e['id'] === $choisi ? 'selected' : '' ?>><?= h($e['classe'] . ' · élève ' . $e['etiquette'] . ($e['identifiant'] ? ' · ' . $e['identifiant'] : '')) ?></option>
                         <?php endforeach; ?></optgroup>
                     </select></label>
@@ -220,13 +230,18 @@ function carte_tester(string $retour): bool
             </form>
             <p class="aide">Un nouvel onglet s’ouvre, connecté comme cet élève (2 h, sans code) : son portail, ses ateliers, ses parcours,
                 « Étape suivante » et dossier de projet, comme en classe. Les boutons <strong>Tester</strong> du tableau ouvrent directement
-                l’atelier, ou le portail pour un parcours, avec l’élève choisi ici. Seuls les élèves des classes de test sont proposés.
+                l’atelier, ou le portail pour un parcours, avec l’élève choisi ici. Dans l’application, l’interrupteur
+                <strong>Élève | Enseignant</strong> de la barre du haut passe de la vue de l’élève (règles de l’atelier appliquées)
+                à la vue enseignant (tous les modes). Les classes de test viennent en premier ; avec un vrai élève, ce que vous faites
+                s’enregistre dans son dossier (ces essais ne comptent pas dans ses connexions).
                 Si votre navigateur n’ouvre pas de nouvel onglet, la page s’ouvre ici : « Précédent » pour revenir.</p>
+            <?php if ($avec_tests): ?>
             <div class="ligne-actions">
                 <?= bouton('reinitialiser_test', 'Remettre les élèves test à zéro', ['retour' => $retour], 'secondaire',
                     'Effacer le travail, l’avancement et les dossiers de projet de tous les élèves test ?') ?>
                 <?= bouton('creer_classes_test', 'Compléter les classes de test', ['retour' => $retour], 'secondaire') ?>
             </div>
+            <?php endif; ?>
         <?php endif; ?>
         <?php if ($codes): ?>
             <div class="message ok" style="margin-top:12px">Codes des élèves test (affichés une seule fois, pour essayer aussi la connexion par code) :

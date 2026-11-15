@@ -102,7 +102,8 @@ function jeton_compte_test(): string
 function jeton_session_eleve(int $eleve_id): string
 {
     $jeton = bin2hex(random_bytes(32));
-    db()->prepare('INSERT INTO sessions (jeton_hash, eleve_id, expire) VALUES (?, ?, ?)')
+    // essai = 1 : session de l'enseignant qui teste à la place de l'élève (les applications proposent alors la vue enseignant)
+    db()->prepare('INSERT INTO sessions (jeton_hash, eleve_id, expire, essai) VALUES (?, ?, ?, 1)')
         ->execute([hash('sha256', $jeton), $eleve_id, time() + 2 * 3600]);
     return $jeton;
 }
