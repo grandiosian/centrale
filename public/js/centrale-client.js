@@ -32,6 +32,7 @@
   var activiteTransmise = null; // activité à ouvrir directement (#activite=…)
   var CLE_RETOUR = 'centrale-retour';
   var CLE_ATELIER = 'centrale-atelier';   // { parcours, etape } : atelier transversal en cours dans cet onglet
+  var CLE_CARTE = 'centrale-carte';       // { atelier, activite } : atelier d'une carte du portail (calendrier) ouvert dans cet onglet
   var memoire = null;          // session si sessionStorage est indisponible
   var attentes = {};           // cle -> { minuteur, promesses: [] }
   var bases = {};              // cle -> date (serveur) de la version sur laquelle l'élève travaille
@@ -111,7 +112,7 @@
 
   /** Petit bouton « ← Mes ateliers » en bas à gauche, quand l'application a été ouverte depuis le portail. */
   function afficherBoutonRetour() {
-    if (!adresseRetour() || document.getElementById('centrale-retour')) return;
+    if (config.navigationIntegree || !adresseRetour() || document.getElementById('centrale-retour')) return;
     var b = document.createElement('button');
     b.id = 'centrale-retour';
     b.type = 'button';
@@ -136,7 +137,11 @@
    */
   async function etapeSuivante() {
     var d = await etape();
-    if (!d) return null;
+    return d ? infoSuivante(d) : null;
+  }
+
+  /** etapeSuivante() à partir du parcours déjà lu (etape()). */
+  function infoSuivante(d) {
     var n = d.numero + 1;
     var e = d.etapes[n] || null;
     // Réglage de l'enseignant (parcours ou étape) : le bouton du bas ramène à la Centrale au lieu d'ouvrir l'étape suivante
@@ -285,7 +290,8 @@
 
   /** Recalcule le bouton « Étape suivante » (après une progression, un dépôt, une connexion…). */
   function majBoutonSuivant(delai) {
-    if (config.boutonSuivant === false || !contexteAtelier()) return;
+    majNavigation(delai);   // navigation intégrée à l'application (Centrale.navigation), si elle en a une
+    if (config.navigationIntegree || config.boutonSuivant === false || !contexteAtelier()) return;
     clearTimeout(suivant.minuteur);
     suivant.minuteur = setTimeout(async function () {
       if (!connecte()) { suivant.minuteur = setTimeout(function () { majBoutonSuivant(); }, 3000); return; }
@@ -297,6 +303,7 @@
   function dessinerBoutonSuivant() {
     var info = suivant.info;
     var b = suivant.bouton;
+    if (config.navigationIntegree) { info = null; }   // l'application dessine sa navigation (Centrale.navigation) : pas de bouton flottant
     if (!info) { if (b) b.remove(); suivant.bouton = null; return; }
     if (!b) {
       b = suivant.bouton = document.createElement('button');
@@ -334,6 +341,126 @@
       + 'background:' + (verrou ? '#eceae4' : '#1f8a52') + ';color:' + (verrou ? '#4a4d55' : '#fff');
   }
 
+  /* ---------- Navigation intégrée à l'application (pied du panneau consigne) ----------
+   *
+   * Centrale.navigation(rappel, options) : l'application dessine elle-même « ← » et « Suivant », dans sa charte,
+   * au lieu des boutons flottants du module (retirés dès l'appel). rappel(nav) est appelé tout de suite, puis à chaque
+   * changement (progression, dépôt, connexion, vue, retour sur l'onglet). nav vaut null hors de la Centrale, sinon :
+   *   { contexte: 'parcours' | 'atelier' | 'portail',
+   *     position: { numero, total, titre, consigne } | null,          // « Étape 2 / 5 », ou activité dans l'atelier
+   *     precedent: { cible: 'etape' | 'portail', libelle, court, titre, aller() } | null,
+   *     suivant:   { cible: 'etape' | 'activite' | 'portail', libelle, titre, verrou, raison, fin, activite, app, aller() } | null }
+   *   (activite / app : ce que « Suivant » ouvrira, pour une étape ou une activité)
+   *   aller() enregistre tout (avantDeQuitter), puis part ; il renvoie false si c'est verrouillé.
+   * Contexte « parcours » : ouverte depuis une étape (réglages « avant » / « après » de l'enseignant).
+   * Contexte « atelier » : ouverte depuis une carte d'atelier du portail (calendrier) : la suite est l'activité
+   *   suivante du même atelier (étapes une à une), puis « Mes ateliers ».
+   * options.activite : fonction qui renvoie l'activité ouverte (sinon celle demandée par le portail). L'application
+   *   appelle maj() dès qu'elle a ouvert une activité (par exemple après un rechargement), pour une position juste.
+   * Renvoie { maj, arreter }.
+   */
+  var navigations = [];
+  var navMinuteur = 0;
+
+  function contexteCarte() {
+    try { return JSON.parse(sessionStorage.getItem(CLE_CARTE)) || null; } catch (e) { return null; }
+  }
+
+  function navigation(rappel, options) {
+    if (typeof rappel !== 'function') return null;
+    var n = { rappel: rappel, options: options || {} };
+    navigations.push(n);
+    config.navigationIntegree = true;
+    clearTimeout(suivant.minuteur);   // bouton flottant prévu par init() : plus besoin
+    ['centrale-retour', 'centrale-suivant'].forEach(function (id) { var b = document.getElementById(id); if (b) b.remove(); });
+    suivant.bouton = null;
+    if (navigations.length === 1) {
+      ecouteursEtat.push(function () { majNavigation(); });
+      surChangementVue(function () { majNavigation(); });
+      document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') majNavigation(); });
+      setInterval(function () { if (document.visibilityState === 'visible') majNavigation(); }, 60000);
+    }
+    majNavigation(0);
+    return {
+      maj: function () { majNavigation(0); },
+      arreter: function () { navigations = navigations.filter(function (x) { return x !== n; }); }
+    };
+  }
+
+  function majNavigation(delai) {
+    if (!navigations.length) return;
+    clearTimeout(navMinuteur);
+    navMinuteur = setTimeout(async function () {
+      var nav = null;
+      try { nav = await calculerNavigation(); } catch (e) { return; }
+      navigations.slice().forEach(function (n) { try { n.rappel(nav); } catch (e) { /* l'application gère */ } });
+    }, delai == null ? 300 : delai);
+  }
+
+  function versPortail(libelle, titre, fin) {
+    return { cible: 'portail', libelle: libelle, court: 'Mes ateliers', titre: titre, fin: !!fin, verrou: false, raison: '',
+             aller: function () { return Promise.resolve(allerPortail()); } };
+  }
+
+  async function calculerNavigation() {
+    var c = contexteAtelier(), k = contexteCarte();
+    if (!connecte() || (!adresseRetour() && !c)) return null;   // hors de la Centrale : l'application garde son fonctionnement
+    var portail = versPortail('Mes ateliers', 'Revenir à tous tes ateliers (ton travail est enregistré)');
+    if (c) {   // étape d'un parcours
+      var d = await etape();
+      if (!d || !d.etape) return { contexte: 'parcours', position: null, precedent: portail, suivant: null };
+      var prec = d.etapes[d.numero - 1];
+      var precedent = d.numero > 0 && d.etape.avant !== 'portail' && prec && prec.url
+        ? { cible: 'etape', libelle: 'Étape ' + d.numero + ' : ' + prec.titre, court: 'Étape précédente',
+            titre: 'Revenir à l’étape ' + d.numero + ' : ' + prec.titre + ' (ton travail est enregistré)',
+            aller: function () { return allerPrecedent(); } }
+        : portail;
+      var info = infoSuivante(d), suiv;
+      if (info.fin) suiv = versPortail('Parcours terminé → Mes ateliers', 'Dernière étape : revenir à tes ateliers', true);
+      else if (info.portail) suiv = versPortail('Mes ateliers →', 'Enregistrer et revenir à tes ateliers : la suite (« ' + info.etape.titre + ' ») y est');
+      else {
+        var verrou = !!info.raison && !peutSeDebloquerEnPartant(info);
+        suiv = { cible: 'etape', libelle: 'Étape ' + (info.numero + 1) + ' : ' + info.etape.titre, titre: verrou ? info.raison : 'Enregistrer et ouvrir l’étape suivante',
+                 app: info.etape.app, activite: info.etape.activite || '',
+                 verrou: verrou, raison: verrou ? info.raison : '', fin: false, aller: function () { return allerEtapeSuivante(); } };
+      }
+      return { contexte: 'parcours', precedent: precedent, suivant: suiv,
+               position: { numero: d.numero + 1, total: d.etapes.length, titre: d.etape.titre, consigne: d.etape.consigne || '' } };
+    }
+    if (k && k.atelier) {   // carte d'atelier du portail : activités de l'atelier, une à une
+      var liste = (await ateliers()).filter(function (a) { return a.app === config.app; })[0];
+      var acts = ((liste && liste.activites) || []).filter(function (x) { return x.atelier === k.atelier; });
+      var choix = navigations[0] && navigations[0].options.activite;
+      var courante = (typeof choix === 'function' ? choix() : '') || k.activite || '';
+      var i = -1;
+      acts.forEach(function (x, j) { if (x.id === courante) i = j; });
+      if (!acts.length || i < 0) return { contexte: 'atelier', position: null, precedent: portail, suivant: portail };
+      var x = acts[i + 1], titre = acts[i].atelier_titre || '';
+      var tout = acts.every(function (y) { return y.statut === 'termine'; });
+      var s2 = !x ? versPortail(tout ? 'Atelier terminé → Mes ateliers' : 'Mes ateliers →', 'Revenir à tes ateliers (ton travail est enregistré)', true)
+        : { cible: 'activite', libelle: x.titre || x.id, titre: '', fin: false,
+            verrou: !!x.verrou || x.disponible === false,
+            raison: x.verrou ? 'Termine d’abord « ' + (x.apres || acts[i].titre || '') + ' »' : x.disponible === false ? 'Pas encore ouvert' : '',
+            activite: x.id, aller: function () { return allerActivite(x.id); } };
+      if (x) s2.titre = s2.verrou ? s2.raison : 'Enregistrer et ouvrir « ' + (x.titre || x.id) + ' »';
+      return { contexte: 'atelier', precedent: portail, suivant: s2,
+               position: { numero: i + 1, total: acts.length, titre: titre, consigne: '' } };
+    }
+    return { contexte: 'portail', position: null, precedent: portail, suivant: null };
+  }
+
+  /** Ouvre une autre activité de la même application (carte d'atelier du portail), après avoir tout enregistré. */
+  async function allerActivite(id) {
+    var k = contexteCarte();
+    await avantDeQuitter();
+    toutEnvoyer();
+    await viderFileProgression();
+    var cible = lien(location.href.replace(/#.*$/, ''), { activite: id, atelier: k && k.atelier });
+    location.href = cible;
+    location.reload();   // même page : le changement de # ne recharge pas
+    return true;
+  }
+
   function montrerMessageSuivant(texte) {
     var b = suivant.bouton;
     if (!b) return;
@@ -357,7 +484,7 @@
    */
   function lireJetonTransmis() {
     var h = location.hash.replace(/^#/, '');
-    if (!/(^|&)(centrale|retour|activite|parcours|etape)=/.test(h)) return;
+    if (!/(^|&)(centrale|retour|activite|parcours|etape|centrale_atelier)=/.test(h)) return;
     var atelier = {};
     var reste = [];
     h.split('&').forEach(function (morceau) {
@@ -367,11 +494,14 @@
       else if (morceau.indexOf('activite=') === 0) activiteTransmise = v(9);
       else if (morceau.indexOf('parcours=') === 0) atelier.parcours = parseInt(v(9), 10);
       else if (morceau.indexOf('etape=') === 0) atelier.etape = parseInt(v(6), 10);
+      else if (morceau.indexOf('centrale_atelier=') === 0) atelier.carte = v(17);
       else if (morceau) reste.push(morceau);
     });
     try {
       if (atelier.parcours) sessionStorage.setItem(CLE_ATELIER, JSON.stringify({ parcours: atelier.parcours, etape: atelier.etape || 0 }));
       else if (jetonTransmis) sessionStorage.removeItem(CLE_ATELIER);   // ouvert hors atelier : on oublie l'atelier précédent
+      if (atelier.carte && !atelier.parcours) sessionStorage.setItem(CLE_CARTE, JSON.stringify({ atelier: atelier.carte, activite: activiteTransmise || '' }));
+      else if (jetonTransmis) sessionStorage.removeItem(CLE_CARTE);
     } catch (e) { /* rien */ }
     try {
       history.replaceState(null, '', location.pathname + location.search + (reste.length ? '#' + reste.join('&') : ''));
@@ -457,7 +587,8 @@
 
   /**
    * Adresse d'une autre application, avec le jeton pour que l'élève n'ait pas à retaper son code.
-   * options : { activite: "e5-1" (à ouvrir directement), retour: adresse du bouton « ← Mes ateliers » }
+   * options : { activite: "e5-1" (à ouvrir directement), retour: adresse du bouton « ← Mes ateliers »,
+   *             parcours, etape (étape d'un parcours), atelier: atelier du catalogue (carte du portail, pour Centrale.navigation) }
    */
   function lien(adresse, options) {
     options = options || {};
@@ -470,6 +601,7 @@
     if (r) morceaux.push('retour=' + encodeURIComponent(r));
     if (options.activite) morceaux.push('activite=' + encodeURIComponent(options.activite));
     if (options.parcours) morceaux.push('parcours=' + encodeURIComponent(options.parcours), 'etape=' + encodeURIComponent(options.etape || 0));
+    if (options.atelier && !options.parcours) morceaux.push('centrale_atelier=' + encodeURIComponent(options.atelier));   // carte d'atelier du portail
     if (h) morceaux.push(h);
     u.hash = morceaux.join('&');
     return u.toString();
@@ -1534,6 +1666,7 @@
     allerPortail: allerPortail,
     activiteDemandee: activiteDemandee,
     etapeSuivante: etapeSuivante,
+    navigation: navigation,
     allerEtapeSuivante: allerEtapeSuivante,
     precedent: precedent,
     allerPrecedent: allerPrecedent,

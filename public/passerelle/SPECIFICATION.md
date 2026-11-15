@@ -164,6 +164,26 @@ Ce que l'application doit faire pour que cela marche bien :
 3. **Signaler la fin de l'étape** (`Centrale.progression(id, { statut: 'termine' })` ou dépôt des fichiers `produit`) : c'est ce qui ouvre l'étape suivante en mode « dans l'ordre ».
 4. **Accepter d'être rouvert sur la même page** avec une autre étape : le module recharge la page quand deux étapes de suite sont dans la même application ; `Centrale.etape()` donne alors la nouvelle étape.
 
+**Navigation intégrée (recommandé) : « ← » et « Suivant » dans le panneau consigne de l'application.** Plutôt que les boutons flottants, l'application dessine elle-même, dans sa charte, un pied de panneau consigne avec « ← » et « Suivant → ». Le module lui dit quoi afficher selon la façon dont elle a été ouverte, et retire ses boutons flottants dès l'appel :
+
+```js
+Centrale.navigation && Centrale.navigation((nav) => {
+  // nav = null hors de la Centrale : rien à afficher
+  // nav.contexte : 'parcours' (étape d'un parcours), 'atelier' (carte d'un atelier du calendrier) ou 'portail'
+  // nav.position : { numero, total, titre, consigne } ou null  → « Étape 2 / 5 »
+  // nav.precedent / nav.suivant : { cible, libelle, titre, verrou, raison, fin, aller() } ou null
+  dessinerPiedConsigne(nav);   // bouton suivant grisé si nav.suivant.verrou, avec nav.suivant.raison
+}, { activite: () => activiteOuverte() });   // facultatif : l'activité ouverte, si l'élève en change dans l'application
+```
+
+- **parcours** : « ← » revient à l'étape précédente ou à la Centrale, « Suivant » ouvre l'étape suivante ou ramène à la Centrale, selon les réglages de l'enseignant (`avant` / `apres`) ; verrou et raison comme le bouton flottant ; « Parcours terminé → Mes ateliers » à la fin.
+- **atelier** : ouverte depuis une carte d'atelier du portail (classe avec un calendrier ; le portail ajoute `centrale_atelier=<atelier>` à l'adresse). « Suivant » ouvre l'activité suivante du même atelier, dans cette application (`#activite=…`, page rechargée) ; elle est verrouillée tant que la précédente n'est pas terminée (étapes une à une). À la fin : « Atelier terminé → Mes ateliers ».
+- **portail** : ouverte depuis le portail sans atelier : seulement « ← Mes ateliers ».
+- `aller()` enregistre tout (`avantDeQuitter`, envois en attente) puis part ; il renvoie `false` si c'est verrouillé.
+- Le rappel est appelé tout de suite, puis après chaque `Centrale.progression`, chaque dépôt, un changement de connexion ou de vue (essai de l'enseignant) et au retour sur l'onglet. `Centrale.navigation(…)` renvoie `{ maj, arreter }` : l'application appelle `maj()` dès qu'elle a ouvert une activité (après un rechargement par exemple), pour que la position soit juste tout de suite.
+- `nav.suivant.activite` (et `app` pour une étape de parcours) dit ce que « Suivant » ouvrira.
+- Un module plus ancien n'a pas `Centrale.navigation` : l'application teste la fonction et garde les boutons flottants.
+
 **Revenir en arrière : le bouton « ← » du widget de l'élève.** Les applications élèves (NetSim, TechnoStudio, Établi 3D) et le portail ont la même barre du haut : logo et menu à gauche, **widget de l'élève** (« Visiteur » ou son identifiant), l'**atelier en cours** au centre, les réglages à droite. Le widget commence par un bouton « ← » fourni par le module :
 
 ```js

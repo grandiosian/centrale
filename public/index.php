@@ -541,10 +541,11 @@ details.fait .atelier { opacity: .85; }
   /* Ce que l'élève a ouvert en dernier depuis ce portail : le bouton « ← Reprendre » du widget le rouvre. */
   // (déclarations de fonctions : utilisables dès le démarrage, avant cette ligne)
   function lireDernier() { try { return JSON.parse(localStorage.getItem('portail-dernier') || 'null'); } catch (e) { return null; } }
-  function ouvrir(url, activite, parcours, etape, titre) {
+  function ouvrir(url, activite, parcours, etape, titre, atelier) {
     try { localStorage.setItem('portail-dernier', JSON.stringify({ url, activite: activite || '', parcours: parcours || 0, etape, titre: titre || '' })); } catch (e) { /* rien */ }
     $('chargement').hidden = false;
-    Centrale.ouvrir(url, { activite: activite || undefined, retour: PORTAIL, parcours: parcours || undefined, etape: etape });
+    // atelier : carte d'un atelier du calendrier (Centrale.navigation, dans l'application, propose l'activité suivante de l'atelier)
+    Centrale.ouvrir(url, { activite: activite || undefined, retour: PORTAIL, parcours: parcours || undefined, etape: etape, atelier: atelier || undefined });
   }
 
   async function rafraichir() {
@@ -629,7 +630,7 @@ details.fait .atelier { opacity: .85; }
    */
   function ouvrirActivite(a, x) {
     if (x.parcours) ouvrir(x.url, x.activite || undefined, x.parcours, x.etape, (x.titre || x.id) + ' · ' + a.nom);
-    else ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom);
+    else ouvrir(a.url, x.id, undefined, undefined, (x.titre || x.id) + ' · ' + a.nom, x.atelier);
   }
   /** Reprendre l'atelier courant : sa prochaine activité, ou l'atelier lui-même. */
   function reprendreAtelier(a) {

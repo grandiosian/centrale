@@ -353,7 +353,7 @@ function lire_etapes(string $texte): array
             }
             continue;
         }
-        if (preg_match('/^(avant|retour|pr[ée]c[ée]dent)\s*:\s*(.*)$/iu', $ligne, $m)) {   // bouton « ← » à cette étape
+        if (preg_match('/^(av[ae]nt|retour|pr[ée]c[ée]dent)\s*:\s*(.*)$/iu', $ligne, $m)) {   // bouton « ← » à cette étape (« avent » toléré)
             if ($dernier >= 0) {
                 $etapes[$dernier]['avant'] = navigation_lue($m[2]);
             }
@@ -369,6 +369,12 @@ function lire_etapes(string $texte): array
             if ($dernier >= 0) {
                 $etapes[$dernier]['competences'] = implode(', ', liste_codes_competences($m[2]));
             }
+            continue;
+        }
+        // Ligne de détail inconnue (« mot : … » sans « | ») : on le dit clairement, plutôt qu'« il faut Titre | atelier »
+        if (!str_contains($ligne, '|') && preg_match('/^([\p{L}\s]{2,20}?)\s*:/u', $ligne, $m)) {
+            $erreurs[] = 'Ligne ' . ($n + 1) . ' : « ' . trim($m[1]) . ' : » n’est pas reconnu. Sous une étape, écrivez '
+                . '« > consigne », « reçoit : », « produit : », « compétences : », « avant : » ou « après : ».';
             continue;
         }
         $champs = array_map('trim', explode('|', $ligne));
