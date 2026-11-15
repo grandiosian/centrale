@@ -21,6 +21,9 @@
  * listés (ouverts à leur date, « bientôt » avant), dans son ordre ; dans un atelier ouvert, les étapes s'ouvrent une
  * à une (verrou = true, apres = étape à terminer d'abord). Ce que l'enseignant a demandé reste ouvert. Chaque activité
  * porte alors atelier et atelier_titre : le portail fait une carte par atelier (et non par application).
+ *
+ * Vue enseignant d'un essai (« Tester à la place d'un élève », interrupteur Élève | Enseignant) : tout le catalogue
+ * des ateliers de la classe, ouverts, sans calendrier ni étapes verrouillées (vue = 'enseignant' dans la réponse).
  */
 declare(strict_types=1);
 
@@ -28,11 +31,12 @@ require __DIR__ . '/../../lib/api.php';
 
 appliquer_cors();
 $eleve = eleve_connecte();
+$vue_prof = session_essai()['vue'] === 'enseignant';
 
 $prog = progression_eleves([$eleve['id']])[$eleve['id']] ?? [];
 $catalogue = catalogue_activites();
 $proposees = propositions_eleve((int) $eleve['id']);
-$filtrer = portail_seulement_proposees();
+$filtrer = portail_seulement_proposees() && !$vue_prof;
 
 $cid = (int) $eleve['classe_id'];
 $gid = isset($eleve['groupe_id']) ? (int) $eleve['groupe_id'] : null;
@@ -55,7 +59,7 @@ $res = [];
 foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers de la classe : la disponibilité est calculée ci-dessous
     $app = $a['app'];
     // Fenêtres d'activation (calendrier) : disponible maintenant, « bientôt » (avec une date), ou caché.
-    $disponible = atelier_disponible_maintenant($app, $cid, $gid);
+    $disponible = $vue_prof || atelier_disponible_maintenant($app, $cid, $gid);
     $disponible_le = null;
     if (!$disponible) {
         $disponible_le = prochaine_disponibilite($app, $cid, $gid);
@@ -78,6 +82,9 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
         // fermé : plus montré, sauf commencé (périodes) ; avec une progression, hors progression = jamais montré
         // (le travail de l'élève reste enregistré et revient si l'atelier est remis dans la progression)
         $par_progression = ($d['source'] ?? '') === 'progression';
+        if ($vue_prof) {
+            $d = ['etat' => 'ouvert', 'ouvre_le' => null, 'jusqu_au' => null, 'revision' => !empty($d['revision'])] + $d;
+        }
         if ($d['etat'] === 'ferme' && !($avec_progression && $propose) && (!isset($lignes[$id]) || $par_progression)) {
             $fermees++;
             continue;   // atelier fermé, pas commencé : plus montré
@@ -105,6 +112,13 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
         $num = array_flip(array_keys($activites));
         uksort($activites, fn($i, $j) => $place($activites[$i]) <=> $place($activites[$j]) ?: $num[$i] <=> $num[$j]);
         $activites = verrouiller_etapes($app, array_values($activites), $dispos);
+        if ($vue_prof) {   // vue enseignant : aucune étape verrouillée
+            foreach ($activites as $k => $x) {
+                $activites[$k]['verrou'] = false;
+                $activites[$k]['disponible'] = true;
+                unset($activites[$k]['apres']);
+            }
+        }
         foreach ($activites as $k => $x) {   // l'atelier de chaque étape : le portail fait une carte par atelier
             $at = atelier_de_activite_classe($dispos, $app, (string) $x['id']);
             if ($at !== null) {
@@ -146,4 +160,4 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
     ];
 }
 
-envoyer_json(200, ['ok' => true, 'ateliers' => $res]);
+envoyer_json(200, ['ok' => true, 'ateliers' => $res, 'vue' => $vue_prof ? 'enseignant' : 'eleve']);

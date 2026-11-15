@@ -136,13 +136,18 @@ body.barre-serree .brand { margin-right: 0; }
 .tb-reprendre { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 12px; border-radius: 999px; background: var(--encre); color: var(--encre-texte); font-weight: 700; font-size: .85rem; flex: none; }
 .tb-droite { grid-column: 3; justify-self: end; display: inline-flex; align-items: center; gap: 6px; }
 .tb-droite[hidden] { display: none; }
+/* Essai de l'enseignant : l'interrupteur Élève | Enseignant (module de la Centrale) se colle au centre de la barre */
+.tb-droite:has(.tb-vue:not([hidden])) { justify-self: stretch; justify-content: flex-end; min-width: 0; }
+.tb-droite .tb-vue { margin-right: auto; color: var(--texte); }
+body.barre-serree .tb-vue .centrale-vue-txt { display: none; }
+body.barre-serree .tb-vue button { padding: 0 8px; }
 .tb-bouton { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; background: transparent; color: var(--doux); border: 1px solid transparent; font-size: .86rem; font-weight: 600; }
 .tb-bouton:hover { color: var(--encre); border-color: var(--bord); }
 @media (max-width: 760px) {
   header.topbar { padding: 6px 10px; gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; }
   .tb-gauche { gap: 6px; }
   .brand { margin-right: 0; }
-  .tbid-txt, .brand span, .tb-barres { display: none; }
+  .tbid-txt, .brand span, .tb-barres, .tb-vue .centrale-vue-txt { display: none; }
   .tb-centre { justify-self: stretch; }
 }
 @media (max-width: 480px) {
@@ -482,7 +487,10 @@ details.fait .atelier { opacity: .85; }
       el('span', { 'aria-hidden': 'true' }, '⎋'), el('span', { class: 'tbid-txt' }, 'Se déconnecter'));
     sortir.onclick = () => { Centrale.deconnexion(); location.reload(); };
     $('tb-droite').hidden = false;
-    $('tb-droite').replaceChildren(sortir);
+    // Essai de l'enseignant (« Tester à la place d'un élève ») : interrupteur Élève | Enseignant, juste après le centre.
+    // Vue enseignant : tous les ateliers de la classe, ouverts, sans calendrier ni étapes verrouillées (api/ateliers.php).
+    const vue = Centrale.boutonVue ? Centrale.boutonVue({ classe: 'tb-vue', onChange: () => rafraichir() }) : null;
+    $('tb-droite').replaceChildren(...(vue ? [vue.bouton] : []), sortir);
     rafraichir();
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Centrale.connecte()) rafraichir(); });
   }

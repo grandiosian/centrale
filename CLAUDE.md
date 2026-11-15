@@ -26,6 +26,7 @@ avec les applications, dans [public/passerelle/](public/passerelle/). Vue d'ense
 | Pages enseignant | `lib/admin_accueil.php` (tableau de bord), `admin_organisation.php` (établissements, emploi du temps, plans), `admin_catalogue.php` (Ateliers), `admin_progression.php` (Calendrier), `admin_suivi.php` (Applications, parcours, suivi), `admin_competences.php`, `admin_bibliotheque.php`, `admin_tester.php` (élèves test)… | README §4–7 |
 | JS et CSS de l'espace enseignant (plan de classe 2D/3D, feuille de séance, suivi) | `public/admin/admin.js`, `plan.js`, `plan3d.js`, `admin.css` | README §5 |
 | Emploi du temps (séances, semaines A/B, vacances) | `lib/organisation.php` (`semaine_emploi_du_temps`, `seances_classe` dans progression.php) | README §5 |
+| Essai de l'enseignant (« Tester à la place d'un élève ») : tous les élèves, session `essai`, interrupteur Élève \| Enseignant | `lib/admin_tester.php`, `sessions.essai` / `sessions.vue`, `api/session.php` (POST vue), `session_essai()` (lib/api.php), `api/ateliers.php` (vue enseignant sans calendrier), `Centrale.boutonVue()` | SPECIFICATION §2.6 |
 | Contrat passerelle (lu par les applications) | `public/passerelle/*.md`, schémas JSON | — |
 | Copies des applications servies par la Centrale | `miroirs.txt` (construit au déploiement dans `public/miroir/`, `prive/miroir/`) | README §1 |
 

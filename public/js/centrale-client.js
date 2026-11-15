@@ -1345,6 +1345,118 @@
     return true;
   }
 
+  /* ---------- Essai de l'enseignant : vue élève / vue enseignant ----------
+   * « Tester à la place d'un élève » (espace enseignant) ouvre une session marquée essai. Dans ces sessions seulement,
+   * un interrupteur « Élève | Enseignant » permet de passer de la vue de l'élève (règles de l'atelier, fenêtres et
+   * fonctions de l'élève) à la vue enseignant (tous les modes). Le choix est gardé sur le serveur, avec la session :
+   * le portail et chaque application le retrouvent. Une session d'élève normale répond toujours « eleve ».
+   *   essai() : true dans une session d'essai ; vue() : 'eleve' | 'enseignant' ;
+   *   changerVue(v) : change la vue (prévient surChangementVue, puis le serveur) ;
+   *   boutonVue({ classe, onChange(v) }) : { bouton, maj } à poser juste après l'atelier, au centre de la barre du haut
+   *   (caché hors essai). Les applications testent la fonction avant de l'appeler (module plus ancien).
+   */
+  var ecouteursVue = [];
+  var STYLE_VUE = [
+    '.centrale-vue{flex:none;display:inline-flex;align-items:center;gap:2px;height:34px;padding:2px;box-sizing:border-box;border-radius:999px;background:transparent;border:1px dashed #d9a400;font:600 12.5px/1 system-ui,-apple-system,"Segoe UI",sans-serif}',
+    '.centrale-vue[hidden]{display:none!important}',
+    '.centrale-vue button{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border:0;border-radius:999px;background:transparent;color:inherit;opacity:.72;font:inherit;white-space:nowrap;cursor:pointer}',
+    '.centrale-vue button:hover{opacity:1}',
+    '.centrale-vue button.on{background:#F5C400;color:#3a2d00;opacity:1;cursor:default}',
+    '.centrale-vue button:focus-visible{outline:2px solid currentColor;outline-offset:-2px}',
+    '.centrale-vue svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}',
+    '.centrale-vue.court .centrale-vue-txt{display:none}.centrale-vue.court button{padding:0 8px}'
+  ].join('\n');
+  var ICONES_VUE = {
+    eleve: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+    enseignant: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20l4-4 4 4M7 9h6M7 12h9"/>'
+  };
+
+  function essai() {
+    var s = session();
+    return !!(s && s.essai);
+  }
+
+  function vue() {
+    var s = session();
+    return s && s.essai && s.vue === 'enseignant' ? 'enseignant' : 'eleve';
+  }
+
+  function surChangementVue(f) {
+    if (typeof f === 'function') ecouteursVue.push(f);
+  }
+
+  function prevenirVue() {
+    var v = vue();
+    ecouteursVue.slice().forEach(function (f) { try { f(v); } catch (e) { /* rien */ } });
+  }
+
+  async function changerVue(v) {
+    var s = session();
+    if (!s || !s.essai) return false;
+    v = v === 'enseignant' ? 'enseignant' : 'eleve';
+    if (s.vue !== v) { s.vue = v; enregistrerSession(s); prevenirVue(); }
+    try {
+      var r = await fetch(url('session.php', { app: config.app }), { method: 'POST', headers: { 'X-Jeton': s.jeton, 'Content-Type': 'application/json' }, body: JSON.stringify({ vue: v }) });
+      return r.ok;
+    } catch (e) { return false; }
+  }
+
+  /** Relit la vue gardée sur le serveur (changée dans une autre application ou un autre onglet). */
+  async function actualiserVue() {
+    var s = session();
+    if (!s || !s.essai || !config.api) return vue();
+    try {
+      var r = await fetch(url('session.php', { app: config.app }), { headers: { 'X-Jeton': s.jeton } });
+      var d = await r.json();
+      var s2 = session();
+      if (r.ok && d.ok && s2 && s2.jeton === s.jeton) {
+        var v = d.vue === 'enseignant' ? 'enseignant' : 'eleve';
+        if ((s2.vue || 'eleve') !== v || !d.essai !== !s2.essai) { s2.vue = v; s2.essai = !!d.essai; enregistrerSession(s2); prevenirVue(); }
+      }
+    } catch (e) { /* hors ligne : on garde la vue connue */ }
+    return vue();
+  }
+
+  function boutonVue(options) {
+    options = options || {};
+    if (!document.getElementById('centrale-style-vue')) {
+      var st = document.createElement('style');
+      st.id = 'centrale-style-vue';
+      st.textContent = STYLE_VUE;
+      document.head.appendChild(st);
+    }
+    var g = document.createElement('div');
+    g.className = 'centrale-vue' + (options.classe ? ' ' + options.classe : '');
+    g.setAttribute('role', 'group');
+    g.setAttribute('aria-label', 'Essai à la place de l’élève : choix de la vue');
+    var opts = [['eleve', 'Élève', 'Vue élève : comme le voit l’élève (fenêtres, fonctions et règles de l’atelier)'],
+      ['enseignant', 'Enseignant', 'Vue enseignant : tous les modes, toujours connecté comme l’élève']];
+    var boutons = opts.map(function (o) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.vue = o[0];
+      b.title = o[2];
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONES_VUE[o[0]] + '</svg><span class="centrale-vue-txt">' + o[1] + '</span>';
+      b.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (vue() !== o[0]) changerVue(o[0]);
+      });
+      g.appendChild(b);
+      return b;
+    });
+    function maj() {
+      g.hidden = !essai();
+      var v = vue();
+      boutons.forEach(function (b) { var on = b.dataset.vue === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    }
+    surChangementVue(function (v) { maj(); if (options.onChange) options.onChange(v); });
+    ecouteursEtat.push(function () { maj(); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && essai()) actualiserVue(); });
+    maj();
+    if (essai()) actualiserVue();
+    return { bouton: g, maj: maj };
+  }
+
   /* ---------- Événements du navigateur ---------- */
 
   global.addEventListener('online', function () {
@@ -1403,6 +1515,12 @@
     nomFichier: nomFichier,
     telecharger: telecharger,
     ouvrirDepot: ouvrirDepot,
+    essai: essai,
+    vue: vue,
+    changerVue: changerVue,
+    actualiserVue: actualiserVue,
+    surChangementVue: surChangementVue,
+    boutonVue: boutonVue,
   };
   global.Centrale = Centrale;
 })(window);

@@ -82,6 +82,19 @@ function eleve_connecte(): array
     return $eleve;
 }
 
+/**
+ * Session d'essai de l'enseignant (« Tester à la place d'un élève ») : ['essai' => bool, 'vue' => 'eleve'|'enseignant'].
+ * Une session d'élève normale donne toujours essai = false et vue = 'eleve'.
+ */
+function session_essai(): array
+{
+    $st = db()->prepare('SELECT essai, vue FROM sessions WHERE jeton_hash = ?');
+    $st->execute([hash('sha256', (string) ($_SERVER['HTTP_X_JETON'] ?? ''))]);
+    $l = $st->fetch();
+    $essai = $l && (int) $l['essai'] === 1;
+    return ['essai' => $essai, 'vue' => $essai && $l['vue'] === 'enseignant' ? 'enseignant' : 'eleve'];
+}
+
 /** Identifiant d'atelier obligatoire pour les données et fichiers. */
 function app_requise(array $entree): string
 {
