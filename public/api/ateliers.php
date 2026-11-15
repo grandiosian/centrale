@@ -17,10 +17,11 @@
  * Réglage « portail_activites » (page Bibliothèque de l'espace enseignant) : « proposees » (par défaut) ne liste
  * que les activités proposées à l'élève et celles qu'il a déjà commencées ; « toutes » liste tout le catalogue.
  *
- * Classe avec une progression (page Progression, lib/progression.php) : seuls les ateliers de la progression sont
- * listés (ouverts à leur date, « bientôt » avant), dans son ordre ; dans un atelier ouvert, les étapes s'ouvrent une
- * à une (verrou = true, apres = étape à terminer d'abord). Ce que l'enseignant a demandé reste ouvert. Chaque activité
- * porte alors atelier et atelier_titre : le portail fait une carte par atelier (et non par application).
+ * Dans chaque atelier, avec ou sans calendrier, les étapes s'ouvrent une à une (verrou = true, apres = étape à terminer
+ * d'abord) ; ce que l'enseignant a demandé reste ouvert.
+ * Classe avec une progression (page Calendrier, lib/progression.php) : seuls les ateliers de la progression sont
+ * listés (ouverts à leur date, « bientôt » avant), dans son ordre. Chaque activité porte alors atelier et
+ * atelier_titre : le portail fait une carte par atelier (sans calendrier : une carte par application).
  *
  * Vue enseignant d'un essai (« Tester à la place d'un élève », interrupteur Élève | Enseignant) : tout le catalogue
  * des ateliers de la classe, ouverts, sans calendrier ni étapes verrouillées (vue = 'enseignant' dans la réponse).
@@ -106,27 +107,27 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
                             'disponible' => true, 'ouvre_le' => null, 'jusqu_au' => null];
         }
     }
-    if ($avec_progression) {
-        // dans l'ordre de la progression, puis étapes une à une dans chaque atelier
+    if ($avec_progression) {   // dans l'ordre de la progression
         $place = fn($x) => $rang[$app][atelier_de_activite_classe($dispos, $app, (string) $x['id']) ?? ''] ?? PHP_INT_MAX;
         $num = array_flip(array_keys($activites));
         uksort($activites, fn($i, $j) => $place($activites[$i]) <=> $place($activites[$j]) ?: $num[$i] <=> $num[$j]);
-        $activites = verrouiller_etapes($app, array_values($activites), $dispos);
-        if ($vue_prof) {   // vue enseignant : aucune étape verrouillée
-            foreach ($activites as $k => $x) {
-                $activites[$k]['verrou'] = false;
-                $activites[$k]['disponible'] = true;
-                unset($activites[$k]['apres']);
-            }
+    }
+    // étapes une à une dans chaque atelier, avec ou sans calendrier (une étape s'ouvre quand la précédente est terminée)
+    $activites = verrouiller_etapes($app, array_values($activites), $dispos);
+    if ($vue_prof) {   // vue enseignant d'un essai : aucune étape verrouillée
+        foreach ($activites as $k => $x) {
+            $activites[$k]['verrou'] = false;
+            $activites[$k]['disponible'] = true;
+            unset($activites[$k]['apres']);
         }
-        foreach ($activites as $k => $x) {   // l'atelier de chaque étape : le portail fait une carte par atelier
-            $at = atelier_de_activite_classe($dispos, $app, (string) $x['id']);
-            if ($at !== null) {
-                $activites[$k]['atelier'] = $at;
-                $activites[$k]['atelier_titre'] = $titres[$app][$at] ?? $at;
-                if (isset($ouvertures[$app][$at])) {
-                    $activites[$k]['atelier_ouvrir'] = $ouvertures[$app][$at];   // le portail ouvre l'atelier entier (ex. NetSim « Premiers pas »)
-                }
+    }
+    foreach ($avec_progression ? $activites : [] as $k => $x) {   // l'atelier de chaque étape : le portail fait une carte par atelier
+        $at = atelier_de_activite_classe($dispos, $app, (string) $x['id']);
+        if ($at !== null) {
+            $activites[$k]['atelier'] = $at;
+            $activites[$k]['atelier_titre'] = $titres[$app][$at] ?? $at;
+            if (isset($ouvertures[$app][$at])) {
+                $activites[$k]['atelier_ouvrir'] = $ouvertures[$app][$at];   // le portail ouvre l'atelier entier (ex. NetSim « Premiers pas »)
             }
         }
     }

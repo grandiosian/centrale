@@ -168,7 +168,7 @@ function page_calendrier_ateliers(): void
         </div>
         <p class="aide">Pour chaque classe, rangez les ateliers dans l’ordre où elle les fera et donnez à chacun sa date d’ouverture.
             Les élèves ne voient alors <strong>que les ateliers de la progression</strong> : ouverts à partir de leur date, « Prochainement » avant.
-            Dans un atelier, les étapes s’ouvrent <strong>une à une</strong>. Une classe sans progression garde l’accès libre d’avant.
+            Dans un atelier, les étapes s’ouvrent <strong>une à une</strong>, avec ou sans progression. Une classe sans progression voit tous ses ateliers (une carte par application).
             Les parcours et ce que vous demandez à un élève restent toujours ouverts.</p>
         <?php messages(); ?>
         <nav class="progression-classes" aria-label="Classes">
