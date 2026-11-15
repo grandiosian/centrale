@@ -1026,11 +1026,11 @@ function page_classe(int $id): void
                     <h2>Codes générés</h2>
                     <div class="boutons">
                         <button type="button" onclick="window.print()">Imprimer les fiches</button>
-                        <button type="button" class="secondaire" id="telecharger-codes">Télécharger (CSV)</button>
+                        <button type="button" class="secondaire" id="telecharger-codes">Télécharger la sauvegarde (.desanonim)</button>
                     </div>
                 </div>
-                <p class="alerte-bloc">Ces codes ne seront <strong>plus jamais affichés</strong>. Téléchargez le CSV maintenant :
-                    il contient aussi les noms, qui ne sont <strong>pas</strong> sur le serveur. Rangez-le dans un dossier privé de votre Nuage.</p>
+                <p class="alerte-bloc">Ces codes ne seront <strong>plus jamais affichés</strong>. Téléchargez la sauvegarde .desanonim maintenant :
+                    elle contient les codes et les noms, qui ne sont <strong>pas</strong> sur le serveur. Rangez-la dans un dossier privé de votre Nuage.</p>
                 <div class="defile"><table>
                     <thead><tr><th>N°</th><th>Nom (sur cet ordinateur)</th><th>Code</th></tr></thead>
                     <tbody>
@@ -1416,7 +1416,7 @@ function section_reinitialiser_codes(int $nb_classes, int $nb_eleves): void
     $nb_etabs = (int) db()->query('SELECT COUNT(DISTINCT etablissement_id) FROM classes WHERE etablissement_id IS NOT NULL')->fetchColumn();
     ?>
     <section class="reinit" id="reinit">
-        <button type="button" class="danger" id="reinit-ouvrir">Réinitialiser tous les codes et télécharger la liste</button>
+        <button type="button" class="danger" id="reinit-ouvrir">Réinitialiser tous les codes et télécharger la sauvegarde (.desanonim)</button>
         <div class="reinit-confirmation" id="reinit-confirmation" hidden>
             <p><strong>Attention : les codes de connexion des <?= $nb_eleves ?> élèves vont tous être remplacés</strong>
                 (<?= $nb_classes ?> classe<?= $nb_classes > 1 ? 's' : '' ?><?= $nb_etabs ? ', ' . $nb_etabs . ' établissement' . ($nb_etabs > 1 ? 's' : '') : '' ?>).</p>
@@ -1427,8 +1427,9 @@ function section_reinitialiser_codes(int $nb_classes, int $nb_eleves): void
                 <li>Nouveau format : classe, code de l'établissement, puis le code personnel (ex. 4C-LHA-9943-kfmz-tqpr).</li>
                 <li id="reinit-noms"></li>
             </ul>
-            <p>Un seul fichier sera téléchargé : tous les établissements, toutes les classes, avec noms, codes et PAP / PPS / PAI.
-                Rangez-le dans un dossier privé de votre Nuage.</p>
+            <p>Un seul fichier sera téléchargé : la sauvegarde <strong>.desanonim</strong> de cet ordinateur, avec les nouveaux codes
+                (noms, codes, PAP / PPS / PAI, cartons, trombinoscopes…). Rangez-la dans un dossier privé de votre Nuage ;
+                « Tout charger (.desanonim) » la relit sur un autre ordinateur.</p>
             <div class="ligne-actions">
                 <button type="button" class="danger" id="reinit-confirmer">Oui, remplacer les <?= $nb_eleves ?> codes</button>
                 <button type="button" class="secondaire" id="reinit-annuler">Annuler</button>
@@ -1439,10 +1440,10 @@ function section_reinitialiser_codes(int $nb_classes, int $nb_eleves): void
                 <h2 id="reinit-titre">Nouveaux codes</h2>
                 <div class="boutons">
                     <button type="button" id="reinit-imprimer">Imprimer toutes les fiches</button>
-                    <button type="button" class="secondaire" id="reinit-telecharger">Télécharger la liste à nouveau</button>
+                    <button type="button" class="secondaire" id="reinit-telecharger">Télécharger la sauvegarde à nouveau (.desanonim)</button>
                 </div>
             </div>
-            <p class="alerte-bloc">La liste a été téléchargée : elle contient les noms et les codes. Rangez-la dans un dossier privé de votre Nuage.</p>
+            <p class="alerte-bloc">La sauvegarde .desanonim a été téléchargée : elle contient les noms et les nouveaux codes. Rangez-la dans un dossier privé de votre Nuage.</p>
             <div class="fiches" id="fiches-toutes" aria-hidden="true"></div>
         </div>
         <script type="application/json" id="json-reinit"><?= json_encode(['csrf' => $_SESSION['csrf'], 'nb_eleves' => $nb_eleves,

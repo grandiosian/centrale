@@ -57,9 +57,9 @@ Dans l'espace enseignant, classe par classe :
 
 1. Collez la liste des élèves (« Léa D. », un par ligne) dans **Générer des codes**. Pour un élève seul, utilisez **Ajouter un élève** : nom, prénom, besoins (PPS, PAP, PAI, PPRE) et sortie éventuelle. Le code s'affiche ensuite.
    Votre navigateur garde les noms et n'envoie au serveur **que leur nombre**. Le serveur attribue des numéros : 01, 02, 03…
-2. **Imprimez les fiches** (nom + code, à découper) et **téléchargez le CSV** (Classe ; Numéro ; Nom ; Code).
+2. **Imprimez les fiches** (nom + code, à découper) et **téléchargez la sauvegarde** (`centrale_AAAA-MM-JJ.desanonim` : noms, codes, besoins, cartons, trombinoscopes de cet ordinateur).
    Les codes ne seront plus jamais affichés.
-3. Rangez le CSV dans un **dossier privé de votre Nuage**. C'est votre fichier de correspondance.
+3. Rangez la sauvegarde dans un **dossier privé de votre Nuage**. C'est votre fichier de correspondance ; « Tout charger (.desanonim) » la relit sur un autre ordinateur. La page de la classe propose aussi les codes en CSV (« Télécharger les codes »).
 
 Sur un autre ordinateur, ou après avoir vidé le navigateur : **Charger mon fichier de noms (CSV)** affiche à nouveau les noms à côté des numéros. Ils ne sont jamais envoyés au serveur.
 
@@ -546,9 +546,9 @@ Adresse : **https://technoversailles.alwaysdata.net/admin/**. Elle n'apparaît p
   - Côté enseignant (colonne « Identifiant ») : un surnom qui ressemble au vrai nom est signalé, et ↻ en donne un autre au hasard. La comparaison se fait sur votre ordinateur.
   - Le changement de surnom par les élèves peut être désactivé dans les Réglages.
   - L'identifiant sert à afficher l'élève. Pour se connecter, l'élève utilise toujours son code.
-- **Réinitialiser tous les codes et télécharger la liste** (bouton rouge en haut de la page Classes) :
+- **Réinitialiser tous les codes et télécharger la sauvegarde (.desanonim)** (bouton rouge en haut de la page Classes) :
   - Tous les élèves de tous les établissements reçoivent un nouveau code, après une confirmation. Le travail des élèves est conservé.
-  - La liste globale est téléchargée et toutes les fiches sont prêtes à imprimer.
+  - La sauvegarde `.desanonim`, avec les nouveaux codes, est téléchargée et toutes les fiches sont prêtes à imprimer.
 - **Liste globale** (« Télécharger la liste ») : un seul fichier pour tous les établissements et toutes les classes, avec les colonnes Établissement ; Classe ; Groupe ; Numéro ; Identifiant ; Nom ; Code ; Besoins.
 - **Groupes** (section « Groupes » de la page de la classe) :
   - « Diviser la classe en deux groupes » crée GR1 et GR2. Vous pouvez renommer ou ajouter des groupes.

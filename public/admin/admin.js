@@ -1094,13 +1094,9 @@
       if (ajout.sortie) setSortie(info.classe, nouveau, aujourdhui());
       afficherNoms();
     }
-    var boutonCSV = document.getElementById('telecharger-codes');
-    if (boutonCSV) {
-      boutonCSV.addEventListener('click', function () {
-        telechargerCSV('codes_' + info.prefixe + '_' + aujourdhui() + '.csv', ['Classe', 'Numéro', 'Nom', 'Code'],
-          info.codes.map(function (c) { return [info.classe, c.numero, nomLocal(info.classe, c.numero), c.code]; }));
-      });
-    }
+    // nouveaux codes : la sauvegarde .desanonim (noms et codes de cet ordinateur, nouveaux codes compris)
+    var boutonSauvegarde = document.getElementById('telecharger-codes');
+    if (boutonSauvegarde) boutonSauvegarde.addEventListener('click', function () { exporterTout(); });
   }
 
   /* ---------- Classe anonymisée : correspondance ancien nom → numéro ---------- */
@@ -1879,7 +1875,7 @@
           c.codes.forEach(function (x) { copie[x.numero] = x.code; nouveauxTous.push({ classe: c.classe, numero: x.numero, code: x.code }); });
           ecrireCle(CLE_CODES, Object.assign(lireCle(CLE_CODES), (function () { var o = {}; o[c.classe] = copie; return o; })()));
         });
-        telechargerListeGlobale();
+        exporterTout();   // sauvegarde .desanonim, nouveaux codes compris
         conf.hidden = true;
         document.getElementById('reinit-titre').textContent = nouveauxTous.length + ' nouveaux codes';
         var zone = document.getElementById('fiches-toutes');
@@ -1893,7 +1889,7 @@
       b.disabled = false; b.textContent = 'Oui, remplacer les ' + dr.nb_eleves + ' codes';
     });
     document.getElementById('reinit-imprimer').addEventListener('click', function () { imprimerFiches(document.getElementById('fiches-toutes')); });
-    document.getElementById('reinit-telecharger').addEventListener('click', telechargerListeGlobale);
+    document.getElementById('reinit-telecharger').addEventListener('click', function () { exporterTout(); });
   }
 
   /* ---------- Codes de la classe : réimprimer / retélécharger depuis la copie locale ---------- */
