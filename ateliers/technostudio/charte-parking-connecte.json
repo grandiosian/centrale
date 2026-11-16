@@ -1,0 +1,356 @@
+{
+ "format": 2,
+ "id": "charte-parking-connecte",
+ "version": 2,
+ "title": "Le parking connecté",
+ "level": "college",
+ "niveau": "4e",
+ "cycle": 4,
+ "seq": 6,
+ "duration": 275,
+ "author": "Pôle des Sciences et de la Technologie",
+ "summary": "comprendre comment une barrière connectée reconnaît les véhicules autorisés, décrire ses chaînes et programmer la carte ESP32 de la barrière.",
+ "problematique": "Comment des objets connectés communiquent-ils pour ne laisser entrer que les véhicules autorisés ?",
+ "objet": "Le parking connecté",
+ "position": 6,
+ "competences": [
+  {
+   "code": "T1C1",
+   "color": "#30B34A",
+   "label": "Décrire les liens entre usages et évolutions technologiques des objets et des systèmes techniques",
+   "co": "Lignée d’objets, innovation. IA : données étiquetées, biais. Donnée personnelle, identification, authentification, mot de passe WPA2.",
+   "sub": [
+    {
+     "code": "T1C11",
+     "label": "Situer l’évolution des barrières ; avantages, inconvénients, biais d’une IA",
+     "ref": [
+      "OST11.4.2"
+     ]
+    },
+    {
+     "code": "T1C11",
+     "label": "Appliquer des règles de cybersécurité ; repérer les données personnelles",
+     "ref": [
+      "OST12.4.1"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "T2C1",
+   "color": "#C45CCE",
+   "label": "Décrire et caractériser l’organisation interne d’un objet et ses échanges avec son environnement (énergies, données)",
+   "co": "Terminal, serveur, point d’accès WiFi, liaison sans fil, topologie en étoile. Adresse IP (partie réseau / appareil, fixe). Capteur à ultrasons, ESP32, servomoteur. CSV, tableur, octet, ASCII.",
+   "sub": [
+    {
+     "code": "T2C11",
+     "label": "Décrire la chaîne d’énergie de la barrière",
+     "ref": [
+      "SFC11.4.1"
+     ]
+    },
+    {
+     "code": "T2C13",
+     "label": "Décrire la chaîne d’information de la barrière",
+     "ref": [
+      "SFC13.4.1"
+     ]
+    },
+    {
+     "code": "T2C14",
+     "label": "Réseau local, adresses IP, trames, données CSV, octets",
+     "ref": [
+      "SFC15.4.1"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "T2C2",
+   "color": "#C45CCE",
+   "label": "Identifier un dysfonctionnement d’un objet technique et y remédier",
+   "co": "Symptôme, hypothèse, vérification. Conflit d’adresses IP, câblage du servomoteur, seuil du capteur.",
+   "sub": [
+    {
+     "code": "T2C21",
+     "label": "Formuler une hypothèse de panne et proposer une vérification",
+     "ref": [
+      "SFC21.4.1"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "T3C3",
+   "color": "#E8B624",
+   "label": "Concevoir, écrire, tester et mettre au point un programme",
+   "co": "Protocole, trame. Événement « quand je reçois », instruction conditionnelle, attente sur un capteur, envoi de message. Protocole de test.",
+   "sub": [
+    {
+     "code": "T2C31",
+     "label": "Comprendre le protocole : ordre des échanges"
+    },
+    {
+     "code": "T3C31",
+     "label": "Compléter et téléverser le programme de la barrière",
+     "ref": [
+      "SFC31.4.2"
+     ]
+    },
+    {
+     "code": "T3C22",
+     "label": "Tester : mesurer le temps de réponse (< 2 s)",
+     "ref": [
+      "CCRI22.4.1"
+     ]
+    }
+   ]
+  }
+ ],
+ "presentation": "Dans chaque îlot, un robot ESP32 (le véhicule), une barrière ESP32 et un serveur Raspberry Pi communiquent sur un réseau WiFi local isolé. Les élèves analysent le réseau et les adresses IP, décrivent la barrière, complètent et testent son programme, exploitent le journal CSV, puis sécurisent et dépannent le parking.",
+ "synthese": "Terminal, serveur, client / serveur ; réseau local WiFi en étoile ; adresse IP (partie réseau / appareil, fixe ou automatique) ; protocole et trames ; chaînes d’information et d’énergie ; programme événementiel ; journal CSV et octets ; WPA2, authentification ; méthode de dépannage.",
+ "evaluation": "Évaluation /20 sans ordinateur, recto verso (E01 / E02), documents A, B, C autorisés ; version SEGPA /20.",
+ "deroulement": [
+  {
+   "seance": "Séance 1",
+   "objectif": "Découvrir le système",
+   "activites": "Évolution des barrières, rôles des objets",
+   "ressources": "P01, R01"
+  },
+  {
+   "seance": "Séance 2",
+   "objectif": "Comprendre le réseau local",
+   "activites": "Jeu des messages, IP, IP fixe",
+   "ressources": "P02, R02, R04, Pi + barrière"
+  },
+  {
+   "seance": "Séance 3",
+   "objectif": "Chaînes et programme",
+   "activites": "Chaînes, protocole, programme, test",
+   "ressources": "P03, R03, R04, robot + barrière"
+  },
+  {
+   "seance": "Séance 4",
+   "objectif": "Données, sécurité, pannes",
+   "activites": "Journal CSV, ASCII, attaque, pannes",
+   "ressources": "P04, R05, tableur, journal CSV"
+  },
+  {
+   "seance": "Séance 5",
+   "objectif": "Faire le bilan",
+   "activites": "Synthèse et évaluation",
+   "ressources": "S01, E01 / E02, R06"
+  }
+ ],
+ "differenciation": "Activités ORDI doublées par une version papier (7 postes pour 30 élèves). SEGPA : 2 feuilles (SEGPA_P01, P02), ressources S1 et S2, évaluation adaptée /20 avec « Mon bilan ».",
+ "materiel": "Par îlot : 1 Raspberry Pi (point d’accès WiFi PARKING-ILOTn, programme serveur, journal), 1 robot ESP32 (2 moteurs, capteur ultrason), 1 barrière ESP32 (servomoteur, capteur ultrason de passage, 2 voyants), 1 tablette de supervision. Programmes Barriere_demarrage et Barriere_ouverture ; fichier journal_parking.csv ; tableur ; chronomètres.",
+ "steps": [
+  {
+   "id": "pk-p03",
+   "title": "Séance 3 - Feuille 1",
+   "kind": "feuille",
+   "seance": 3,
+   "feuille": 1,
+   "resume": "la barrière reçoit un ordre du serveur et détecte le passage du véhicule. Tu décris ses chaînes, tu complètes son programme puis tu le testes.",
+   "blocks": [
+    {
+     "id": "pk-1",
+     "type": "boxes",
+     "tag": "papier",
+     "comp": [
+      "T2C13"
+     ],
+     "question": "Complète la **chaîne d’information** de la barrière avec : *capteur à ultrasons – carte ESP32 – module WiFi*.",
+     "topLabel": "fonction",
+     "bottomLabel": "constituant",
+     "items": [
+      {
+       "top": "ACQUÉRIR",
+       "bottom": {
+        "a": "capteur à ultrasons|capteur ultrason|capteur"
+       }
+      },
+      {
+       "top": "TRAITER",
+       "bottom": {
+        "a": "carte ESP32|ESP32"
+       }
+      },
+      {
+       "top": "COMMUNIQUER",
+       "bottom": {
+        "a": "module WiFi|WiFi|wifi"
+       }
+      }
+     ]
+    },
+    {
+     "id": "pk-f1",
+     "type": "filet"
+    },
+    {
+     "id": "pk-2",
+     "type": "table",
+     "tag": "papier",
+     "comp": [
+      "T2C14"
+     ],
+     "question": "Le réseau de l’îlot est **192.168.4.x**. Complète les adresses IP fixes (ressource 4).",
+     "headers": [
+      "Objet",
+      "Rôle",
+      "Adresse IP"
+     ],
+     "rows": [
+      [
+       "Raspberry Pi",
+       "serveur",
+       "192.168.4.1"
+      ],
+      [
+       "Barrière ESP32",
+       "client",
+       {
+        "a": "192.168.4.10"
+       }
+      ],
+      [
+       "Robot ESP32",
+       "client",
+       {
+        "a": "192.168.4.20"
+       }
+      ]
+     ],
+     "bank": [
+      "192.168.4.10",
+      "192.168.4.20"
+     ]
+    },
+    {
+     "id": "pk-q1",
+     "type": "questions",
+     "items": [
+      {
+       "q": "Quelle partie de l’adresse IP est commune à tous les objets de l’îlot ?",
+       "corr": "192.168.4 : la partie réseau."
+      },
+      {
+       "q": "Que se passe-t-il si deux objets ont la même adresse ?",
+       "corr": "Conflit d’adresses : les messages n’arrivent plus au bon objet."
+      }
+     ]
+    },
+    {
+     "id": "pk-d1",
+     "type": "decoupe"
+    },
+    {
+     "id": "pk-3",
+     "type": "code",
+     "tag": "ordi",
+     "comp": [
+      "T3C31"
+     ],
+     "board": "esp32",
+     "question": "Complète **Barriere_ouverture** : quand le capteur (déclenche 5, écho 18) mesure **moins de 15 cm**, le servomoteur (broche 13) ouvre la barrière à **90°** pendant 3 s, puis la referme à 0°.",
+     "start": {
+      "blocks": {
+       "languageVersion": 0,
+       "blocks": [
+        {
+         "type": "tl_program",
+         "x": 20,
+         "y": 20,
+         "inputs": {
+          "SETUP": {
+           "block": {
+            "type": "tl_servo",
+            "fields": {
+             "PIN": "13"
+            },
+            "inputs": {
+             "ANGLE": {
+              "shadow": {
+               "type": "math_number",
+               "fields": {
+                "NUM": 0
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       ]
+      }
+     },
+     "expect": [
+      "distanceCm(5, 18)",
+      "servo_13.write(90)",
+      "servo_13.write(0)",
+      "delay(3000)"
+     ],
+     "corr": "si distance < 15 alors servo 90°, attendre 3000 ms, sinon servo 0°."
+    },
+    {
+     "id": "pk-4",
+     "type": "vraifaux",
+     "tag": "papier",
+     "comp": [
+      "T3C22"
+     ],
+     "question": "Protocole de test : coche vrai ou faux.",
+     "items": [
+      {
+       "text": "On mesure le temps entre la détection et l’ouverture avec un chronomètre.",
+       "v": true
+      },
+      {
+       "text": "Si la barrière met 5 s à s’ouvrir, le cahier des charges (< 2 s) est respecté.",
+       "v": false
+      },
+      {
+       "text": "On répète la mesure plusieurs fois.",
+       "v": true
+      }
+     ]
+    },
+    {
+     "id": "pk-q2",
+     "type": "questions",
+     "items": [
+      {
+       "q": "Pourquoi la barrière attend-elle 3 secondes avant de se refermer ?",
+       "corr": "Pour laisser passer le véhicule en sécurité."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "pk-r",
+   "title": "Ressources 3 et 4",
+   "kind": "ressource",
+   "blocks": [
+    {
+     "id": "pk-r3",
+     "type": "ressource",
+     "num": "3",
+     "title": "La barrière connectée",
+     "md": "- **capteur à ultrasons** : mesure la distance au véhicule ;\n- **carte ESP32** : exécute le programme, reçoit les ordres du serveur par **WiFi** ;\n- **servomoteur** : lève ou baisse la barrière ;\n- **voyants** : vert = passage autorisé, rouge = refusé."
+    },
+    {
+     "id": "pk-r4",
+     "type": "ressource",
+     "num": "4",
+     "title": "Le réseau de l’îlot",
+     "md": "| Objet | Adresse IP |\n|---|---|\n| Raspberry Pi (point d’accès, serveur) | 192.168.4.1 |\n| Barrière ESP32 | 192.168.4.10 |\n| Robot ESP32 | 192.168.4.20 |\n\nLes trois premiers nombres (192.168.4) forment la **partie réseau** ; le dernier identifie l’**appareil**.",
+     "qr": "#code",
+     "qrLabel": "Ouvrir l’atelier Code"
+    }
+   ]
+  }
+ ]
+}

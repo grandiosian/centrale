@@ -11,7 +11,7 @@ Ce document fixe ce que chaque application publie, enregistre et échange, pour 
 ## 1. Principes
 
 1. **Sans serveur d'abord.** Une application est une page statique (GitHub Pages, avec ses copies sur la Forge et sur ce serveur). Elle marche entièrement sans la Centrale : ouvrir un atelier, le faire, garder son travail.
-2. **Les ateliers sont créés dans l'application et publiés avec elle.** Ils sont dans son code ou dans son dossier `ateliers/`, servis avec la page. Ils restent donc disponibles même si la Centrale est en panne, déplacée ou absente.
+2. **Les premiers pas sont dans l'application ; les autres ateliers passent par la Centrale.** Les ateliers intégrés (premiers pas) sont dans son code, servis avec la page : ils s'ouvrent toujours, même sur un poste neuf, même si la Centrale est en panne. Les autres sont des fichiers versionnés du dépôt de la Centrale (`ateliers/<app>/<id>.json`), que l'application demande à son API puis garde en copie sur le poste : ils s'ouvrent pendant une panne du serveur sur un poste qui les a déjà ouverts. Règle : [Ateliers intégrés et transférés](./?doc=integres-transferes).
 3. **Le travail de l'élève reste sur son poste.** Il est enregistré dans le navigateur. La seule copie de secours obligatoire est le **dépôt Nuage d'urgence** : l'élève enregistre un fichier et le dépose dans le dossier Nuage de sa classe (§ 9). Quand la Centrale est là, elle reçoit en plus la progression, les constats et une copie du travail : c'est un confort, jamais une condition.
 4. **La Centrale range, elle ne crée pas.** Elle importe les ateliers publiés par les applications (§ 4) pour les ranger dans la page Ateliers, les relier aux compétences, aux parcours, à la bibliothèque et au suivi. Elle n'est jamais la seule à détenir un atelier.
 5. **Identifiants stables.** Application, atelier, activité, clé de données, nom de fichier attendu : on en ajoute, on n'en renomme pas. Le travail et le suivi des élèves y sont rattachés.
@@ -40,7 +40,7 @@ Dans l'espace enseignant, la page **Ateliers** a deux onglets : « Applications 
 |---|---|---|---|
 | `centrale.json` | `passerelle.atelier` v1 | obligatoire | identité, activités, progression, données, fichiers échangés ([spécification](./)) |
 | `ateliers.json` | `catalogue.ateliers` v1 | obligatoire | liste des ateliers ([schéma](catalogue-ateliers.schema.json), [modèle](modele-ateliers.json)) |
-| `ateliers/<id>.json` | propre à l'application | si les ateliers sont des fichiers | contenu complet d'un atelier (TechnoStudio) |
+| `ateliers/<id>.json` | propre à l'application | si les ateliers sont des fichiers | contenu complet d'un atelier publié par l'application (aucun aujourd'hui : les ateliers en fichiers sont dans la Centrale, `ateliers/<app>/<id>.json`, servis par `api/atelier-fichier.php`) |
 | `PASSERELLE.md` | texte | recommandé | ce que l'application fait de ses données |
 
 Ces fichiers sont **produits à partir du code** de l'application (script de construction ou page d'outil), jamais écrits à la main, et un test vérifie qu'ils correspondent à ce que l'application fait réellement. C'est ce que font déjà l'outil `verifier-descripteur.html` de NetSim et d'Établi 3D et `tools/centrale-json.js` de TechnoStudio.
@@ -187,12 +187,12 @@ Les trois applications suivent ce document.
 |---|---|---|---|
 | `centrale.json` produit et vérifié | oui | oui | oui |
 | `ateliers.json` produit et vérifié | oui, `NetSim.ateliers()` + `outils/verifier-descripteur.html` | oui, `Etabli3D.ateliers()` + `npm test` | oui, `tools/centrale-json.js` (refait à chaque publication) |
-| Ateliers | 18 exercices | 39 tutos, exercices, exemples | ateliers intégrés + dossier `ateliers/` des enseignants |
+| Ateliers | 18 exercices | 39 tutos, exercices, exemples | 3 ateliers intégrés (premiers pas) + ateliers transférés par la Centrale (copie gardée sur le poste) |
 | Ouvrir par `#activite=` sans connexion | oui | oui | oui (`<atelier>` ou `<atelier>/<feuille>`) |
 | Compétences déclarées et constats | oui (indices, essais) | oui (indice, niveau de la classe) | oui (niveau d'après le barème) |
 | Fichier de travail et « Déposer sur Nuage » | Exporter le schéma | Fichier → Déposer sur Nuage | Fichier → Enregistrer / Ouvrir mon travail, Déposer sur Nuage |
 | Lien Nuage gardé sur le poste | `netsim-nuage` | `etabli3d.nuage` | `ts-nuage` |
 
-Dans TechnoStudio, les ressources déposées sur la Centrale restent lues à la connexion, en attendant que les ateliers des enseignants soient publiés dans `ateliers/` (voir `ateliers/LISEZMOI.md` du dépôt TechnoStudio).
+Dans TechnoStudio, les ressources déposées sur la Centrale restent lues à la connexion (un atelier pour une seule classe, sans attendre) ; les ateliers pour tous sont publiés dans le dossier `ateliers/technostudio/` du dépôt de la Centrale (voir `ateliers/LISEZMOI.md` du dépôt TechnoStudio).
 
 Une nouvelle application suit la liste de contrôle du § 13 ; ensuite : Centrale → Ateliers → « Ateliers des applications » → « Importer ».

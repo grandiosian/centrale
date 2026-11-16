@@ -1,0 +1,270 @@
+{
+ "format": 2,
+ "id": "demo-snt-parking-connecte",
+ "version": 2,
+ "title": "Parking connecté : variables et compteur",
+ "level": "snt",
+ "duration": 90,
+ "author": "TechnoStudio (démo)",
+ "summary": "Informatique embarquée : capteurs, variables, boucle d’événements, passage des blocs à Python.",
+ "competences": [
+  "SNT · Informatique embarquée et objets connectés",
+  "Écrire un programme simple avec variables et conditions",
+  "Passer d’un langage par blocs à Python"
+ ],
+ "steps": [
+  {
+   "title": "Système embarqué",
+   "blocks": [
+    {
+     "type": "text",
+     "md": "Un **système informatique embarqué** est intégré à un objet : il lit des **capteurs**, exécute un **programme** et commande des **actionneurs**, souvent sans écran ni clavier. La barrière d’un parking en est un exemple.",
+     "id": "e1-b1"
+    },
+    {
+     "type": "match",
+     "question": "Associe chaque élément à son rôle.",
+     "pairs": [
+      [
+       "Capteur à boucle magnétique",
+       "Détecte une voiture"
+      ],
+      [
+       "Microcontrôleur",
+       "Exécute le programme"
+      ],
+      [
+       "Barrière motorisée",
+       "Agit sur le monde réel"
+      ],
+      [
+       "Variable `places`",
+       "Mémorise une valeur"
+      ]
+     ],
+     "id": "e1-b2"
+    }
+   ],
+   "id": "e1"
+  },
+  {
+   "title": "Compter les places",
+   "blocks": [
+    {
+     "type": "text",
+     "md": "Le parking compte **5 places**. Programme la barrière :\n1. au démarrage, `places` vaut 5 et l’afficheur l’indique ;\n2. si une voiture se présente **et** qu’il reste des places : lever la barrière, enlever 1 à `places`, mettre à jour l’afficheur, attendre que la voiture soit passée puis 1 s, baisser la barrière ;\n3. si une voiture sort : ajouter 1 à `places` ;\n4. le voyant **COMPLET** s’allume quand `places` vaut 0.",
+     "id": "e2-b1"
+    },
+    {
+     "type": "blocks",
+     "scene": "parking",
+     "vars": [
+      "places"
+     ],
+     "start": [
+      {
+       "op": "setvar",
+       "name": "places",
+       "value": 5
+      },
+      {
+       "op": "set",
+       "target": "afficheur",
+       "value": {
+        "var": "places"
+       }
+      },
+      {
+       "op": "forever",
+       "body": []
+      }
+     ],
+     "tests": [
+      {
+       "name": "Au démarrage, l’afficheur indique 5",
+       "steps": [
+        {
+         "run": 0.5,
+         "expect": {
+          "afficheur": 5
+         }
+        }
+       ]
+      },
+      {
+       "name": "Une voiture entre : la barrière se lève et l’afficheur passe à 4",
+       "steps": [
+        {
+         "set": {
+          "entree": 1
+         },
+         "run": 0.4,
+         "expect": {
+          "barriere": 1
+         }
+        },
+        {
+         "set": {
+          "entree": 0
+         },
+         "run": 2,
+         "expect": {
+          "afficheur": 4,
+          "barriere": 0
+         }
+        }
+       ]
+      },
+      {
+       "name": "Une sortie libère une place",
+       "steps": [
+        {
+         "set": {
+          "entree": 1
+         },
+         "run": 0.4
+        },
+        {
+         "set": {
+          "entree": 0
+         },
+         "run": 2
+        },
+        {
+         "set": {
+          "sortie": 1
+         },
+         "run": 0.4
+        },
+        {
+         "set": {
+          "sortie": 0
+         },
+         "run": 0.5,
+         "expect": {
+          "places": 5
+         }
+        }
+       ]
+      },
+      {
+       "name": "Après 5 entrées : COMPLET et la barrière reste baissée",
+       "steps": [
+        {
+         "set": {
+          "entree": 1
+         },
+         "run": 0.4
+        },
+        {
+         "set": {
+          "entree": 0
+         },
+         "run": 2
+        },
+        {
+         "set": {
+          "entree": 1
+         },
+         "run": 0.4
+        },
+        {
+         "set": {
+          "entree": 0
+         },
+         "run": 2
+        },
+        {
+         "set": {
+          "entree": 1
+         },
+         "run": 0.4
+        },
+        {
+         "set": {
+          "entree": 0
+         },
+         "run": 2
+        },
+        {
+         "set": {
+          "entree": 1
+         },
+         "run": 0.4
+        },
+        {
+         "set": {
+          "entree": 0
+         },
+         "run": 2
+        },
+        {
+         "set": {
+          "entree": 1
+         },
+         "run": 0.4
+        },
+        {
+         "set": {
+          "entree": 0
+         },
+         "run": 2
+        },
+        {
+         "set": {
+          "entree": 1
+         },
+         "run": 0.6,
+         "expect": {
+          "voyant_complet": 1,
+          "barriere": 0,
+          "afficheur": 0
+         }
+        }
+       ]
+      }
+     ],
+     "hint": "Pour éviter de compter une voiture plusieurs fois, attends que le capteur repasse à 0 (« attendre jusqu’à Capteur entrée = 0 ») avant de continuer.",
+     "id": "e2-b2"
+    }
+   ],
+   "id": "e2"
+  },
+  {
+   "title": "Vers Python",
+   "blocks": [
+    {
+     "type": "text",
+     "md": "Clique sur **Voir en Python** sous ton programme : chaque bloc a son équivalent textuel. `while True:` correspond à « répéter indéfiniment », `if … :` à « si … alors ».",
+     "id": "e3-b1"
+    },
+    {
+     "type": "cloze",
+     "text": "En Python, une boucle infinie s’écrit `[[while True:|while true:|while True]]`. Pour retirer 1 à la variable places, on écrit `places = places [[-]] 1`. Le test « égal à » s’écrit avec [[!==|=|:=]].",
+     "id": "e3-b2"
+    },
+    {
+     "type": "qcm",
+     "question": "Que fait ce code ?\n\n`if places == 0:`\n`    ecrire(\"voyant_complet\", 1)`",
+     "options": [
+      {
+       "text": "Il allume le voyant quand il ne reste plus de place",
+       "correct": true
+      },
+      {
+       "text": "Il met la variable places à 0",
+       "correct": false
+      },
+      {
+       "text": "Il compte les voitures",
+       "correct": false
+      }
+     ],
+     "id": "e3-b3"
+    }
+   ],
+   "id": "e3"
+  }
+ ],
+ "niveau": "2nde"
+}

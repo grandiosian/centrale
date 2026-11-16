@@ -1,0 +1,241 @@
+{
+ "format": 2,
+ "id": "demo-sti2d-serre-regulation",
+ "version": 2,
+ "title": "Serre automatisée : régulation tout ou rien",
+ "level": "sti2d",
+ "duration": 120,
+ "author": "TechnoStudio (démo)",
+ "summary": "Chaîne de puissance, bilan énergétique, régulation à hystérésis de la température et de l’arrosage.",
+ "competences": [
+  "Analyser le comportement d’un système asservi",
+  "Évaluer une performance énergétique",
+  "Programmer une commande tout ou rien avec hystérésis"
+ ],
+ "steps": [
+  {
+   "title": "Analyse fonctionnelle",
+   "blocks": [
+    {
+     "type": "text",
+     "md": "La serre maintient les plantes dans de bonnes conditions : **température entre 18 et 24 °C**, **humidité du sol entre 30 et 60 %**. Un microcontrôleur lit les capteurs et pilote chauffage, ventilation et électrovanne d’arrosage.",
+     "id": "e1-b1"
+    },
+    {
+     "type": "chain",
+     "question": "Complète les chaînes pour la fonction « chauffer la serre ».",
+     "infoIn": "Température",
+     "infoOut": "Données vers le superviseur",
+     "energyIn": "Réseau 230 V",
+     "action": "Air chauffé",
+     "items": [
+      {
+       "text": "Sonde PT100",
+       "slot": "acquerir"
+      },
+      {
+       "text": "Microcontrôleur",
+       "slot": "traiter"
+      },
+      {
+       "text": "Module LoRa",
+       "slot": "communiquer"
+      },
+      {
+       "text": "Disjoncteur + réseau",
+       "slot": "alimenter"
+      },
+      {
+       "text": "Relais statique",
+       "slot": "distribuer"
+      },
+      {
+       "text": "Résistance chauffante",
+       "slot": "convertir"
+      },
+      {
+       "text": "Ventilateur de brassage",
+       "slot": "transmettre"
+      }
+     ],
+     "id": "e1-b2"
+    }
+   ],
+   "id": "e1"
+  },
+  {
+   "title": "Bilan énergétique",
+   "blocks": [
+    {
+     "type": "numeric",
+     "question": "Le chauffage est une résistance alimentée sous **230 V** et parcourue par **6,5 A**. Calcule sa puissance P = U × I.",
+     "answer": 1495,
+     "tolerance": 5,
+     "unit": "W",
+     "id": "e2-b1"
+    },
+    {
+     "type": "numeric",
+     "question": "Il fonctionne en moyenne **5 h par nuit** pendant **90 nuits**. Calcule l’énergie consommée en kWh (E = P × t).",
+     "answer": 672.75,
+     "tolerance": 3,
+     "unit": "kWh",
+     "hint": "Convertis P en kW, puis multiplie par le nombre total d’heures (5 × 90).",
+     "explanation": "E = 1,495 kW × 450 h ≈ **673 kWh**.",
+     "id": "e2-b2"
+    },
+    {
+     "type": "numeric",
+     "question": "À **0,25 € le kWh**, quel est le coût de ce chauffage pour la saison ?",
+     "answer": 168.19,
+     "tolerance": 2,
+     "unit": "€",
+     "id": "e2-b3"
+    }
+   ],
+   "id": "e2"
+  },
+  {
+   "title": "Régulation à hystérésis",
+   "blocks": [
+    {
+     "type": "text",
+     "md": "Une régulation **tout ou rien** sans écart provoque des commutations très rapides du relais. On utilise une **hystérésis** : on allume sous le seuil bas, on éteint au-dessus du seuil haut, et entre les deux **on ne change rien**.\n\n| Mesure | Chauffage | Ventilation | Arrosage |\n|---|---|---|---|\n| T < 18 °C | marche | — | — |\n| T > 22 °C | arrêt | — | — |\n| T > 26 °C | — | marche | — |\n| T < 24 °C | — | arrêt | — |\n| Sol < 30 % | — | — | ouvert |\n| Sol > 60 % | — | — | fermé |",
+     "id": "e3-b1"
+    },
+    {
+     "type": "blocks",
+     "scene": "serre",
+     "question": "Programme la régulation complète. Teste en direct en changeant la température extérieure.",
+     "tests": [
+      {
+       "name": "Hiver (5 °C dehors) : la température reste entre 17 et 24 °C",
+       "init": {
+        "temp_ext": 5
+       },
+       "steps": [
+        {
+         "run": 30
+        },
+        {
+         "run": 60,
+         "expect": {
+          "temperature": {
+           "min": 17,
+           "max": 24
+          }
+         }
+        }
+       ]
+      },
+      {
+       "name": "Pas de surchauffe : la température ne dépasse jamais 24 °C",
+       "init": {
+        "temp_ext": 5
+       },
+       "steps": [
+        {
+         "run": 9,
+         "expect": {
+          "temperature": {
+           "max": 24
+          }
+         }
+        },
+        {
+         "run": 4,
+         "expect": {
+          "temperature": {
+           "max": 24
+          }
+         }
+        },
+        {
+         "run": 5,
+         "expect": {
+          "temperature": {
+           "max": 24
+          }
+         }
+        },
+        {
+         "run": 7,
+         "expect": {
+          "temperature": {
+           "max": 24
+          }
+         }
+        },
+        {
+         "run": 11,
+         "expect": {
+          "temperature": {
+           "min": 16,
+           "max": 24
+          }
+         }
+        }
+       ]
+      },
+      {
+       "name": "Forte chaleur (32 °C dehors) : la ventilation démarre",
+       "init": {
+        "temp_ext": 32
+       },
+       "steps": [
+        {
+         "run": 40,
+         "expect": {
+          "ventilation": 1,
+          "chauffage": 0
+         }
+        }
+       ]
+      },
+      {
+       "name": "L’humidité du sol reste entre 25 et 65 %",
+       "init": {
+        "temp_ext": 15
+       },
+       "steps": [
+        {
+         "run": 120,
+         "expect": {
+          "humidite": {
+           "min": 25,
+           "max": 65
+          }
+         }
+        }
+       ]
+      }
+     ],
+     "hint": "Utilise trois blocs « si » indépendants dans la boucle, un par actionneur, chacun avec deux conditions (seuil bas / seuil haut).",
+     "id": "e3-b2"
+    },
+    {
+     "type": "qcm",
+     "question": "Quel est l’intérêt principal de l’hystérésis ?",
+     "options": [
+      {
+       "text": "Limiter le nombre de commutations du relais",
+       "correct": true
+      },
+      {
+       "text": "Atteindre exactement la consigne",
+       "correct": false
+      },
+      {
+       "text": "Supprimer le capteur de température",
+       "correct": false
+      }
+     ],
+     "explanation": "Moins de commutations = moins d’usure des contacts et moins de perturbations.",
+     "id": "e3-b3"
+    }
+   ],
+   "id": "e3"
+  }
+ ],
+ "niveau": "1re"
+}

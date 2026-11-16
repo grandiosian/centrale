@@ -1,0 +1,159 @@
+{
+ "format": 2,
+ "id": "demo-pro-consignation-mesures",
+ "version": 2,
+ "title": "Consignation et mesures électriques",
+ "level": "pro",
+ "duration": 90,
+ "author": "TechnoStudio (démo)",
+ "summary": "Étapes de la consignation (NF C18-510), EPI, mesures et loi d’Ohm sur maquette virtuelle.",
+ "competences": [
+  "Mettre en sécurité un ouvrage électrique",
+  "Réaliser des mesures et exploiter les résultats"
+ ],
+ "steps": [
+  {
+   "title": "La consignation",
+   "blocks": [
+    {
+     "type": "text",
+     "md": "> ! Avant toute intervention sur une installation, elle doit être **consignée** par une personne habilitée. Une erreur d’ordre peut exposer l’intervenant à la tension.",
+     "id": "e1-b1"
+    },
+    {
+     "type": "order",
+     "question": "Remets les opérations de consignation dans l’ordre.",
+     "items": [
+      "Pré-identifier l’ouvrage sur les plans",
+      "Séparer l’ouvrage de toute source de tension",
+      "Condamner l’organe de séparation (cadenas, pancarte)",
+      "Identifier l’ouvrage sur le lieu de travail",
+      "Vérifier l’absence de tension (VAT)",
+      "Mettre à la terre et en court-circuit (si nécessaire)"
+     ],
+     "id": "e1-b2"
+    },
+    {
+     "type": "sort",
+     "question": "Classe les équipements.",
+     "categories": [
+      {
+       "name": "Équipement de protection individuelle",
+       "items": [
+        "Gants isolants",
+        "Écran facial anti-UV",
+        "Vêtement ininflammable"
+       ]
+      },
+      {
+       "name": "Équipement de consignation / mesure",
+       "items": [
+        "VAT",
+        "Cadenas de condamnation",
+        "Tapis isolant",
+        "Pancarte « Ne pas manœuvrer »"
+       ]
+      }
+     ],
+     "id": "e1-b3"
+    }
+   ],
+   "id": "e1"
+  },
+  {
+   "title": "Mesures et loi d’Ohm",
+   "blocks": [
+    {
+     "type": "text",
+     "md": "Sur la maquette, la résistance **R1** est alimentée par une source de **9 V**. Touche R1 pour afficher la tension à ses bornes et l’intensité qui la traverse, comme avec un multimètre.",
+     "id": "e2-b1"
+    },
+    {
+     "type": "circuit",
+     "demo": true,
+     "cols": 5,
+     "rows": 3,
+     "initial": {
+      "v-0-0": {
+       "type": "battery",
+       "v": 9,
+       "label": "G1"
+      },
+      "v-1-0": {
+       "type": "wire"
+      },
+      "h-0-0": {
+       "type": "wire"
+      },
+      "h-0-1": {
+       "type": "switch",
+       "closed": true,
+       "label": "K1"
+      },
+      "h-0-2": {
+       "type": "wire"
+      },
+      "h-0-3": {
+       "type": "wire"
+      },
+      "v-0-4": {
+       "type": "wire"
+      },
+      "v-1-4": {
+       "type": "resistor",
+       "r": 470,
+       "label": "R1"
+      },
+      "h-2-0": {
+       "type": "wire"
+      },
+      "h-2-1": {
+       "type": "wire"
+      },
+      "h-2-2": {
+       "type": "wire"
+      },
+      "h-2-3": {
+       "type": "wire"
+      }
+     },
+     "id": "e2-b2"
+    },
+    {
+     "type": "numeric",
+     "question": "Relève l’intensité dans R1 et calcule sa résistance R = U ÷ I à partir de tes mesures.",
+     "answer": 470,
+     "tolerancePct": 3,
+     "unit": "Ω",
+     "id": "e2-b3"
+    },
+    {
+     "type": "numeric",
+     "question": "Calcule la puissance dissipée par R1 : P = U × I.",
+     "answer": 0.172,
+     "tolerance": 0.006,
+     "unit": "W",
+     "explanation": "P ≈ 8,99 V × 0,0191 A ≈ **0,17 W** : une résistance ¼ W convient, mais sans grande marge.",
+     "id": "e2-b4"
+    },
+    {
+     "type": "qcm",
+     "question": "Pour mesurer une intensité, l’ampèremètre se branche…",
+     "options": [
+      {
+       "text": "en série dans le circuit",
+       "correct": true
+      },
+      {
+       "text": "en dérivation aux bornes du récepteur",
+       "correct": false
+      }
+     ],
+     "id": "e2-b5"
+    }
+   ],
+   "id": "e2"
+  }
+ ],
+ "niveau": "Pro"
+}

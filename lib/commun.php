@@ -1846,5 +1846,6 @@ require_once __DIR__ . '/passerelles.php';
 require_once __DIR__ . '/bibliotheque.php';
 require_once __DIR__ . '/competences.php';
 require_once __DIR__ . '/catalogue_ateliers.php';
+require_once __DIR__ . '/ateliers_centrale.php';   // ateliers transférés par la Centrale (dossier ateliers/<app>/)
 require_once __DIR__ . '/progression.php';    // progression des ateliers d'une classe
 require_once __DIR__ . '/organisation.php';   // emploi du temps : utilisé par l'activation calendaire des ateliers (portail)

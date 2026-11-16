@@ -12,13 +12,15 @@
  *  2. « descripteur » : à défaut, les activités de son centrale.json, regroupées par atelier ;
  *  3. « fichier » : un fichier exporté d'une application et déposé par l'enseignant (catalogue, atelier seul,
  *     ou atelier TechnoStudio *.technostudio.json).
+ * À côté : « centrale », les ateliers transférés par la Centrale (fichiers versionnés ateliers/<app>/<id>.json du dépôt
+ * de la Centrale, lib/ateliers_centrale.php). Ils passent avant ce que l'application publie sous le même identifiant.
  */
 declare(strict_types=1);
 
 const FORMAT_CATALOGUE = 'catalogue.ateliers';
 const TAILLE_MAX_FICHIER_ATELIERS = 2 * 1024 * 1024;
 const SOURCES_CATALOGUE = ['catalogue' => 'ateliers.json de l’application', 'descripteur' => 'centrale.json (activités regroupées)',
-                           'fichier' => 'fichier importé'];
+                           'fichier' => 'fichier importé', 'centrale' => 'fichier de la Centrale (dossier ateliers/ de son dépôt)'];
 
 function creer_tables_catalogue(PDO $pdo): void
 {
@@ -392,8 +394,9 @@ function ranger_ateliers(string $app, array $ateliers, string $source, bool $com
     if ($complet && $ateliers) {
         $ret = $pdo->prepare("UPDATE catalogue_ateliers SET etat = 'retire', modifie_le = ? WHERE app = ? AND atelier = ?");
         foreach ($avant as $id => $a) {
-            // Un fichier importé à la main n'est pas « retiré » parce que l'application ne le publie pas encore
-            if (!isset($vus[$id]) && $a['etat'] === 'actif' && $a['source'] !== 'fichier') {
+            // Un fichier importé à la main n'est pas « retiré » parce que l'application ne le publie pas encore ;
+            // un atelier transféré par la Centrale ne dépend pas de ce que publie l'application
+            if (!isset($vus[$id]) && $a['etat'] === 'actif' && $a['source'] !== 'fichier' && $a['source'] !== 'centrale') {
                 $ret->execute([$maintenant, $app, $id]);
                 $bilan['retires'][] = $a['titre'];
             }
@@ -449,15 +452,21 @@ function importer_ateliers_application(string $app): array
     }
     $erreurs = [];
     $connues = activites_descripteur(descripteur_de($app));
+    $bilan_centrale = importer_ateliers_centrale($app);   // d'abord : ses ateliers ne seront pas « retirés » ci-dessous
+    // Ateliers transférés par la Centrale (ateliers/<app>/) : leur fichier passe avant ce que publie l'application
+    $centrale = fichiers_ateliers_centrale($app);
+    $sans_centrale = fn(array $l) => array_values(array_filter($l, fn($n) => !isset($centrale[$n['atelier']])));
     foreach (adresses_catalogue($at) as $url) {
         [$c, $err] = telecharger_descripteur($url);
         if ($c) {
             [$liste, $rem] = lire_catalogue_ateliers($c, $app, $connues, $url);
+            $liste = $sans_centrale($liste);
             if ($liste) {
                 $bilan = ranger_ateliers($app, $liste, 'catalogue', true);
                 $bilan['remarques'] = $rem;
                 journaliser_import($app, 'catalogue', $url, $bilan);
-                return ['ok' => true, 'source' => 'catalogue', 'adresse' => $url, 'bilan' => $bilan, 'remarques' => $rem, 'n' => count($liste)];
+                return ['ok' => true, 'source' => 'catalogue', 'adresse' => $url, 'bilan' => $bilan, 'remarques' => $rem, 'n' => count($liste),
+                        'centrale' => $bilan_centrale];
             }
             $erreurs[] = "$url : " . ($rem ? implode(' ', $rem) : 'catalogue vide.');
             break;
@@ -481,14 +490,16 @@ function importer_ateliers_application(string $app): array
             $erreurs[] = $err;
         }
     }
-    $liste = $d ? ateliers_depuis_descripteur($d) : [];
+    $liste = $d ? $sans_centrale(ateliers_depuis_descripteur($d)) : [];
     if (!$liste) {
-        return ['ok' => false, 'remarques' => array_merge($erreurs, ['Aucun atelier trouvé : l’application ne publie ni ateliers.json ni activités dans centrale.json.'])];
+        return ['ok' => false, 'centrale' => $bilan_centrale,
+                'remarques' => array_merge($erreurs, ['Aucun atelier trouvé : l’application ne publie ni ateliers.json ni activités dans centrale.json.'])];
     }
     $bilan = ranger_ateliers($app, $liste, 'descripteur', true);
     $bilan['remarques'] = $erreurs;
     journaliser_import($app, 'descripteur', $adresse, $bilan);
-    return ['ok' => true, 'source' => 'descripteur', 'adresse' => $adresse, 'bilan' => $bilan, 'remarques' => $erreurs, 'n' => count($liste)];
+    return ['ok' => true, 'source' => 'descripteur', 'adresse' => $adresse, 'bilan' => $bilan, 'remarques' => $erreurs, 'n' => count($liste),
+            'centrale' => $bilan_centrale];
 }
 
 /** Bilan lisible : « 2 ajoutés, 1 modifié, 15 inchangés ». */
@@ -510,6 +521,7 @@ function texte_bilan(array $b): string
 /** Ateliers du catalogue (tous, ou d'une application), dans l'ordre des applications puis de l'application. */
 function catalogue_ateliers(?string $app = null, bool $avec_retires = true): array
 {
+    synchroniser_ateliers_centrale();   // fichiers ateliers/<app>/ ajoutés, changés ou retirés depuis la dernière lecture
     $sql = 'SELECT c.*, a.nom AS nom_app, a.icone AS icone_app, a.url AS url_app FROM catalogue_ateliers c
             LEFT JOIN ateliers a ON a.app = c.app WHERE 1 = 1' . ($app !== null ? ' AND c.app = ?' : '')
         . ($avec_retires ? '' : " AND c.etat = 'actif'") . ' ORDER BY COALESCE(a.ordre, 999), c.app, c.etat, c.ordre, c.titre';

@@ -6,17 +6,20 @@ Centrale → **Ateliers** → **Inspecter** (dans « Imports et disponibilité �
 
 ## 1. Comment un atelier est rangé
 
-> **Où vit un atelier** : les premiers pas de chaque application restent dans son code ; tous les autres passeront par la
+> **Où vit un atelier** : les premiers pas de chaque application restent dans son code ; tous les autres passent par la
 > Centrale (`centrale/ateliers/<app>/`). Règle et ordre de passage : [Ateliers intégrés et transférés](./?doc=integres-transferes).
-> Tant qu'un atelier n'est pas passé, la procédure ci-dessous s'applique telle quelle.
+> **TechnoStudio est passé** (16 novembre 2026) : ses ateliers, sauf la lampe de poche, le premier programme et les circuits
+> série / dérivation, sont des fichiers de la Centrale. La procédure ci-dessous est la sienne.
 
 Un atelier existe à trois endroits. Seul le premier est la référence ; les deux autres en sont tirés automatiquement.
 
 | Où | Quoi | Qui l'écrit |
 |---|---|---|
-| **Le fichier de l'atelier**, dans l'application : `TechnoStudio/ateliers/<id>.technostudio.json` | Tout l'atelier : fiche pédagogique, compétences, feuilles, blocs, images | L'éditeur de TechnoStudio (bouton **Publier**) |
-| **Le catalogue de l'application** : `ateliers.json` (et `centrale.json`) | Une fiche courte par atelier : titre, niveau, durée, compétences, liste des activités | La publication de l'application, jamais à la main |
-| **Le catalogue de la Centrale** (table `catalogue_ateliers`) | Une copie de cette fiche, pour ranger, proposer, mettre au calendrier, suivre | Le bouton **Mettre à jour** de la page Ateliers |
+| **Le fichier de l'atelier**, dans la Centrale : `centrale/ateliers/technostudio/<id>.json` (versionné dans git, déployé avec elle) | Tout l'atelier : fiche pédagogique, compétences, feuilles, blocs, images | L'éditeur de TechnoStudio (bouton **Publier**) |
+| **Le catalogue de la Centrale** (table `catalogue_ateliers`, source « fichier de la Centrale ») | Une fiche courte : titre, niveau, durée, compétences, liste des activités, calculées comme TechnoStudio | La Centrale elle-même, dès que le fichier change (aussi au bouton **Mettre à jour**) |
+| **La copie du poste** (TechnoStudio, IndexedDB `transfere:<id>`) | Le fichier, avec sa version, pour les pannes du serveur | TechnoStudio, à la première ouverture (API `api/atelier-fichier.php`) |
+
+Les ateliers intégrés (premiers pas) restent dans le code de l'application ; elle les publie dans son `ateliers.json`, que la Centrale importe.
 
 Dans le fichier TechnoStudio, un atelier contient :
 
@@ -58,26 +61,26 @@ FicheStudio **n'exporte pas** vers TechnoStudio : on en tire un **PDF**, qui ser
 > Un nouvel atelier reçoit d'abord un identifiant au hasard (`at-k3j9x2ab`). « Publier » le rappelle tant qu'il n'a pas été
 > remplacé par un identifiant lisible (`radar-recul-robot-mbot`). Après la publication, il ne peut plus changer.
 
-### Étape C — Publier avec l'application
-1. Fichier → Mes ateliers (créer, publier) → **Publier** sur la ligne de l'atelier (ou dans l'éditeur) : la fenêtre rappelle l'identifiant et la version, puis « Télécharger » donne le fichier `<id>.technostudio.json`. (Le bouton reste grisé tant que l'atelier n'est pas conforme.)
-2. Sur GitHub, dépôt **TechnoStudio**, dossier `ateliers/` : **Add file → Upload files**, déposer le fichier, **Commit changes**.
-3. La publication automatique (quelques minutes) vérifie l'atelier, refait `ateliers.json`, `centrale.json` et le fichier
-   unique, puis met le site à jour. Une erreur dans le fichier bloque toute la publication : regarder l'onglet **Actions** de GitHub.
-4. **Centrale** : pousser la Centrale (un commit vide suffit) pour mettre à jour sa copie de TechnoStudio (miroir).
+### Étape C — Publier dans la Centrale
+1. Fichier → Mes ateliers (créer, publier) → **Publier** sur la ligne de l'atelier (ou dans l'éditeur) : la fenêtre rappelle l'identifiant et la version, puis « Télécharger » donne le fichier `<id>.json`. (Le bouton reste grisé tant que l'atelier n'est pas conforme.)
+2. Sur GitHub, dépôt **centrale**, dossier `ateliers/technostudio/` : **Add file → Upload files**, déposer le fichier, **Commit changes**.
+   Le nom du fichier est l'identifiant de l'atelier : ne pas le renommer.
+3. Le déploiement de la Centrale (quelques minutes, onglet **Actions** de GitHub) met le fichier en ligne. Rien à faire dans TechnoStudio.
 
 ### Étape D — Dans la Centrale
-1. **Ateliers** → « Imports et disponibilité » → TechnoStudio → **Mettre à jour**.
-2. **Inspecter** l'atelier : vérifier l'identifiant, les activités (P1, P2…), les compétences reliées et le fichier publié.
+1. **Ateliers** : l'atelier est déjà au catalogue (la Centrale relit son dossier `ateliers/` dès qu'il change ; « Mettre à jour » le relit aussi).
+2. **Inspecter** l'atelier : vérifier l'identifiant, les activités (P1, P2…), les compétences reliées et le fichier (parties 4 et 5).
 3. Le proposer : **Calendrier** de la classe (date et nombre de séances), **Parcours**, ou activités demandées.
 4. **Tester à la place d'un élève** (Applications → Tester) : vue Élève pour les verrous, vue Enseignant pour tout voir.
 
 ## 4. Modifier un atelier déjà publié
 
-1. TechnoStudio → Fichier → Mes ateliers (créer, publier), section « Ateliers publiés avec TechnoStudio » → **Modifier**.
+1. TechnoStudio → Fichier → Mes ateliers (créer, publier), section « Ateliers de la Centrale » → **Modifier**.
    L'atelier garde son identifiant : le travail des élèves reste rattaché.
 2. Modifier, en respectant les règles du §2 (nouvelles feuilles à la fin).
 3. **Publier** : la version suivante est proposée d'elle-même si le contenu a changé. Télécharger le fichier : il porte le même nom.
-4. Sur GitHub, redéposer le fichier dans `ateliers/` : il remplace l'ancien. Puis étapes C3, C4 et D1.
+4. Sur GitHub, redéposer le fichier dans `ateliers/technostudio/` de la Centrale : il remplace l'ancien. Puis étapes C3 et D2.
+   Les postes qui en ont une copie prennent la nouvelle version à leur prochaine connexion à la Centrale.
 
 - **Dupliquer** (à côté de Modifier) fait un **autre** atelier, avec un nouvel identifiant et sans le travail des élèves.
 - **Abandonner** (dans Mes ateliers) efface les modifications de ce poste : la version publiée revient.
@@ -85,7 +88,7 @@ FicheStudio **n'exporte pas** vers TechnoStudio : on en tire un **PDF**, qui ser
 
 ## 5. Avant de dire « c'est fini »
 
-- [ ] L'atelier s'ouvre dans TechnoStudio sans connexion (`#activite=<id>`) et en lien seul (`?atelier=<id>`).
+- [ ] L'atelier s'ouvre dans TechnoStudio par son adresse (`#activite=<id>`) et en lien seul (`?atelier=<id>`), puis, une fois ouvert, encore pendant une panne du serveur (copie du poste).
 - [ ] Centrale → Inspecter : identifiant lisible, une activité par feuille notée, aucune compétence « sans lien au référentiel ».
 - [ ] Version augmentée (Inspecter → « Fichier complet ») ; aucune feuille déjà utilisée renumérotée.
 - [ ] Testé à la place d'un élève, vue Élève (étapes une à une) et vue Enseignant.
@@ -94,7 +97,9 @@ FicheStudio **n'exporte pas** vers TechnoStudio : on en tire un **PDF**, qui ser
 ## 6. NetSim et Établi 3D
 
 Leurs ateliers (exercices, tutos) sont écrits **dans le code** de l'application, avec leurs identifiants. On les ajoute dans
-le dépôt de l'application (voir son `CLAUDE.md`), qui produit seule `ateliers.json` et `centrale.json` ; ensuite étapes C4 et D.
+le dépôt de l'application (voir son `CLAUDE.md`), qui produit seule `ateliers.json` et `centrale.json` ; ensuite pousser la Centrale
+(un commit vide suffit, pour sa copie de l'application), **Mettre à jour** dans Ateliers, puis l'étape D. Ils passeront eux aussi
+par la Centrale, après la conversion de leurs vérifications en vérifications nommées.
 
 ## 7. Pour aller plus loin
 

@@ -14,6 +14,7 @@ avec les applications, dans [public/passerelle/](public/passerelle/). Vue d'ense
   - Chaque formulaire envoie `action=…`, et **toutes** les fonctions `action_*()` reçoivent cette action, la première qui la reconnaît la traite. Un **nom d'action** doit donc être unique dans tout le projet (`grep -rn "'mon_action'" lib public`) : sinon un autre fichier la traite à votre place.
 - **`public/js/centrale-client.js` est chargé en direct par les applications.** Toute modification doit rester compatible : on ajoute des fonctions, on n'en change pas le sens. Les applications testent une fonction récente avant de l'appeler.
 - Ne jamais écrire `centrale.json` / `ateliers.json` des applications : ils sont produits par chaque application.
+- Un fichier de `ateliers/<app>/` porte son `id` (= nom du fichier, jamais changé), son `format` et sa `version` (augmentée à chaque modification) ; il vient de l'application (TechnoStudio : « Publier »), pas d'une écriture à la main.
 
 ## Carte
 | Je touche à… | Fichiers | Doc |
@@ -29,6 +30,7 @@ avec les applications, dans [public/passerelle/](public/passerelle/). Vue d'ense
 | Emploi du temps (séances, semaines A/B, vacances) ; « Les cours aujourd'hui » de l'accueil (classes simulées à part, `pourquoi_pas_de_cours`) | `lib/organisation.php` (`semaine_emploi_du_temps`, `seances_classe` dans progression.php), `lib/admin_accueil.php` | README §5 |
 | Essai de l'enseignant (« Tester à la place d'un élève ») : tous les élèves, session `essai`, interrupteur Élève \| Enseignant | `lib/admin_tester.php`, `sessions.essai` / `sessions.vue`, `api/session.php` (POST vue), `session_essai()` (lib/api.php), `api/ateliers.php` (vue enseignant sans calendrier), `Centrale.boutonVue()` | SPECIFICATION §2.6 |
 | Inspecter un atelier (fiche du catalogue, activités, où il sert, fichier publié par l'application, code source : `SOURCES_CODE_ATELIERS` dit où sont écrits les ateliers intégrés) ; procédure de création | `lib/admin_inspecter.php`, `public/admin/inspecter.js` ; `public/passerelle/CREER-UN-ATELIER.md` (`?doc=creer-atelier`) | README §Imports et disponibilité |
+| Ateliers transférés par la Centrale (fichiers versionnés `ateliers/<app>/<id>.json`, jamais dans `data/`) : catalogue (source `centrale`, relu dès que le dossier change), activités TechnoStudio calculées comme son `js/passerelle.js`, API publique | `lib/ateliers_centrale.php`, `public/api/atelier-fichier.php` | `public/passerelle/ATELIERS-INTEGRES-ET-TRANSFERES.md` |
 | Contrat passerelle (lu par les applications) | `public/passerelle/*.md`, schémas JSON | — |
 | Copies des applications servies par la Centrale | `miroirs.txt` (construit au déploiement dans `public/miroir/`, `prive/miroir/`) | README §1 |
 

@@ -4,6 +4,8 @@
  * Un atelier TechnoStudio (format « Workshop », champ steps) est détaillé feuille par feuille : codes P1/R1/S1/E1
  * (comme js/passerelle.js de TechnoStudio), blocs, blocs notés, compétences, images. Rien n'est modifié.
  * Partie 5 : le code source (le fichier complet, ou l'extrait du code de l'application lu sur GitHub, SOURCES_CODE_ATELIERS).
+ * Atelier transféré par la Centrale (D.centrale : { chemin, depot }) : pas de fiche ateliers.json chez l'application ; le fichier
+ * vient de l'API de la Centrale et son lien GitHub mène au dépôt de la Centrale.
  */
 (function () {
   'use strict';
@@ -209,15 +211,20 @@
     });
     return b;
   }
-  function github(f, ligne) { return D.code ? 'https://github.com/' + D.code.depot + '/blob/main/' + f + (ligne ? '#L' + ligne : '') : ''; }
+  function github(f, ligne, depot) {
+    depot = depot || (D.code && D.code.depot);
+    return depot ? 'https://github.com/' + depot + '/blob/main/' + f + (ligne ? '#L' + ligne : '') : '';
+  }
   /** Atelier avec un fichier : le fichier entier (images raccourcies à l'écran ; le téléchargement est complet). */
   function sourceFichier(f, rel, txt, v) {
     var tele = el('a', 'btn petit secondaire', 'Télécharger le fichier');
-    tele.href = f; tele.download = f.split('/').pop().split('?')[0];
+    tele.href = f; tele.download = rel ? rel.split('/').pop() : f.split('/').pop().split('?')[0];
     var texte = jsonLisible(v);
     zoneCode.replaceChildren(
-      el('p', 'inspect-source-tete', [code(rel || f.split('/').pop()), ' · ' + ko(txt.length) + ' ',
-        tele, ' ', boutonCopier(txt), ' ', rel && D.code ? lien(github(rel), 'Voir sur GitHub ↗') : null]),
+      el('p', 'inspect-source-tete', [D.centrale ? 'Fichier de la Centrale : ' : '', code(rel || f.split('/').pop()), ' · ' + ko(txt.length) + ' ',
+        tele, ' ', boutonCopier(txt), ' ', D.centrale ? lien(github(rel, 0, D.centrale.depot), 'Voir sur GitHub ↗') : rel && D.code ? lien(github(rel), 'Voir sur GitHub ↗') : null]),
+      D.centrale ? el('p', 'discret', 'Pour le modifier : TechnoStudio (profil Enseignant) → Mes ateliers → Modifier, puis Publier, et redéposer le fichier, '
+        + 'du même nom, dans ce dossier du dépôt de la Centrale. Sa « version » doit augmenter.') : null,
       el('p', 'discret', 'Images intégrées raccourcies à l’écran : « Copier » et « Télécharger » donnent le fichier complet.'),
       el('pre', 'inspect-json inspect-code', texte));
   }
@@ -250,8 +257,13 @@
     })(0);
   }
 
-  var catalogue = D.catalogue || (D.url_app ? adresse(D.url_app.replace(/[?#].*$/, '').replace(/\/?$/, '/'), 'ateliers.json') : '');
+  var catalogue = D.centrale ? '' : D.catalogue || (D.url_app ? adresse(D.url_app.replace(/[?#].*$/, '').replace(/\/?$/, '/'), 'ateliers.json') : '');
   zone.replaceChildren();
+  if (D.centrale && !D.centrale.present) {
+    zone.appendChild(el('p', 'alerte', ['Plus de fichier ', code(D.centrale.chemin), ' dans la Centrale : l’atelier est retiré (le travail des élèves est gardé).']));
+    if (zoneCode) zoneCode.replaceChildren(el('p', 'alerte', 'Fichier retiré du dépôt de la Centrale.'));
+    return;
+  }
   var p1 = catalogue ? lire(catalogue).then(function (c) {
     var liste = Array.isArray(c) ? c : (c && c.ateliers) || [];
     var a = liste.filter(function (x) { return x && x.id === D.atelier; })[0];
@@ -282,7 +294,7 @@
       var w = v && v.workshops ? v.workshops.filter(function (x) { return x.id === D.atelier; })[0] || v.workshops[0] : Array.isArray(v) ? v[0] : v;
       zone.appendChild(el('p', 'discret', ['Fichier : ', lien(f)]));
       zone.appendChild(w && w.steps ? technostudio(w, txt.length) : generique(v));
-      if (zoneCode) sourceFichier(f, a && a.fichier ? String(a.fichier).replace(/^\.?\//, '') : '', txt, v);
+      if (zoneCode) sourceFichier(f, D.centrale ? D.centrale.chemin : a && a.fichier ? String(a.fichier).replace(/^\.?\//, '') : '', txt, v);
     }).catch(function (e) {
       zone.appendChild(el('p', 'alerte', 'Fichier illisible (' + e.message + ') : ' + f));
       if (zoneCode) zoneCode.replaceChildren(el('p', 'alerte', 'Fichier illisible : ' + f));

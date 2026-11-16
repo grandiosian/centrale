@@ -30,6 +30,7 @@ Centrale (alwaysdata, en France)  ─ ─ ►  export ZIP / dépôt Nuage en sec
 | `public/index.php` | Portail élève : code, parcours, ouverture des logiciels |
 | `public/apps/exemple/` | Application d'exemple : carnet de bord avec sauvegarde auto et fichiers |
 | `lib/` | Code PHP commun (non accessible depuis internet) |
+| `ateliers/<app>/` | Ateliers transférés par la Centrale : un fichier `<id>.json` par atelier, au format de l'application, versionné et déployé (servi par `api/atelier-fichier.php`) |
 | `data/` | Base SQLite et fichiers des élèves, créés automatiquement (non accessibles, jamais envoyés sur GitHub) |
 
 ---
@@ -297,13 +298,22 @@ Centrale.afficherConnexion(element, {
 
 ### Imports et disponibilité des ateliers
 
-Les ateliers sont créés **dans les applications** et publiés avec elles : ils marchent sans serveur. La Centrale les importe pour les ranger.
+Les ateliers sont créés **dans les applications**. Les premiers pas restent dans leur code et sont publiés avec elles ; les autres
+ateliers sont **transférés par la Centrale** : un fichier versionné par atelier dans `ateliers/<app>/<id>.json` de ce dépôt
+(règle : `public/passerelle/ATELIERS-INTEGRES-ET-TRANSFERES.md`). La Centrale range les deux dans son catalogue.
+
+- **Ateliers transférés** (`lib/ateliers_centrale.php`) : la Centrale relit le dossier `ateliers/` dès qu'il change (empreinte des
+  fichiers, à la première lecture du catalogue après un déploiement) et au bouton « Mettre à jour » ; source « fichier de la Centrale ».
+  Pour TechnoStudio, les activités sont calculées comme dans son `js/passerelle.js`. Un fichier supprimé passe l'atelier à
+  « retiré ». Un fichier de ce dossier passe avant ce que l'application publie sous le même identifiant.
+  Les applications les lisent par `api/atelier-fichier.php` (sans jeton) et en gardent une copie pour les pannes du serveur.
+  Ils ne vont jamais dans `data/`.
 
 - Page **Ateliers**, section dépliable **Imports et disponibilité** : « Importer les ateliers de toutes les applications », ou « Importer / Mettre à jour » pour une seule.
 - La Centrale lit le catalogue `ateliers.json` publié à côté de `centrale.json`. À défaut, elle regroupe les activités de `centrale.json` en ateliers et le signale.
 - Bilan affiché : ajoutés, modifiés, retirés (jamais effacés), inchangés. Les activités rejoignent les cartes de la page Ateliers, les parcours et le suivi.
 - Filtres par application, niveau, texte ou code de compétence ; « Ouvrir » lance l'atelier sans connexion.
-- **Inspecter** (dans le tableau, ou « Détail » d'un atelier → « Inspecter les données ») : tout ce qui décrit l'atelier, couche par couche — la fiche du catalogue de la Centrale, ses activités (identifiants, compétences, élèves), où il sert (calendriers, périodes, parcours, activités demandées), puis ce que l'application publie, lu à l'instant chez elle (`ateliers.json`, et pour TechnoStudio le fichier complet : feuilles P/R/S/E avec leurs codes, blocs notés, compétences reliées ou non au référentiel, poids des images), et enfin le **code source** : le fichier complet (Télécharger, Copier, lien GitHub) ou, pour un atelier écrit dans le code de l'application, l'extrait de ce code lu sur GitHub avec son numéro de ligne (fichiers déclarés dans `SOURCES_CODE_ATELIERS`). Rien n'y est modifié. `lib/admin_inspecter.php`, `admin/inspecter.js`.
+- **Inspecter** (dans le tableau, ou « Détail » d'un atelier → « Inspecter les données ») : tout ce qui décrit l'atelier, couche par couche — la fiche du catalogue de la Centrale, ses activités (identifiants, compétences, élèves), où il sert (calendriers, périodes, parcours, activités demandées), puis ce que l'application publie, lu à l'instant chez elle (`ateliers.json`, et pour TechnoStudio le fichier complet ; pour un atelier transféré, son fichier `ateliers/<app>/<id>.json` lu par l'API de la Centrale : feuilles P/R/S/E avec leurs codes, blocs notés, compétences reliées ou non au référentiel, poids des images), et enfin le **code source** : le fichier complet (Télécharger, Copier, lien GitHub) ou, pour un atelier écrit dans le code de l'application, l'extrait de ce code lu sur GitHub avec son numéro de ligne (fichiers déclarés dans `SOURCES_CODE_ATELIERS`). Rien n'y est modifié. `lib/admin_inspecter.php`, `admin/inspecter.js`.
 - **Procédure de création d'un atelier** (surtout TechnoStudio), avec les règles qui protègent le travail des élèves : `public/passerelle/CREER-UN-ATELIER.md`, en ligne sur `passerelle/?doc=creer-atelier`, liée en haut de la page Ateliers.
 - Un fichier exporté d'une application (atelier `.json`, `ateliers.json`, `.technostudio.json`) peut aussi être importé à la main : il reste marqué « pas encore dans l'application » tant qu'elle ne le publie pas.
 - Les autres applications lisent ce catalogue : `GET /api/catalogue.php?app=&niveau=&competence=`.
@@ -674,7 +684,7 @@ L'empreinte d'un code élève est calculée ainsi : `HMAC-SHA256(clé secrète, 
 
 ## 10. Référence de l'API
 
-Toutes les requêtes, sauf `login.php`, `catalogue.php` et `compilation.php` (état), demandent l'en-tête `X-Jeton` reçu à la connexion.
+Toutes les requêtes, sauf `login.php`, `catalogue.php`, `atelier-fichier.php` et `compilation.php` (état), demandent l'en-tête `X-Jeton` reçu à la connexion.
 
 | Requête | Rôle |
 |---|---|
@@ -695,6 +705,8 @@ Toutes les requêtes, sauf `login.php`, `catalogue.php` et `compilation.php` (é
 | `GET ateliers.php` | Ateliers proposés à la classe, avec l'avancement et les activités |
 | `GET session.php?app=` | Vérifie un jeton (passage d'une application à l'autre) |
 | `GET catalogue.php?app=&niveau=&competence=` | Ateliers importés depuis les applications, avec l'adresse qui les ouvre (sans connexion, sans donnée d'élève) |
+| `GET atelier-fichier.php?app=` | Ateliers transférés par la Centrale (dossier `ateliers/<app>/`) : `{format: "ateliers.centrale", version: 1, ateliers: [{id, format, version, titre, fichier, …}]}` (sans connexion, CORS ouvert) |
+| `GET atelier-fichier.php?app=&id=` | Le fichier de l'atelier, tel quel (format de l'application, avec `format`, `version`, `id`) ; ETag, `X-Version` |
 | `GET compilation.php` | État du compilateur des cartes (sans connexion) |
 | `POST compilation.php` `{carte, code}` | Compile pour `uno`, `nano`, `esp32` (C++) ou `microbit` (MicroPython) → `.hex` / `.bin` ; `{enCours, travail}` au-delà de 25 s |
 | `GET compilation.php?travail=` | Résultat d’une compilation longue |

@@ -69,7 +69,25 @@ vérifications nommées, avec des paramètres ; l'atelier les cite :
 1. **Centrale** : dossier `ateliers/<app>/`, catalogue, API, Inspecter. **TechnoStudio** d'abord (déjà en données) :
    ses ateliers publiés (`TechnoStudio/ateliers/`) et ses ateliers intégrés hors fondations passent dans la Centrale.
    L'éditeur « Publier » dépose alors le fichier dans la Centrale au lieu du dépôt de TechnoStudio.
+   **Fait le 16 novembre 2026** (voir le §7).
 2. **NetSim** : vérifications nommées, puis fichiers de données pour la 4e et au-delà.
 3. **Établi 3D** : vérifications nommées, puis fichiers pour les exercices et les exemples.
 
 À chaque étape : identifiants inchangés, ancien code retiré seulement après vérification (§2).
+
+## 7. Ce qui existe (étape 1)
+
+- **Dossier** `centrale/ateliers/technostudio/` : 8 ateliers (`anticollision-robot-mbot`, `charte-parking-connecte`,
+  `demo-portail-automatique`, `demo-pro-consignation-mesures`, `demo-snt-parking-connecte`, `demo-sti2d-serre-regulation`,
+  `programmer-robots-mbot-maqueen`, `radar-recul-robot-mbot`), identifiants et versions inchangés.
+- **Catalogue** : `lib/ateliers_centrale.php`. La Centrale relit le dossier dès qu'il change (empreinte des fichiers, à la
+  première lecture du catalogue) et au bouton « Mettre à jour » ; source « centrale ». Pour TechnoStudio, les activités sont
+  calculées comme dans son `js/passerelle.js` (une par feuille notée, `<id>/<code feuille>`). Un fichier retiré passe l'atelier
+  à l'état « retiré » (le travail des élèves est gardé). Un atelier de ce dossier passe avant ce que l'application publie sous le même identifiant.
+- **API** publique, en lecture seule, sans jeton, CORS ouvert : `api/atelier-fichier.php?app=<app>` (liste, format
+  `ateliers.centrale` v1 : id, format, version, titre…) et `api/atelier-fichier.php?app=<app>&id=<id>` (le fichier tel quel,
+  avec ETag et `X-Version`).
+- **Inspecter** : parties 4 et 5 lisent le fichier par l'API ; lien GitHub vers le dépôt de la Centrale.
+- **TechnoStudio** (`js/transferes.js`) : demande l'atelier absent, garde la copie (`transfere:<id>`), remplace une copie plus
+  ancienne, montre les ateliers de la Centrale dans sa bibliothèque quand elle est joignable ; « Publier » donne `<id>.json`
+  pour ce dossier ; `ateliers.json` ne contient plus que les trois ateliers intégrés.

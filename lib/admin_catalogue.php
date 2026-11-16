@@ -24,6 +24,14 @@ function action_catalogue(string $action): bool
                 } else {
                     flash("« $a » : " . implode(' ', $r['remarques']), 'err');
                 }
+                $c = $r['centrale'] ?? null;   // ateliers transférés par la Centrale (dossier ateliers/<app>/)
+                $nc = count(fichiers_ateliers_centrale((string) $a));
+                if ($c && ($nc || $c['retires'])) {
+                    flash("« $a » : $nc atelier" . ($nc > 1 ? 's' : '') . ' de la Centrale (dossier ateliers/' . $a . '/) — ' . texte_bilan($c) . '.');
+                    foreach (array_slice($c['remarques'] ?? [], 0, 3) as $m) {
+                        flash("« $a » : $m", 'err');
+                    }
+                }
             }
             rediriger($retour . ($app !== '*' ? '&app=' . rawurlencode($app) : ''));
 
@@ -115,7 +123,7 @@ function aide_creation_atelier(): void
     ?>
     <ol class="etapes-atelier" aria-label="Créer un atelier">
         <li><strong>Sur papier</strong> : fiches et présentation dans <a href="appli.php/fichestudio/#nouveau" target="_blank" rel="noopener">FicheStudio</a> (ou Affinity), exportées en PDF.</li>
-        <li><strong>Construit dans TechnoStudio</strong> : « Convertir une fiche papier » (le PDF), puis feuilles, blocs et compétences ; « Publier », puis le fichier déposé dans <code>ateliers/</code> sur GitHub.</li>
+        <li><strong>Construit dans TechnoStudio</strong> : « Convertir une fiche papier » (le PDF), puis feuilles, blocs et compétences ; « Publier », puis le fichier <code>&lt;id&gt;.json</code> déposé sur GitHub dans le dossier <code>ateliers/technostudio/</code> de la Centrale (seuls les premiers pas restent dans l’application).</li>
         <li><strong>Importé ici</strong> : « Mettre à jour », « Inspecter » pour vérifier, puis proposé aux classes, mis au calendrier, dans les parcours et suivi.</li>
     </ol>
     <p class="aide">Pas à pas, avec les règles qui protègent le travail des élèves : <a href="../passerelle/?doc=creer-atelier" target="_blank">procédure de création d’un atelier</a>.</p>
@@ -233,7 +241,8 @@ function corps_catalogue_ateliers(): void
             <summary>Importer un fichier exporté d’une application</summary>
             <p class="aide">Un atelier seul (<code>.json</code>), un catalogue <code>ateliers.json</code> ou un atelier TechnoStudio
                 (<code>.technostudio.json</code>, codes T1/T2/T3 convertis en OST/SFC/CCRI). Le fichier est gardé ici en attendant
-                d’être publié avec l’application : c’est seulement là qu’il restera disponible sans serveur.</p>
+                d’être rangé dans le dossier <code>ateliers/&lt;application&gt;/</code> du dépôt de la Centrale (versionné, déployé avec elle,
+                et gardé en copie par l’application pour les pannes du serveur).</p>
             <form method="post" enctype="multipart/form-data" class="formulaire-ligne">
                 <?= csrf() ?>
                 <input type="hidden" name="action" value="importer_fichier_ateliers">

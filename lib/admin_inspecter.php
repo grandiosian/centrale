@@ -7,7 +7,9 @@
  *  2. ses activités (identifiants « atelier/P1 » : le travail des élèves y est rattaché) et ce que les élèves en ont fait ;
  *  3. où il sert : calendrier des classes, périodes, parcours, activités demandées ;
  *  4. ce que l'application publie (son ateliers.json, et le fichier complet de l'atelier s'il en a un), lu dans le
- *     navigateur par admin/inspecter.js : feuilles, blocs, compétences, données brutes.
+ *     navigateur par admin/inspecter.js : feuilles, blocs, compétences, données brutes ; pour un atelier transféré par la
+ *     Centrale (source « centrale »), son fichier ateliers/<app>/<id>.json, lu par api/atelier-fichier.php ;
+ *  5. le code source : ce fichier, ou l'extrait du code de l'application (ateliers intégrés).
  * Rien n'est modifié ici. Voir la procédure : passerelle/?doc=creer-atelier.
  */
 declare(strict_types=1);
@@ -86,9 +88,14 @@ function page_inspecter_atelier(string $app, string $atelier): void
     $import = $derniers->fetch() ?: null;
     $ouvrir = adresse_ouvrir_atelier($r);
     $ligne = array_diff_key($r, ['contenu' => 1, 'codes' => 1, 'nom_app' => 1, 'icone_app' => 1, 'url_app' => 1]);
-    $donnees = ['app' => $app, 'atelier' => $atelier, 'catalogue' => $import['adresse'] ?? '',
-                'fichier' => (string) $r['fichier'], 'url_app' => (string) ($r['url_app'] ?? ''),
-                'code' => SOURCES_CODE_ATELIERS[$app] ?? null];
+    // Atelier transféré par la Centrale : son fichier est dans le dépôt de la Centrale (ateliers/<app>/<id>.json), servi par l'API
+    $centrale = $r['source'] === 'centrale';
+    $fichier = $centrale ? '../' . adresse_api_atelier_centrale($app, $atelier) : (string) $r['fichier'];
+    $donnees = ['app' => $app, 'atelier' => $atelier, 'catalogue' => $centrale ? '' : ($import['adresse'] ?? ''),
+                'fichier' => $fichier, 'url_app' => (string) ($r['url_app'] ?? ''),
+                'code' => SOURCES_CODE_ATELIERS[$app] ?? null,
+                'centrale' => $centrale ? ['chemin' => chemin_depot_atelier_centrale($app, $atelier), 'depot' => DEPOT_ATELIERS_CENTRALE,
+                                           'present' => isset(fichiers_ateliers_centrale($app)[$atelier])] : null];
     ?>
     <div class="titre-section">
         <h1><?= icone_app($app, $r['icone_app'] ?? '') ?> <?= h($r['titre']) ?></h1>
@@ -97,8 +104,15 @@ function page_inspecter_atelier(string $app, string $atelier): void
             <a class="btn secondaire" href="../passerelle/?doc=creer-atelier" target="_blank">Procédure de création</a>
         </div>
     </div>
+    <?php if ($centrale): ?>
+    <p class="aide">Atelier <strong>transféré par la Centrale</strong> : son fichier est rangé dans le dépôt de la Centrale
+        (<code><?= h(chemin_depot_atelier_centrale($app, $atelier)) ?></code>), déployé avec elle, et l’application le demande à la Centrale
+        puis en garde une copie. La fiche ci-dessous est refaite dès que le fichier change. Les <strong>identifiants</strong> (atelier, activités)
+        ne doivent jamais changer : le travail des élèves y est rattaché.</p>
+    <?php else: ?>
     <p class="aide">Un atelier vit d’abord dans son application, qui le publie avec elle. La Centrale en garde une fiche (ci-dessous),
         relue à chaque « Mettre à jour ». Les <strong>identifiants</strong> (atelier, activités) ne doivent jamais changer : le travail des élèves y est rattaché.</p>
+    <?php endif; ?>
 
     <section class="carte">
         <h2>1. Fiche du catalogue de la Centrale</h2>
@@ -113,9 +127,10 @@ function page_inspecter_atelier(string $app, string $atelier): void
             <dt>Ouverture</dt><dd><code><?= h($r['ouvrir'] !== '' ? $r['ouvrir'] : '—') ?></code><?= $ouvrir !== '' ? ' → <a href="' . h($ouvrir) . '" target="_blank" rel="noopener">' . h(mb_strimwidth($ouvrir, 0, 90, '…')) . '</a>' : '' ?></dd>
             <dt>Source</dt><dd><?= h(SOURCES_CATALOGUE[$r['source']] ?? $r['source']) ?>
                 <?php if ($import): ?><br><span class="discret">dernier import <?= quand((int) $import['ts']) ?> :</span> <a href="<?= h($import['adresse']) ?>" target="_blank" rel="noopener"><?= h($import['adresse']) ?></a><?php endif; ?></dd>
-            <dt>Fichier complet</dt><dd><?= $r['fichier'] !== '' ? '<a href="' . h($r['fichier']) . '" target="_blank" rel="noopener">' . h($r['fichier']) . '</a>'
-                : '<span class="discret">aucun : l’atelier est écrit dans le code de l’application</span>' ?></dd>
-            <dt>État</dt><dd><?= $r['etat'] === 'actif' ? 'publié' : '<span class="alerte">retiré de l’application</span>' ?> ·
+            <dt>Fichier complet</dt><dd><?= $centrale ? '<code>' . h(chemin_depot_atelier_centrale($app, $atelier)) . '</code> du dépôt de la Centrale · <a href="' . h($fichier) . '" target="_blank" rel="noopener">lu par l’API</a>'
+                : ($r['fichier'] !== '' ? '<a href="' . h($r['fichier']) . '" target="_blank" rel="noopener">' . h($r['fichier']) . '</a>'
+                : '<span class="discret">aucun : l’atelier est écrit dans le code de l’application</span>') ?></dd>
+            <dt>État</dt><dd><?= $r['etat'] === 'actif' ? 'publié' : '<span class="alerte">' . ($centrale ? 'retiré (plus de fichier dans la Centrale)' : 'retiré de l’application') . '</span>' ?> ·
                 importé <?= quand((int) $r['importe_le']) ?> · modifié <?= quand((int) $r['modifie_le']) ?> · empreinte <code><?= h(substr((string) $r['empreinte'], 0, 12)) ?></code></dd>
         </dl>
     </section>
@@ -157,15 +172,22 @@ function page_inspecter_atelier(string $app, string $atelier): void
     </section>
 
     <section class="carte" id="inspect-publie">
+        <?php if ($centrale): ?>
+        <h2>4. Le fichier de la Centrale</h2>
+        <p class="aide">Lu à l’instant par l’API de la Centrale (<code>api/atelier-fichier.php</code>), comme le reçoivent les applications :
+            feuilles, blocs, compétences, images.</p>
+        <?php else: ?>
         <h2>4. Ce que l’application publie</h2>
         <p class="aide">Lu à l’instant chez l’application (pas dans la Centrale) : sa fiche dans <code>ateliers.json</code> et, s’il existe,
             le fichier complet de l’atelier (feuilles, blocs, images).</p>
+        <?php endif; ?>
         <div id="inspect-contenu"><p class="discret">Lecture…</p></div>
     </section>
 
     <section class="carte" id="inspect-source">
         <h2>5. Code source</h2>
-        <p class="aide">Ce qui définit vraiment l’atelier : son fichier complet, ou, pour un atelier intégré à l’application,
+        <p class="aide">Ce qui définit vraiment l’atelier : son fichier complet (pour un atelier transféré, celui du dossier
+            <code>ateliers/<?= h($app) ?>/</code> de la Centrale), ou, pour un atelier intégré à l’application,
             l’extrait de son code (lu sur GitHub, branche <code>main</code>).</p>
         <div id="inspect-code"><p class="discret">Lecture…</p></div>
     </section>

@@ -1,0 +1,335 @@
+{
+ "format": 2,
+ "id": "programmer-robots-mbot-maqueen",
+ "version": 4,
+ "title": "Programmer les robots mBot et Maqueen",
+ "level": "college",
+ "niveau": "5e",
+ "cycle": 4,
+ "seq": 2,
+ "duration": 110,
+ "author": "Pôle des Sciences et de la Technologie",
+ "summary": "programmer un robot avec des blocs, lire le code produit, compiler puis téléverser dans le mBot ou le Maqueen ; le même programme passe d’un robot à l’autre.",
+ "problematique": "Comment un même programme peut-il commander deux robots différents ?",
+ "objet": "Robots mBot (carte mCore) et Maqueen (carte micro:bit)",
+ "position": 2,
+ "competences": [
+  {
+   "code": "T3C3",
+   "color": "#E8B624",
+   "label": "Concevoir, écrire, tester et mettre au point un programme",
+   "co": "Programmation par blocs, compilation, téléversement dans le robot.",
+   "sub": [
+    {
+     "code": "T3C31",
+     "label": "Analyser un programme simple fourni, tester s’il répond au besoin ; modifier un programme fourni",
+     "ref": [
+      "CCRI31.5.1",
+      "CCRI31.5.2"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "T2C3",
+   "color": "#C45CCE",
+   "label": "Comprendre et modifier un programme associé à une fonctionnalité d’un objet ou d’un système technique",
+   "co": "Événements, séquences d’instructions, condition, boucle.",
+   "sub": [
+    {
+     "code": "T2C31",
+     "label": "Identifier les données utilisées et produites par un programme ; modifier ses paramètres et évaluer les effets",
+     "ref": [
+      "SFC31.5.1",
+      "SFC31.5.2"
+     ]
+    }
+   ]
+  }
+ ],
+ "deroulement": [
+  {
+   "seance": "Séance 1",
+   "objectif": "Premier programme, compiler, téléverser",
+   "activites": "Tester le programme fourni sur un robot, le modifier, passer à l’autre robot",
+   "ressources": "Ressource 1. mBot ou Maqueen, câble USB"
+  },
+  {
+   "seance": "Séance 2",
+   "objectif": "Programme anticollision",
+   "activites": "Écrire le programme avec une condition sur la distance, le tester sur les deux robots",
+   "ressources": "Ressources 1 et 2"
+  }
+ ],
+ "materiel": "Un mBot ou un Maqueen Lite par îlot, son câble USB, des piles chargées. Chrome ou Edge sur ordinateur.",
+ "prof": {
+  "organisation": "Dans chaque question ORDI, le bouton **Programmer ▸** ouvre l’environnement Robots à côté de la feuille. Les boutons **mBot / Maqueen** en haut changent de robot sans perdre les blocs : le code est régénéré (C++ pour le mBot, MicroPython pour le Maqueen).\n\n- **Compiler** : le serveur de compilation de la Centrale vérifie le programme (élève connecté, ou clé enseignant dans Compte → Réglages de connexion).\n- **Téléverser** : mBot → le navigateur écrit le programme par le câble USB (le port est retenu pour la séance) ; Maqueen → choisir le lecteur **MICROBIT** dans la fenêtre d’enregistrement (sinon le fichier maqueen.hex est téléchargé : le glisser sur MICROBIT).\n\nLe mBot est programmé sans la bibliothèque Makeblock : le programme qu’il contenait (mode mBlock « en direct ») est remplacé. Pour revenir au micrologiciel d’usine, utiliser mBlock (Connecter → Mettre à jour le micrologiciel).\n\n**Mode direct** (bouton **⚡ En direct**) : le programme tourne dans l’ordinateur et le robot, resté branché, obéit en temps réel ; les capteurs s’affichent en continu et le bloc en cours est surligné. Il faut une fois par robot cliquer sur **Installer le mode direct** (mBot : écrit par le câble ; Maqueen : fichier `maqueen-mode-direct.hex` à enregistrer sur MICROBIT, la micro:bit affiche alors **D**). Les deux robots peuvent être branchés en même temps : on passe de l’un à l’autre sans rebrancher. Pas de compilation en mode direct : pratique pour mettre au point, puis on téléverse pour que le robot roule sans câble. Par sécurité, le robot s’arrête seul s’il ne reçoit plus d’ordre pendant 1,5 s."
+ },
+ "steps": [
+  {
+   "id": "p01",
+   "title": "Séance 1 - Feuille 1",
+   "kind": "feuille",
+   "seance": 1,
+   "feuille": 1,
+   "objectif": "Je sais compiler et téléverser un programme dans un robot.",
+   "blocks": [
+    {
+     "id": "p01-t",
+     "type": "text",
+     "md": "# 1. Mon premier programme de robot\n\nLe **programme** est écrit avec des **blocs**. L’ordinateur le traduit en **code** (C++ pour le mBot, MicroPython pour le Maqueen), le **compile**, puis le **téléverse** dans la carte du robot par le câble USB."
+    },
+    {
+     "id": "p01-proc",
+     "type": "procedure",
+     "question": "Suis les étapes et coche-les au fur et à mesure.",
+     "tag": "ordi",
+     "items": [
+      {
+       "text": "Clique sur **Programmer ▸** puis choisis ton robot en haut : **mBot** ou **Maqueen**."
+      },
+      {
+       "text": "Branche le câble USB du robot et allume-le (mBot : interrupteur sur ON)."
+      },
+      {
+       "text": "Clique sur **⬆ Téléverser dans le robot** : le programme est compilé (vérifié) puis envoyé."
+      },
+      {
+       "text": "Suis le message affiché sous le bouton.",
+       "detail": "mBot : choisis le port USB proposé. Maqueen : enregistre le fichier sur le lecteur **MICROBIT**. Un message vert ✓ : c’est réussi."
+      },
+      {
+       "text": "Débranche, pose le robot au sol et observe."
+      }
+     ]
+    },
+    {
+     "id": "p01-r1",
+     "type": "robot",
+     "question": "Téléverse le programme fourni dans ton robot. Modifie ensuite **la couleur de la LED** et **la durée** pendant laquelle il avance, puis téléverse à nouveau.",
+     "tag": "ordi",
+     "comp": [
+      "T3C31"
+     ],
+     "robot": "mbot",
+     "start": {
+      "blocks": {
+       "languageVersion": 0,
+       "blocks": [
+        {
+         "type": "rb_start",
+         "x": 30,
+         "y": 30,
+         "next": {
+          "block": {
+           "type": "rb_led",
+           "fields": {
+            "SIDE": "all",
+            "COLOR": "vert"
+           },
+           "next": {
+            "block": {
+             "type": "rb_fwd_t",
+             "inputs": {
+              "P": {
+               "shadow": {
+                "type": "math_number",
+                "fields": {
+                 "NUM": 50
+                }
+               }
+              },
+              "S": {
+               "shadow": {
+                "type": "math_number",
+                "fields": {
+                 "NUM": 1
+                }
+               }
+              }
+             },
+             "next": {
+              "block": {
+               "type": "rb_turn_t",
+               "fields": {
+                "DIR": "right"
+               },
+               "inputs": {
+                "P": {
+                 "shadow": {
+                  "type": "math_number",
+                  "fields": {
+                   "NUM": 50
+                  }
+                 }
+                },
+                "S": {
+                 "shadow": {
+                  "type": "math_number",
+                  "fields": {
+                   "NUM": 0.5
+                  }
+                 }
+                }
+               },
+               "next": {
+                "block": {
+                 "type": "rb_stop",
+                 "next": {
+                  "block": {
+                   "type": "rb_tone",
+                   "inputs": {
+                    "F": {
+                     "shadow": {
+                      "type": "math_number",
+                      "fields": {
+                       "NUM": 440
+                      }
+                     }
+                    },
+                    "S": {
+                     "shadow": {
+                      "type": "math_number",
+                      "fields": {
+                       "NUM": 0.3
+                      }
+                     }
+                    }
+                   },
+                   "next": {
+                    "block": {
+                     "type": "rb_led",
+                     "fields": {
+                      "SIDE": "all",
+                      "COLOR": "off"
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       ]
+      }
+     },
+     "expect": [
+      "rb_fwd_t",
+      "rb_led"
+     ]
+    },
+    {
+     "id": "p01-q",
+     "type": "questions",
+     "comp": [
+      "T2C31"
+     ],
+     "items": [
+      {
+       "q": "Pendant combien de secondes le robot avance-t-il dans le programme fourni ?",
+       "corr": "1 seconde."
+      },
+      {
+       "q": "Clique sur l’autre robot en haut de l’environnement. Qu’est-ce qui change dans l’onglet **Code** ? Qu’est-ce qui ne change pas ?",
+       "corr": "Le langage du code change (C++ ↔ MicroPython) ; les blocs, donc l’algorithme, restent les mêmes."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "p02",
+   "title": "Séance 2 - Feuille 2",
+   "kind": "feuille",
+   "seance": 2,
+   "feuille": 2,
+   "objectif": "Je sais utiliser une condition pour éviter un obstacle.",
+   "blocks": [
+    {
+     "id": "p02-t",
+     "type": "text",
+     "md": "# 2. Le robot évite les obstacles\n\n**Répéter indéfiniment :** **si** la distance mesurée par le capteur à ultrasons est **plus petite que 15 cm**, **alors** le robot recule puis tourne, **sinon** il avance.\n\n**Astuce :** en mode **⚡ En direct**, le robot reste branché et tu vois la distance mesurée en temps réel : essaie ton programme en tenant le robot dans la main, puis téléverse-le."
+    },
+    {
+     "id": "p02-r1",
+     "type": "robot",
+     "question": "Écris le programme anticollision dans le bloc **répéter indéfiniment** déjà posé (le robot doit mesurer la distance sans arrêt) : **si** distance < 15 **alors** reculer puis tourner, **sinon** avancer. Compile-le, téléverse-le, puis teste-le sur **l’autre robot** sans rien réécrire.",
+     "tag": "ordi",
+     "comp": [
+      "T3C31",
+      "T2C31"
+     ],
+     "robot": "mbot",
+     "start": {
+      "blocks": {
+       "languageVersion": 0,
+       "blocks": [
+        {
+         "type": "rb_start",
+         "x": 30,
+         "y": 30,
+         "next": {
+          "block": {
+           "type": "rb_forever"
+          }
+         }
+        }
+       ]
+      }
+     },
+     "expect": [
+      "rb_forever",
+      "rb_ifelse",
+      "rb_distance",
+      "rb_lt"
+     ],
+     "hint": "Opérateurs → « … < 15 », et glisse « distance ultrasons (cm) » (Capteurs) dans la case de gauche."
+    },
+    {
+     "id": "p02-q",
+     "type": "questions",
+     "comp": [
+      "T2C31"
+     ],
+     "items": [
+      {
+       "q": "Quelle donnée le capteur à ultrasons fournit-il au programme ?",
+       "corr": "La distance de l’obstacle, en cm."
+      },
+      {
+       "q": "Que se passe-t-il si tu remplaces 15 par 40 ? Teste.",
+       "corr": "Le robot réagit plus tôt, plus loin de l’obstacle."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "r01",
+   "title": "Ressources 1 et 2 - Robots",
+   "kind": "ressource",
+   "blocks": [
+    {
+     "id": "r01-1",
+     "type": "ressource",
+     "num": "1",
+     "title": "Compiler et téléverser",
+     "md": "- **Compiler** : traduire le programme en instructions que le microcontrôleur comprend. S’il y a une erreur, la compilation s’arrête et l’explique.\n- **Téléverser** : envoyer le programme compilé dans la mémoire de la carte du robot, par le câble USB.\n- Le programme reste dans le robot quand on le débranche : il redémarre à chaque mise sous tension.\n- **En direct** : le programme tourne dans l’ordinateur et le robot, relié par le câble, obéit à chaque ordre. Pas besoin de compiler, mais le robot ne peut pas s’éloigner."
+    },
+    {
+     "id": "r01-2",
+     "type": "ressource",
+     "num": "2",
+     "title": "Un programme, deux robots",
+     "md": "| | mBot | Maqueen Lite |\n|---|---|---|\n| Carte | mCore (microcontrôleur ATmega328P) | micro:bit |\n| Code produit | C++ (Arduino) | MicroPython |\n| Ultrasons | port 3 | avant (P1, P2) |\n| LED | 2 LED RGB | 2 LED rouges + 4 LED RGB |\n| Téléversement | câble USB, port série | fichier .hex sur le lecteur MICROBIT |\n\nLes **blocs** sont les mêmes : on change de robot avec les boutons **mBot / Maqueen** en haut de l’environnement. Un bloc qu’un robot ne sait pas faire est marqué d’un ⚠."
+    }
+   ]
+  }
+ ]
+}
