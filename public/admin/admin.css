@@ -2672,3 +2672,16 @@ body { padding-bottom: var(--pied-h); }
 @media print { .pied-admin { display: none; } body { padding-bottom: 0; } }
 /* le tableau de bord plein écran laisse la place de la barre */
 .dashboard { height: calc(100dvh - var(--barre-h, 64px) - var(--pied-h)); }
+
+/* ---------- Plan de classe : options (mode échange, icônes au-dessus des élèves), plan.js placement() ---------- */
+.plan-options { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: -4px 0 12px; padding: 6px 12px;
+    background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; }
+.plan-options .bouton-echange.actif { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
+.plan-options-aide { font-size: .85rem; }
+.plan-options-icones { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-left: auto; }
+.plan-options-titre { font-weight: 700; color: var(--doux); }
+.plan-options-case { margin: 0; display: flex; gap: 5px; align-items: center; font-weight: 500; white-space: nowrap; }
+.plan-svg .echange-choisi .forme { stroke: var(--accent); stroke-width: 4; stroke-dasharray: 4 3; }
+.plan-svg .echange-choisi { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)); }
+body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
+@media print { .plan-options { display: none; } }

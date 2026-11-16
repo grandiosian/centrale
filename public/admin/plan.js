@@ -1075,6 +1075,8 @@ window.PlanSalle = (function () {
     var liste = document.getElementById('liste-eleves');
     var choisi = null;                                 // id de l'élève sélectionné
     barreVue(document.getElementById('barre-vue'), plan);
+    var barreOptions = creer('div', 'plan-options');
+    document.getElementById('barre-vue').after(barreOptions);
 
     function nom(e) {
       var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : '';
@@ -1104,10 +1106,21 @@ window.PlanSalle = (function () {
     var ignorerClic = false;   // un glisser-déposer ne compte pas comme un clic
     var apercu = null;          // aperçu d'un nouveau plan : { avant: plan affiché avant, minimal } ; carte est alors la proposition
 
-    /** Clic sur une place (plan ou vue 3D) : pose l'élève sélectionné, ou reprend celui de la place. */
+    /* Mode échange : un clic sur un élève du plan le sélectionne (il reste à sa place), un clic sur un autre élève :
+       les deux échangent leurs places ; sur une place libre : il s'y déplace ; sur lui-même : la sélection s'annule. */
+    var modeEchange = false, placeChoisie = null;
+    try { modeEchange = localStorage.getItem('centrale-plan-echange') === '1'; } catch (e) { /* rien */ }
+
+    /** Clic sur une place (plan ou vue 3D) : pose l'élève sélectionné, ou reprend celui de la place (mode échange : voir plus haut). */
     function clicPlace(id) {
       if (ignorerClic) { ignorerClic = false; return; }
       if (apercu) return;
+      if (modeEchange && !choisi) {
+        if (placeChoisie) { if (placeChoisie !== id && carte[placeChoisie]) poser(id, carte[placeChoisie]); placeChoisie = null; }
+        else if (carte[id]) placeChoisie = id;
+        rendre();
+        return;
+      }
       if (choisi) { poser(id, choisi); choisi = null; }
       else if (carte[id]) { choisi = carte[id]; delete carte[id]; modifie(); }
       rendre();
@@ -1320,6 +1333,7 @@ window.PlanSalle = (function () {
           var id = carte[o.id];
           if (id) {
             g.classList.add('occupee');
+            if (o.id === placeChoisie) g.classList.add('echange-choisi');   // mode échange : l'élève sélectionné
             if (apercu && apercu.avant[o.id] !== id) g.classList.add('deplace');   // aperçu : l'élève change de place
             g.addEventListener('pointerdown', function (ev) { if (!apercu) glisserSvg(g, o.id, ev); });
             var e = eleve(id);
@@ -1387,6 +1401,50 @@ window.PlanSalle = (function () {
         + ' sur ' + d.eleves.length + ' · ' + nbPlaces + ' places élèves dans la salle'
         + (document.getElementById('compte-places').dataset.alerte ? ' · ⚠ ' + document.getElementById('compte-places').dataset.alerte : '');
     }
+
+    /* ---------- Options du plan : mode échange, icônes au-dessus des élèves (réglages gardés sur cet ordinateur) ---------- */
+    (function () {
+      var echange = creer('button', 'petit secondaire bouton-echange', '⇄ Mode échange');
+      echange.type = 'button';
+      echange.title = 'Cliquer sur un élève du plan, puis sur un autre : ils échangent leurs places (sur une place libre : il s’y déplace). Échap annule.';
+      var aideEchange = creer('span', 'discret plan-options-aide', '');
+      function majEchange() {
+        echange.setAttribute('aria-pressed', String(modeEchange));
+        echange.classList.toggle('actif', modeEchange);
+        document.body.classList.toggle('mode-echange', modeEchange);
+        aideEchange.textContent = !modeEchange ? '' : placeChoisie ? 'Cliquez sur l’élève avec qui échanger (ou sur une place libre).' : 'Cliquez sur un premier élève du plan.';
+      }
+      echange.addEventListener('click', function () {
+        modeEchange = !modeEchange;
+        placeChoisie = null;
+        try { localStorage.setItem('centrale-plan-echange', modeEchange ? '1' : ''); } catch (e) { /* rien */ }
+        majEchange();
+        rendre();
+      });
+      document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && placeChoisie) { placeChoisie = null; rendre(); } });
+      var icones = creer('span', 'plan-options-icones');
+      icones.appendChild(creer('span', 'plan-options-titre', 'Icônes'));
+      // mêmes réglages que « Repères des élèves » de l'accueil (classes sans-classe / sans-reperes de <html>)
+      [['sans-classe', 'centrale-classe-cache', 'Observé en classe', 'Appel, cartons, absences et retards répétés'],
+       ['sans-reperes', 'centrale-reperes-caches', 'Progression', 'Repères de la plateforme : activité et avancement dans les ateliers']].forEach(function (x) {
+        var lab = creer('label', 'plan-options-case'), c = creer('input');
+        c.type = 'checkbox';
+        lab.title = x[3];
+        function appliquer(cache) { document.documentElement.classList.toggle(x[0], cache); c.checked = !cache; }
+        try { appliquer(localStorage.getItem(x[1]) === '1'); } catch (e) { appliquer(false); }
+        c.addEventListener('change', function () {
+          try { localStorage.setItem(x[1], c.checked ? '' : '1'); } catch (e) { /* rien */ }
+          appliquer(!c.checked);
+          rendre();
+        });
+        lab.append(c, ' ' + x[2]);
+        icones.appendChild(lab);
+      });
+      barreOptions.append(echange, aideEchange, icones);
+      majEchange();
+      var rendreAvant = rendre;
+      rendre = function () { rendreAvant(); majEchange(); };
+    })();
 
     var boutonVider = document.getElementById('p-vider');
     boutonVider.onclick = function () {
