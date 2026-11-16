@@ -3825,7 +3825,7 @@ window.PlanSalle = (function () {
      ====================================================================== */
 
   /** Plan à plat pour l'impression : la salle dans son propre sens (portrait, miroirs), le nom de chaque élève sur sa place. */
-  function dessinerImprimable(svg, d, avecNumero) {
+  function dessinerImprimable(svg, d, avecNumero, avecPhotos) {
     var carte = d.placement || {};
     var vueSalle = Object.assign({}, (d.plan && d.plan.vue) || {}, { iso: false });
     var p = Object.assign({}, d.plan, { vue: vueSalle });
@@ -3840,6 +3840,8 @@ window.PlanSalle = (function () {
         if (!estPlace(o) || !carte[o.id]) return;
         var e = eleve(carte[o.id]);
         g.classList.add('occupee');
+        var visage = avecPhotos && e ? photo(d.classe, e.numero) : null;   // photos gardées sur cet ordinateur
+        if (visage) photoPlace(g, w, h, visage);
         if (ctx.nom) ctx.nom(e ? texte(e) : '?'); else ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? texte(e) : '?');
       },
     });
@@ -3852,12 +3854,13 @@ window.PlanSalle = (function () {
     var plans = JSON.parse(src.textContent);
     var cases = Array.prototype.slice.call(document.querySelectorAll('.impression-liste input[type=checkbox]'));
     var parFeuille = document.getElementById('imp-par-feuille'), orientation = document.getElementById('imp-orientation');
-    var numeros = document.getElementById('imp-numeros');
+    var numeros = document.getElementById('imp-numeros'), photos = document.getElementById('imp-photos');
     try {   // derniers réglages de cet ordinateur
       var r = JSON.parse(localStorage.getItem('centrale-impression-plans')) || {};
       if (r.n) parFeuille.value = r.n;
       if (r.o) orientation.value = r.o;
       if (r.num === false) numeros.checked = false;
+      if (r.ph === false && photos) photos.checked = false;
     } catch (e) { /* rien */ }
     // grille des cases d'une feuille : [colonnes, rangées]
     var GRILLES = { landscape: { 1: [1, 1], 2: [2, 1], 4: [2, 2], 6: [3, 2] }, portrait: { 1: [1, 1], 2: [1, 2], 4: [2, 2], 6: [2, 3] } };
@@ -3866,7 +3869,7 @@ window.PlanSalle = (function () {
 
     function rendre() {
       var n = +parFeuille.value, o = orientation.value, grille = GRILLES[o][n] || [1, 1];
-      try { localStorage.setItem('centrale-impression-plans', JSON.stringify({ n: n, o: o, num: numeros.checked })); } catch (e) { /* rien */ }
+      try { localStorage.setItem('centrale-impression-plans', JSON.stringify({ n: n, o: o, num: numeros.checked, ph: !photos || photos.checked })); } catch (e) { /* rien */ }
       style.textContent = '@page { size: A4 ' + o + '; margin: 8mm; }';
       zone.className = 'feuilles ' + o;
       zone.replaceChildren();
@@ -3889,12 +3892,12 @@ window.PlanSalle = (function () {
           svg.setAttribute('class', 'plan-svg plan-imprime');
           cas.append(tete, svg);
           feuille.appendChild(cas);
-          dessinerImprimable(svg, pl.donnees, numeros.checked);
+          dessinerImprimable(svg, pl.donnees, numeros.checked, !photos || photos.checked);
         });
       }
     }
     cases.forEach(function (c) { c.addEventListener('change', rendre); });
-    [parFeuille, orientation, numeros].forEach(function (x) { x.addEventListener('change', rendre); });
+    [parFeuille, orientation, numeros, photos].forEach(function (x) { if (x) x.addEventListener('change', rendre); });
     document.getElementById('imp-tout').addEventListener('click', function () { cases.forEach(function (c) { c.checked = true; }); rendre(); });
     document.getElementById('imp-rien').addEventListener('click', function () { cases.forEach(function (c) { c.checked = false; }); rendre(); });
     document.getElementById('imp-imprimer').addEventListener('click', function () { window.print(); });
