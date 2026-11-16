@@ -6,6 +6,10 @@ Centrale → **Ateliers** → **Inspecter** (dans « Imports et disponibilité �
 
 ## 1. Comment un atelier est rangé
 
+> **Où vit un atelier** : les premiers pas de chaque application restent dans son code ; tous les autres passeront par la
+> Centrale (`centrale/ateliers/<app>/`). Règle et ordre de passage : [Ateliers intégrés et transférés](./?doc=integres-transferes).
+> Tant qu'un atelier n'est pas passé, la procédure ci-dessous s'applique telle quelle.
+
 Un atelier existe à trois endroits. Seul le premier est la référence ; les deux autres en sont tirés automatiquement.
 
 | Où | Quoi | Qui l'écrit |

@@ -83,10 +83,11 @@ function md_en_html(string $md): string
     return $html;
 }
 
-// Documents publiés : ?doc=competences, ?doc=donnees, ?doc=creer-atelier (par défaut : la spécification du descripteur)
+// Documents publiés : ?doc=competences, ?doc=donnees, ?doc=creer-atelier, ?doc=integres-transferes (par défaut : la spécification du descripteur)
 const DOCS_PASSERELLE = ['' => ['SPECIFICATION.md', 'Passerelle des ateliers'], 'competences' => ['COMPETENCES.md', 'Compétences'],
                          'donnees' => ['DONNEES-BONNES-PRATIQUES-COMPATIBILITE.md', 'Données, bonnes pratiques et compatibilité'],
-                         'creer-atelier' => ['CREER-UN-ATELIER.md', 'Créer un atelier']];
+                         'creer-atelier' => ['CREER-UN-ATELIER.md', 'Créer un atelier'],
+                         'integres-transferes' => ['ATELIERS-INTEGRES-ET-TRANSFERES.md', 'Ateliers intégrés et transférés']];
 $doc = DOCS_PASSERELLE[(string) ($_GET['doc'] ?? '')] ?? DOCS_PASSERELLE[''];
 $md = (string) file_get_contents(__DIR__ . '/' . $doc[0]);
 ?><!doctype html>
@@ -117,7 +118,7 @@ $md = (string) file_get_contents(__DIR__ . '/' . $doc[0]);
 <body>
 <main>
     <p class="fichiers">Centrale élèves · <a href="./">Descripteur (centrale.json)</a> · <a href="./?doc=donnees">Données et compatibilité</a> ·
-        <a href="./?doc=competences">Compétences</a> · <a href="./?doc=creer-atelier">Créer un atelier</a><br>Fichiers : <a href="<?= htmlspecialchars($doc[0]) ?>"><?= htmlspecialchars($doc[0]) ?></a> ·
+        <a href="./?doc=competences">Compétences</a> · <a href="./?doc=creer-atelier">Créer un atelier</a> · <a href="./?doc=integres-transferes">Ateliers intégrés et transférés</a><br>Fichiers : <a href="<?= htmlspecialchars($doc[0]) ?>"><?= htmlspecialchars($doc[0]) ?></a> ·
         <a href="passerelle-atelier.schema.json">passerelle-atelier.schema.json</a> · <a href="modele-centrale.json">modele-centrale.json</a> ·
         <a href="catalogue-ateliers.schema.json">catalogue-ateliers.schema.json</a> · <a href="modele-ateliers.json">modele-ateliers.json</a> ·
         <a href="competences.json">competences.json</a></p>
