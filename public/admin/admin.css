@@ -2768,12 +2768,12 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 .impression-reglages label.case { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .impression-reglages label.case input { width: 18px; height: 18px; margin: 0; flex: none; }
 .impression-apercu-titre { margin: 20px 0 10px; font-size: 1.05rem; }
-/* feuilles : aperçu à l'écran (format A4), puis impression */
+/* feuilles : aperçu à l'écran (format A4, chaque feuille dans son sens), puis impression (6 mm de marge, @page paysage / portrait) */
 .feuilles { display: flex; flex-direction: column; align-items: center; gap: 18px; }
-.feuille { display: grid; gap: 4mm; box-sizing: border-box; width: min(100%, 1000px); padding: 6mm; background: #fff; color: #111;
+.feuille { display: grid; gap: 3mm; box-sizing: border-box; width: min(100%, 1000px); padding: 4mm; background: #fff; color: #111;
     border: 1px solid var(--bord); box-shadow: 0 4px 18px rgba(0, 0, 0, .12); aspect-ratio: 297 / 210; min-height: 0; overflow: hidden; }
-.feuilles.portrait .feuille { width: min(100%, 700px); aspect-ratio: 210 / 297; }
-.case-plan { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid #ccc; border-radius: 4px; padding: 2mm; }
+.feuille.portrait { width: min(100%, 720px); aspect-ratio: 210 / 297; }
+.case-plan { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid #ccc; border-radius: 4px; padding: 1.2mm 1.5mm; }
 .case-plan-tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 10px;
     margin: 0 0 1.5mm; padding-bottom: 1.5mm; border-bottom: 1px solid #ddd; font: 12px/1.25 system-ui, sans-serif; }
 .case-plan-titre { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
@@ -2782,13 +2782,17 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 .case-plan-sous { color: #444; font-size: 11px; padding: 1px 7px; border: 1px solid #ccc; border-radius: 999px; }
 .case-plan-etab { color: #666; font-size: 10.5px; white-space: nowrap; }
 .impression-classe .pastille-classe { font-size: .95rem; }
-.feuille { -webkit-print-color-adjust: exact; print-color-adjust: exact; }   /* couleurs des pastilles et des noms à l'impression */
 .case-plan .plan-imprime { flex: 1 1 0; min-height: 0; width: 100%; height: 0; }   /* la salle se réduit pour tenir dans la case */
 @media print {
     .impression-plans .feuilles, .impression-plans .feuilles * { visibility: visible; }
     .impression-plans .feuilles { position: absolute; top: 0; left: 0; width: 100%; display: block; }
-    .impression-plans .feuille { width: 100%; height: 194mm; aspect-ratio: auto; padding: 0; border: 0; box-shadow: none; break-after: page; page-break-after: always; }
-    .impression-plans .feuilles.portrait .feuille { height: 281mm; }
+    .impression-plans .feuille { width: 100%; padding: 0; border: 0; box-shadow: none; aspect-ratio: auto; break-after: page; page-break-after: always; }
+    .impression-plans .feuille.paysage { page: paysage; height: 197mm; }
+    .impression-plans .feuille.portrait { page: portrait; height: 284mm; }
     .impression-plans .feuille:last-child { break-after: auto; page-break-after: auto; }
     .impression-plans .ne-pas-imprimer, .impression-plans .pied-admin { display: none !important; }
 }
+/* plans imprimés : nom de l'élève sous sa photo (dessinerImprimable) */
+.plan-imprime .imp-nom { font-family: system-ui, sans-serif; fill: #111; }
+.plan-imprime .imp-nom-fond { fill: rgba(255, 255, 255, .88); stroke: rgba(0, 0, 0, .18); stroke-width: .6; }
+.plan-imprime .anneau-photo { stroke: #fff; stroke-width: 1.2px; }

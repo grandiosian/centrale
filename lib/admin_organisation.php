@@ -1576,14 +1576,16 @@ function page_imprimer_plans(): void
                     </select></label>
                 <label>Feuille
                     <select id="imp-orientation">
-                        <option value="landscape" selected>A4 paysage</option>
+                        <option value="auto" selected>A4, sens automatique (plans les plus grands)</option>
+                        <option value="landscape">A4 paysage</option>
                         <option value="portrait">A4 portrait</option>
                     </select></label>
                 <label class="case"><input type="checkbox" id="imp-photos" checked> Photos des élèves</label>
                 <label class="case"><input type="checkbox" id="imp-numeros" checked> Numéros des élèves avec le nom</label>
                 <button type="button" id="imp-imprimer">🖨 Imprimer</button>
                 <p class="aide">Les noms et les photos sont ceux chargés sur cet ordinateur (jamais envoyés au serveur) ; sans noms, les numéros des élèves.
-                    Les plans sont imprimés à plat, dans le sens de chaque salle.</p>
+                    Les plans sont imprimés à plat, dans le sens de chaque salle, aussi grands que la feuille le permet : en sens automatique,
+                    chaque feuille prend le sens (portrait ou paysage) et la disposition qui donnent les plus grands plans.</p>
             </section>
         </div>
         <h2 class="ne-pas-imprimer impression-apercu-titre">Aperçu <span class="discret" id="imp-feuilles"></span></h2>

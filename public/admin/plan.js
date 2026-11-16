@@ -3824,28 +3824,107 @@ window.PlanSalle = (function () {
      Imprimer plusieurs plans de classe sur une feuille (./?p=imprimer_plans, lib/admin_organisation.php)
      ====================================================================== */
 
-  /** Plan à plat pour l'impression : la salle dans son propre sens (portrait, miroirs), le nom de chaque élève sur sa place. */
+  /**
+   * Plan à plat pour l'impression : la salle dans son propre sens (portrait, miroirs) ; pour chaque élève, sa photo (si elle est
+   * chargée sur cet ordinateur) et son nom sur deux lignes, aussi grands que possible SANS SE CHEVAUCHER : chaque élève a une case
+   * autour de sa place, qui s'arrête à mi-chemin de chaque voisin, du côté (horizontal ou vertical) où il y a le plus de place.
+   */
   function dessinerImprimable(svg, d, avecNumero, avecPhotos) {
     var carte = d.placement || {};
     var vueSalle = Object.assign({}, (d.plan && d.plan.vue) || {}, { iso: false });
     var p = Object.assign({}, d.plan, { vue: vueSalle });
     function eleve(id) { return (d.eleves || []).find(function (e) { return e.id === id; }); }
-    function texte(e) {
-      var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : '';
-      n = n || e.simule || '';
-      return n ? (avecNumero ? e.numero + ' · ' + n : n) : 'n° ' + e.numero;
-    }
-    dessinerPlan(svg, p, {
-      surObjet: function (o, g, w, h, ctx) {
-        if (!estPlace(o) || !carte[o.id]) return;
-        var e = eleve(carte[o.id]);
-        g.classList.add('occupee');
-        var visage = avecPhotos && e ? photo(d.classe, e.numero) : null;   // photos gardées sur cet ordinateur
-        if (visage) photoPlace(g, w, h, visage);
-        if (ctx.nom) ctx.nom(e ? texte(e) : '?'); else ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? texte(e) : '?');
-      },
-    });
+    dessinerPlan(svg, p, {});
     svg.style.aspectRatio = '';
+    var tr = transformation(p);
+    var MAXL = 2.6, MAXH = 3.2, JEU = 0.12;   // case la plus grande (en carreaux) et petit écart entre deux cases
+    var places = p.objets.filter(function (o) { return estPlace(o) && carte[o.id] && eleve(carte[o.id]); }).map(function (o) {
+      var r = tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o));
+      // étendue de la case de chaque côté de la place (gauche, droite, haut, bas), en carreaux
+      return { o: o, e: eleve(carte[o.id]), cx: r.x + r.w / 2, cy: r.y + r.h / 2, g: MAXL / 2, d: MAXL / 2, h: MAXH / 2, b: MAXH / 2 };
+    });
+    // chaque paire de voisins se sépare à mi-chemin, sur l'axe où ils sont le plus loin l'un de l'autre (rapporté à la taille
+    // de case) : un côté libre (allée) garde toute son étendue
+    places.forEach(function (a, i) {
+      places.forEach(function (b, j) {
+        if (j <= i) return;
+        var dx = Math.abs(a.cx - b.cx), dy = Math.abs(a.cy - b.cy);
+        if (dx >= MAXL || dy >= MAXH) return;   // trop loin : les deux cases ne peuvent pas se toucher
+        var g = a.cx <= b.cx ? a : b, dr = g === a ? b : a, ha = a.cy <= b.cy ? a : b, ba = ha === a ? b : a;
+        if (dx / MAXL >= dy / MAXH) { g.d = Math.min(g.d, dx / 2); dr.g = Math.min(dr.g, dx / 2); }
+        else { ha.b = Math.min(ha.b, dy / 2); ba.h = Math.min(ba.h, dy / 2); }
+      });
+    });
+    var calque = el('g', { class: 'calque-imprime' }, svg);
+    // Disposition de chaque case : photo au-dessus du nom (case haute), ou à gauche du nom (case large et basse : deux places
+    // l'une au-dessus de l'autre). Les photos sont ramenées à la taille médiane du plan, pour un rendu régulier.
+    places.forEach(function (pl) {
+      pl.L = (pl.g + pl.d - JEU) * U; pl.H = (pl.h + pl.b - JEU) * U;
+      pl.X0 = (pl.cx - pl.g + JEU / 2) * U; pl.Y0 = (pl.cy - pl.h + JEU / 2) * U;
+      pl.MX = pl.X0 + pl.L / 2; pl.MY = pl.Y0 + pl.H / 2;   // milieu de la case (pas forcément la place : un côté libre l'élargit)
+      pl.cote = pl.L >= 1.6 * pl.H;   // nom à côté de la photo
+      pl.D = pl.cote ? Math.min(pl.H, pl.L * 0.42) : Math.max(0, Math.min(pl.L, pl.H - Math.max(0.45 * U, Math.min(0.8 * U, pl.H * 0.38))));
+    });
+    var tailles = places.map(function (pl) { return pl.D; }).sort(function (x, y) { return x - y; });
+    var mediane = tailles.length ? tailles[Math.floor(tailles.length / 2)] : 0;
+    places.forEach(function (pl) {
+      var D = Math.min(pl.D, mediane);
+      var l = pl.L, h = pl.H, x0 = pl.X0, y0 = pl.Y0;
+      var g = el('g', { class: 'case-eleve', 'data-boite': [x0, y0, l, h].map(function (v) { return v.toFixed(1); }).join(' ') }, calque);
+      var visage = avecPhotos ? photo(d.classe, pl.e.numero) : null;
+      if (!visage) D = 0;
+      var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, pl.e.numero) : '';
+      n = n || pl.e.simule || '';
+      // deux lignes : prénom (avec le numéro) puis nom ; sans nom chargé : le numéro seul
+      var mots = n.split(/\s+/).filter(Boolean), l1, l2;
+      if (!mots.length) { l1 = 'n° ' + pl.e.numero; l2 = ''; }
+      else if (mots.length === 1) { l1 = mots[0]; l2 = ''; }
+      else { l1 = mots[0]; l2 = mots.slice(1).join(' '); }
+      if (avecNumero && mots.length) l1 = pl.e.numero + ' · ' + l1;
+      var lignes = l2 ? 2 : 1;
+      // zone du texte, selon la disposition
+      var zx, zy, zl, zh, ancre;
+      if (D > 0 && pl.cote) {
+        var bloc = Math.min(l, D + 0.06 * U + l * 0.58), bx = pl.MX - bloc / 2;   // photo + nom, centrés ensemble dans la case
+        var Dc = D / 0.92;
+        photoPlace(el('g', { transform: 'translate(' + (bx - (Dc - D) / 2) + ',' + (pl.MY - Dc / 2) + ')' }, g), Dc, Dc, visage);
+        zx = bx + D + 0.06 * U; zl = bx + bloc - zx; zy = pl.MY - D / 2; zh = D; ancre = 'start';
+      } else if (D > 0) {
+        var Dc2 = D / 0.92, haut = D + Math.min(h - D, 0.9 * U), ys = pl.MY - haut / 2;   // photo + nom, centrés ensemble
+        photoPlace(el('g', { transform: 'translate(' + (pl.MX - Dc2 / 2) + ',' + (ys - (Dc2 - D) / 2) + ')' }, g), Dc2, Dc2, visage);
+        zx = x0; zl = l; zy = ys + D + 1; zh = haut - D - 1; ancre = 'middle';
+      } else {
+        zx = x0; zl = l; zh = Math.min(h, 0.9 * U); zy = pl.MY - zh / 2; ancre = 'middle';
+      }
+      var taille = Math.min(0.36 * U, (zh - 2) / (lignes * 1.18));
+      var tx = ancre === 'middle' ? zx + zl / 2 : zx + 3;
+      var fond = el('rect', { class: 'imp-nom-fond', rx: 3 }, g);
+      var texte = el('text', { class: 'imp-nom', 'text-anchor': ancre, 'font-size': taille.toFixed(2) }, g);
+      [l1, l2].filter(Boolean).forEach(function (t, k) {
+        var ts = el('tspan', { x: tx.toFixed(2), dy: k ? (taille * 1.15).toFixed(2) : 0 }, texte);
+        ts.textContent = t;
+        if (k === 0) ts.setAttribute('font-weight', '700');
+      });
+      function poser() {   // texte centré verticalement dans sa zone
+        var hT = taille * (1 + 1.15 * (lignes - 1));
+        texte.setAttribute('y', (zy + (zh - hT) / 2 + taille * 0.86).toFixed(2));
+      }
+      poser();
+      // trop large pour sa zone : la police se réduit (mesurée une fois le texte posé)
+      var larg = 0;
+      try { larg = texte.getBBox().width; } catch (e) { /* hors page */ }
+      if (larg > zl - 6) {   // 2 px de fond de chaque côté, et 1 px de marge
+        taille = taille * (zl - 6) / larg;
+        texte.setAttribute('font-size', taille.toFixed(2));
+        Array.prototype.forEach.call(texte.querySelectorAll('tspan'), function (ts, k) { if (k) ts.setAttribute('dy', (taille * 1.15).toFixed(2)); });
+        poser();
+      }
+      try {
+        var bb = texte.getBBox();
+        fond.setAttribute('x', (bb.x - 2).toFixed(2)); fond.setAttribute('y', (bb.y - 1).toFixed(2));
+        fond.setAttribute('width', (bb.width + 4).toFixed(2)); fond.setAttribute('height', (bb.height + 2).toFixed(2));
+      } catch (e) { fond.remove(); }
+    });
   }
 
   function impression() {
@@ -3862,16 +3941,35 @@ window.PlanSalle = (function () {
       if (r.num === false) numeros.checked = false;
       if (r.ph === false && photos) photos.checked = false;
     } catch (e) { /* rien */ }
-    // grille des cases d'une feuille : [colonnes, rangées]
-    var GRILLES = { landscape: { 1: [1, 1], 2: [2, 1], 4: [2, 2], 6: [3, 2] }, portrait: { 1: [1, 1], 2: [1, 2], 4: [2, 2], 6: [2, 3] } };
+    // Mise en page qui donne les plus grands plans : pour chaque feuille, l'orientation (si « Automatique ») et la grille
+    // (colonnes × rangées) qui maximisent l'échelle du plus petit plan de la feuille. Surface imprimable A4 avec 6 mm de marge.
+    var FEUILLE = { landscape: [285, 198], portrait: [198, 285] }, ECART = 3, TETE = 7, BORD = 3;   // en mm
+    function format(pl) {   // largeur / hauteur du plan dessiné (salle + marge, dans le sens de la salle)
+      var pp = pl.donnees.plan || {}, v = pp.vue || {};
+      var L = (v.portrait ? pp.hauteur : pp.largeur) || 16, H = (v.portrait ? pp.largeur : pp.hauteur) || 11;
+      return { l: L + 2 * MARGE, h: H + 2 * MARGE };
+    }
+    function meilleureMiseEnPage(lot, o) {
+      var orients = o === 'auto' ? ['landscape', 'portrait'] : [o], meilleure = null;
+      orients.forEach(function (or) {
+        var W = FEUILLE[or][0], H = FEUILLE[or][1];
+        for (var col = 1; col <= lot.length; col++) {
+          var rangs = Math.ceil(lot.length / col);
+          if ((col - 1) * rangs >= lot.length) continue;   // une colonne vide : inutile
+          var cl = (W - (col - 1) * ECART) / col - BORD, ch = (H - (rangs - 1) * ECART) / rangs - BORD - TETE;
+          var echelle = Math.min.apply(null, lot.map(function (pl) { var f = format(pl); return Math.min(cl / f.l, ch / f.h); }));
+          if (!meilleure || echelle > meilleure.echelle + 1e-6) meilleure = { or: or, col: col, rangs: rangs, echelle: echelle };
+        }
+      });
+      return meilleure;
+    }
     var style = document.createElement('style');
     document.head.appendChild(style);
+    style.textContent = '@page { size: A4; margin: 6mm; } @page paysage { size: A4 landscape; margin: 6mm; } @page portrait { size: A4 portrait; margin: 6mm; }';
 
     function rendre() {
-      var n = +parFeuille.value, o = orientation.value, grille = GRILLES[o][n] || [1, 1];
+      var n = +parFeuille.value, o = orientation.value;
       try { localStorage.setItem('centrale-impression-plans', JSON.stringify({ n: n, o: o, num: numeros.checked, ph: !photos || photos.checked })); } catch (e) { /* rien */ }
-      style.textContent = '@page { size: A4 ' + o + '; margin: 8mm; }';
-      zone.className = 'feuilles ' + o;
       zone.replaceChildren();
       var choisis = cases.filter(function (c) { return c.checked; }).map(function (c) { return plans[+c.value]; });
       document.getElementById('imp-compte').textContent = choisis.length + ' plan' + (choisis.length > 1 ? 's' : '') + ' coché' + (choisis.length > 1 ? 's' : '');
@@ -3880,11 +3978,12 @@ window.PlanSalle = (function () {
       document.getElementById('imp-imprimer').disabled = !choisis.length;
       if (!choisis.length) { zone.appendChild(creer('p', 'vide', 'Cochez un ou plusieurs plans.')); return; }
       for (var i = 0; i < choisis.length; i += n) {
-        var feuille = creer('div', 'feuille');
-        feuille.style.gridTemplateColumns = 'repeat(' + grille[0] + ', minmax(0, 1fr))';
-        feuille.style.gridTemplateRows = 'repeat(' + grille[1] + ', minmax(0, 1fr))';
+        var lot = choisis.slice(i, i + n), mp = meilleureMiseEnPage(lot, o);
+        var feuille = creer('div', 'feuille ' + (mp.or === 'portrait' ? 'portrait' : 'paysage'));
+        feuille.style.gridTemplateColumns = 'repeat(' + mp.col + ', minmax(0, 1fr))';
+        feuille.style.gridTemplateRows = 'repeat(' + mp.rangs + ', minmax(0, 1fr))';
         zone.appendChild(feuille);   // dans la page avant de dessiner : la taille des noms se mesure
-        choisis.slice(i, i + n).forEach(function (pl) {
+        lot.forEach(function (pl) {
           var cas = creer('section', 'case-plan');
           // en-tête : pastille de la classe (couleurs du niveau et de l'établissement), salle et variante ; à droite l'établissement et la date
           var tete = creer('div', 'case-plan-tete'), gauche = creer('div', 'case-plan-titre'), pastille = creer('span', 'case-plan-pastille');
