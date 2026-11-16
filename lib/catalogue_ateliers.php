@@ -536,10 +536,29 @@ function catalogue_ateliers(?string $app = null, bool $avec_retires = true): arr
     return $res;
 }
 
+/**
+ * Adresse de l'application pour « Ouvrir » : sa copie sur cette Centrale (/miroir/<app>/, à l'adresse de la page en cours) si elle
+ * existe, comme le portail des élèves ; sinon la première adresse qui répond dans l'ordre des emplacements ; sinon son adresse principale.
+ */
+function adresse_application_ouvrir(string $app, string $principale): string
+{
+    static $memo = [];
+    if (isset($memo[$app])) {
+        return $memo[$app];
+    }
+    if (preg_match('/^[A-Za-z0-9_-]+$/', $app) && is_file(__DIR__ . '/../public/miroir/' . $app . '/index.html')) {
+        return $memo[$app] = adresse_complete('/miroir/' . $app . '/');
+    }
+    $st = db()->prepare('SELECT * FROM ateliers WHERE app = ?');
+    $st->execute([$app]);
+    $a = $st->fetch();
+    return $memo[$app] = $a ? meilleure_adresse($a) : $principale;
+}
+
 /** Adresse pour ouvrir un atelier dans son application (sans connexion : l'application doit lire #activite=). */
 function adresse_ouvrir_atelier(array $r): string
 {
-    $u = (string) ($r['url_app'] ?? '');
+    $u = adresse_application_ouvrir((string) $r['app'], (string) ($r['url_app'] ?? ''));
     if ($u === '') {
         return '';
     }
