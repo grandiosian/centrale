@@ -643,6 +643,8 @@ window.PlanSalle = (function () {
     tour: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4.5h-4.5"/>',
     reset: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4.5h4.5"/>',
     echange: '<path d="M4 8h14l-3.5-3.5"/><path d="M20 16H6l3.5 3.5"/>',
+    disposer: '<path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
+    ajouter: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/>',
     classe: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8.5 10h7M8.5 14h7M8.5 18h4"/>',
     progression: '<path d="M4 20h16"/><path d="M6.5 16v-3M11 16V9M15.5 16v-6M20 7l-4.5 3-4.5-3-4.5 4"/>',
   };
@@ -1144,12 +1146,13 @@ window.PlanSalle = (function () {
     /* Mode échange : un clic sur un élève du plan le sélectionne (il reste à sa place), un clic sur un autre élève :
        les deux échangent leurs places ; sur une place libre : il s'y déplace ; sur lui-même : la sélection s'annule. */
     var modeEchange = false, placeChoisie = null;
+    var modeDisposer = false;   // « Disposer les places » : glisser une place la déplace dans la salle (commune à toutes les classes)
     try { modeEchange = localStorage.getItem('centrale-plan-echange') === '1'; } catch (e) { /* rien */ }
 
     /** Clic sur une place (plan ou vue 3D) : pose l'élève sélectionné, ou reprend celui de la place (mode échange : voir plus haut). */
     function clicPlace(id) {
       if (ignorerClic) { ignorerClic = false; return; }
-      if (apercu) return;
+      if (apercu || modeDisposer) return;
       if (modeEchange && !choisi) {
         if (placeChoisie) { if (placeChoisie !== id && carte[placeChoisie]) poser(id, carte[placeChoisie]); placeChoisie = null; }
         else if (carte[id]) placeChoisie = id;
@@ -1172,7 +1175,7 @@ window.PlanSalle = (function () {
     function nomNumero(num) { var e = d.eleves.find(function (x) { return String(x.numero) === String(num); }); return e ? nom(e) : 'n° ' + num; }
     var infosPlaces = {
       liens: function () { return liensPlaces(d, carte, nomNumero); },
-      nomPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? nom(e) : ''; },
+      nomPlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? (o.id === placeChoisie ? '⇄ ' : '') + nom(e) : ''; },
       visagePlace: function (o) { var id = carte[o.id], e = id && eleve(id); return e ? photo(d.classe, e.numero) : null; },
       cartonsPlace: function (o) {
         var id = carte[o.id], e = id && eleve(id);
@@ -1357,6 +1360,52 @@ window.PlanSalle = (function () {
       tracerLiens2D(svg, plan, transformation(p), liensPlaces(d, carte, nomNumero), duosTropPres(carte));
     }
 
+    /* ---------- Disposer les places : glisser une place la déplace dans la salle (vue à plat) ---------- */
+    function vueVersPlan(p, X, Y) {   // coordonnées affichées (portrait, miroirs) → coordonnées de la salle, en carreaux
+      var v = p.vue || {}, portrait = !!v.portrait;
+      var L = portrait ? p.hauteur : p.largeur, H = portrait ? p.largeur : p.hauteur;
+      var vx = v.miroirX ? L - X : X, vy = v.miroirY ? H - Y : Y;
+      return portrait ? { x: vy, y: p.hauteur - vx } : { x: vx, y: vy };
+    }
+    function formulairePlan() { return document.getElementById('form-placement'); }
+    function envoyerPlaces(champs) {
+      var f = formulairePlan(), fd = new FormData();
+      ['csrf', 'classe_id', 'salle_id', 'groupe_id', 'variante_id'].forEach(function (n) { if (f.elements[n]) fd.append(n, f.elements[n].value); });
+      fd.append('action', 'disposer_places');
+      Object.keys(champs).forEach(function (k) { fd.append(k, champs[k]); });
+      return fetch(location.pathname + location.search, { method: 'POST', body: fd, credentials: 'same-origin' });
+    }
+    function deplacerPlace(g, idPlace, ev) {
+      if (ev.button !== undefined && ev.button !== 0) return;
+      ev.preventDefault();
+      var o = plan.objets.find(function (x) { return x.id === idPlace; });
+      if (!o) return;
+      var depart = pointPlan(svg, ev), base = g.getAttribute('transform') || '', dx = 0, dy = 0;
+      g.classList.add('en-deplacement');
+      function bouger(e) {
+        var q = pointPlan(svg, e);
+        dx = q.x - depart.x; dy = q.y - depart.y;
+        g.setAttribute('transform', base + ' translate(' + (dx * U) + ',' + (dy * U) + ')');
+      }
+      function lacher() {
+        document.removeEventListener('pointermove', bouger);
+        document.removeEventListener('pointerup', lacher);
+        ignorerClic = true;
+        setTimeout(function () { ignorerClic = false; }, 0);
+        if (Math.abs(dx) < 0.25 && Math.abs(dy) < 0.25) { rendre(); return; }
+        var p = affichage(plan), tr = transformation(p), r = tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o));
+        var c = vueVersPlan(p, r.x + r.w / 2 + dx, r.y + r.h / 2 + dy);
+        o.x = Math.max(0, Math.min(plan.largeur - largeurVue(o), arrondi(c.x - largeurVue(o) / 2)));
+        o.y = Math.max(0, Math.min(plan.hauteur - hauteurVue(o), arrondi(c.y - hauteurVue(o) / 2)));
+        rendre();
+        envoyerPlaces({ places: JSON.stringify([{ id: o.id, x: o.x, y: o.y }]), reponse: 'json' })
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .catch(function () { alert('La place n’a pas pu être enregistrée : rechargez la page.'); });
+      }
+      document.addEventListener('pointermove', bouger);
+      document.addEventListener('pointerup', lacher);
+    }
+
     /* Filtre de la liste des élèves (numéro ou nom) */
     var champFiltre = document.getElementById('filtre-eleves');
     function filtrerListe() {
@@ -1373,10 +1422,18 @@ window.PlanSalle = (function () {
           if (!estPlace(o)) return;
           g.classList.add('place-cliquable');
           g.setAttribute('data-place', o.id);
+          if (modeDisposer) {   // la place elle-même se déplace (avec ou sans élève)
+            g.classList.add('place-disposable');
+            el('rect', { x: -3, y: -3, width: w + 6, height: h + 6, rx: 6, class: 'cadre-disposer' }, g);
+            g.addEventListener('pointerdown', function (ev) { ev.stopImmediatePropagation(); deplacerPlace(g, o.id, ev); }, true);
+          }
           var id = carte[o.id];
           if (id) {
             g.classList.add('occupee');
-            if (o.id === placeChoisie) g.classList.add('echange-choisi');   // mode échange : l'élève sélectionné
+            if (o.id === placeChoisie) {   // mode échange : l'élève sélectionné, entouré d'un anneau qui pulse
+              g.classList.add('echange-choisi');
+              g.insertBefore(el('rect', { x: -10, y: -10, width: w + 20, height: h + 38, rx: 12, class: 'anneau-echange' }, null), g.firstChild);
+            }
             if (apercu && apercu.avant[o.id] !== id) g.classList.add('deplace');   // aperçu : l'élève change de place
             g.addEventListener('pointerdown', function (ev) { if (!apercu) glisserSvg(g, o.id, ev); });
             var e = eleve(id);
@@ -1480,6 +1537,7 @@ window.PlanSalle = (function () {
       echange.addEventListener('click', function () {
         modeEchange = !modeEchange;
         placeChoisie = null;
+        if (modeEchange) modeDisposer = false;
         try { localStorage.setItem('centrale-plan-echange', modeEchange ? '1' : ''); } catch (e) { /* rien */ }
         rendre();
       });
@@ -1502,10 +1560,45 @@ window.PlanSalle = (function () {
         });
         icones.appendChild(b);
       });
-      barreOptions.append(creer('span', 'barre-titre', 'Plan de classe'), echange, aideEchange, icones);
+      // Places de la salle : les déplacer à la souris, en ajouter (la salle est commune à toutes ses classes)
+      var disposer = puce('disposer', 'Disposer les places', 'Glisser une place pour la déplacer dans la salle (vue Plan). La salle est la même pour toutes les classes qui y ont cours.');
+      var ajouter = puce('ajouter', 'Place', 'Ajouter une place élève à la salle (en bas du plan, puis « Disposer les places » pour la mettre où vous voulez)');
+      ajouter.removeAttribute('aria-pressed');
+      var aideDisposer = creer('span', 'plan-options-aide', '');
+      function majDisposer() {
+        var iso = !!(affichage(plan).vue || {}).iso;
+        disposer.setAttribute('aria-pressed', String(modeDisposer));
+        document.body.classList.toggle('mode-disposer', modeDisposer);
+        aideDisposer.hidden = !modeDisposer;
+        aideDisposer.textContent = iso ? 'Passez en vue « Plan » pour déplacer les places.' : 'Glissez une place où vous voulez (elle s’enregistre aussitôt).';
+      }
+      disposer.addEventListener('click', function () {
+        modeDisposer = !modeDisposer;
+        if (modeDisposer) { modeEchange = false; placeChoisie = null; }
+        rendre();
+      });
+      ajouter.addEventListener('click', function () {
+        var txt = ajouter.querySelector('span');   // 1er clic : « Confirmer ? » (5 s), 2e clic : ajoute
+        if (ajouter.dataset.confirme !== '1') {
+          ajouter.dataset.confirme = '1';
+          txt.textContent = 'Ajouter à la salle ?';
+          ajouter.classList.add('a-confirmer');
+          clearTimeout(ajouter._minuteur);
+          ajouter._minuteur = setTimeout(function () { ajouter.dataset.confirme = ''; txt.textContent = 'Place'; ajouter.classList.remove('a-confirmer'); }, 5000);
+          return;
+        }
+        clearTimeout(ajouter._minuteur);
+        ajouter.disabled = true;
+        envoyerPlaces({ ajouter: '1', reponse: 'json' }).then(function () { location.reload(); }, function () { ajouter.disabled = false; });
+      });
+      document.addEventListener('centrale-vue', majDisposer);
+      var groupePlaces = creer('div', 'barre-groupe');
+      groupePlaces.append(disposer, ajouter);
+      barreOptions.append(creer('span', 'barre-titre', 'Plan de classe'), echange, groupePlaces, aideEchange, aideDisposer, icones);
       majEchange();
+      majDisposer();
       var rendreAvant = rendre;
-      rendre = function () { rendreAvant(); majEchange(); };
+      rendre = function () { rendreAvant(); majEchange(); majDisposer(); };
     })();
 
     var boutonVider = document.getElementById('p-vider');
@@ -3727,6 +3820,88 @@ window.PlanSalle = (function () {
   }
 
   /** Aperçu en lecture seule d'un plan placé (accueil) : dessine la salle + les élèves posés. */
+  /* ======================================================================
+     Imprimer plusieurs plans de classe sur une feuille (./?p=imprimer_plans, lib/admin_organisation.php)
+     ====================================================================== */
+
+  /** Plan à plat pour l'impression : la salle dans son propre sens (portrait, miroirs), le nom de chaque élève sur sa place. */
+  function dessinerImprimable(svg, d, avecNumero) {
+    var carte = d.placement || {};
+    var vueSalle = Object.assign({}, (d.plan && d.plan.vue) || {}, { iso: false });
+    var p = Object.assign({}, d.plan, { vue: vueSalle });
+    function eleve(id) { return (d.eleves || []).find(function (e) { return e.id === id; }); }
+    function texte(e) {
+      var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : '';
+      n = n || e.simule || '';
+      return n ? (avecNumero ? e.numero + ' · ' + n : n) : 'n° ' + e.numero;
+    }
+    dessinerPlan(svg, p, {
+      surObjet: function (o, g, w, h, ctx) {
+        if (!estPlace(o) || !carte[o.id]) return;
+        var e = eleve(carte[o.id]);
+        g.classList.add('occupee');
+        if (ctx.nom) ctx.nom(e ? texte(e) : '?'); else ctx.lab(w / 2, h + 13, 0, 'nom-eleve', e ? texte(e) : '?');
+      },
+    });
+    svg.style.aspectRatio = '';
+  }
+
+  function impression() {
+    var src = document.getElementById('donnees-impression'), zone = document.getElementById('feuilles');
+    if (!src || !zone) return;
+    var plans = JSON.parse(src.textContent);
+    var cases = Array.prototype.slice.call(document.querySelectorAll('.impression-liste input[type=checkbox]'));
+    var parFeuille = document.getElementById('imp-par-feuille'), orientation = document.getElementById('imp-orientation');
+    var numeros = document.getElementById('imp-numeros');
+    try {   // derniers réglages de cet ordinateur
+      var r = JSON.parse(localStorage.getItem('centrale-impression-plans')) || {};
+      if (r.n) parFeuille.value = r.n;
+      if (r.o) orientation.value = r.o;
+      if (r.num === false) numeros.checked = false;
+    } catch (e) { /* rien */ }
+    // grille des cases d'une feuille : [colonnes, rangées]
+    var GRILLES = { landscape: { 1: [1, 1], 2: [2, 1], 4: [2, 2], 6: [3, 2] }, portrait: { 1: [1, 1], 2: [1, 2], 4: [2, 2], 6: [2, 3] } };
+    var style = document.createElement('style');
+    document.head.appendChild(style);
+
+    function rendre() {
+      var n = +parFeuille.value, o = orientation.value, grille = GRILLES[o][n] || [1, 1];
+      try { localStorage.setItem('centrale-impression-plans', JSON.stringify({ n: n, o: o, num: numeros.checked })); } catch (e) { /* rien */ }
+      style.textContent = '@page { size: A4 ' + o + '; margin: 8mm; }';
+      zone.className = 'feuilles ' + o;
+      zone.replaceChildren();
+      var choisis = cases.filter(function (c) { return c.checked; }).map(function (c) { return plans[+c.value]; });
+      document.getElementById('imp-compte').textContent = choisis.length + ' plan' + (choisis.length > 1 ? 's' : '') + ' coché' + (choisis.length > 1 ? 's' : '');
+      var nbFeuilles = Math.ceil(choisis.length / n);
+      document.getElementById('imp-feuilles').textContent = choisis.length ? '· ' + nbFeuilles + ' feuille' + (nbFeuilles > 1 ? 's' : '') : '';
+      document.getElementById('imp-imprimer').disabled = !choisis.length;
+      if (!choisis.length) { zone.appendChild(creer('p', 'vide', 'Cochez un ou plusieurs plans.')); return; }
+      for (var i = 0; i < choisis.length; i += n) {
+        var feuille = creer('div', 'feuille');
+        feuille.style.gridTemplateColumns = 'repeat(' + grille[0] + ', minmax(0, 1fr))';
+        feuille.style.gridTemplateRows = 'repeat(' + grille[1] + ', minmax(0, 1fr))';
+        zone.appendChild(feuille);   // dans la page avant de dessiner : la taille des noms se mesure
+        choisis.slice(i, i + n).forEach(function (pl) {
+          var cas = creer('section', 'case-plan');
+          var tete = creer('div', 'case-plan-tete');
+          tete.append(creer('strong', '', pl.titre), creer('span', '', pl.sous + (pl.etablissement ? ' · ' + pl.etablissement : '')));
+          var svg = document.createElementNS(NS, 'svg');
+          svg.setAttribute('class', 'plan-svg plan-imprime');
+          cas.append(tete, svg);
+          feuille.appendChild(cas);
+          dessinerImprimable(svg, pl.donnees, numeros.checked);
+        });
+      }
+    }
+    cases.forEach(function (c) { c.addEventListener('change', rendre); });
+    [parFeuille, orientation, numeros].forEach(function (x) { x.addEventListener('change', rendre); });
+    document.getElementById('imp-tout').addEventListener('click', function () { cases.forEach(function (c) { c.checked = true; }); rendre(); });
+    document.getElementById('imp-rien').addEventListener('click', function () { cases.forEach(function (c) { c.checked = false; }); rendre(); });
+    document.getElementById('imp-imprimer').addEventListener('click', function () { window.print(); });
+    document.addEventListener('centrale-noms', rendre);   // noms chargés après coup
+    rendre();
+  }
+
   function apercu(svg, d) {
     if (!svg || !d || !d.plan) return;
     var carte = d.placement || {}, enAttente = false;
@@ -3794,6 +3969,6 @@ window.PlanSalle = (function () {
     document.addEventListener('centrale-vue', rendre);    // et quand la présentation change
   }
 
-  return { editeur: editeur, placement: placement, dessiner: dessiner, apercu: apercu, barreVue: barreVue, TYPES: TYPES,
+  return { editeur: editeur, placement: placement, dessiner: dessiner, apercu: apercu, barreVue: barreVue, impression: impression, TYPES: TYPES,
            REPERES: REPERES, CLASSE: CLASSE, CRITERES: CRITERES, GRAVITE: GRAVITE, icone: icone, feuilleSeance: feuilleSeance, statutFeuille: statutFeuille };
 })();

@@ -2709,8 +2709,19 @@ body { padding-bottom: var(--pied-h); }
 /* ---------- Plan de classe : options du plan (2e ligne de .barre-vue : mode échange, icônes), plan.js placement() ---------- */
 .plan-options-aide { font-size: .82rem; color: var(--accent); }
 .plan-options-icones { margin-left: auto; }
-.plan-svg .echange-choisi .forme { stroke: var(--accent); stroke-width: 4; stroke-dasharray: 4 3; }
-.plan-svg .echange-choisi { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)); }
+/* mode échange : anneau épais et pulsant autour de l'élève sélectionné (orange vif, visible sur tous les sols) */
+.plan-svg .anneau-echange { fill: color-mix(in srgb, #ff8a00 22%, transparent); stroke: #ff8a00; stroke-width: 4; pointer-events: none;
+    animation: anneau-echange 1.1s ease-in-out infinite; }
+@keyframes anneau-echange { 50% { stroke-width: 7; fill: color-mix(in srgb, #ff8a00 34%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .plan-svg .anneau-echange { animation: none; } }
+.plan-svg .echange-choisi .forme { stroke: #ff8a00; stroke-width: 3; }
+.plan-svg .echange-choisi { filter: drop-shadow(0 0 8px rgba(255, 138, 0, .75)); }
+/* mode « Disposer les places » : chaque place se glisse */
+.plan-svg .cadre-disposer { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; pointer-events: none; }
+body.mode-disposer .plan-svg .place-disposable { cursor: move; }
+.plan-svg .place-disposable.en-deplacement { opacity: .75; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .3)); }
+.puce-option.a-confirmer { border-color: var(--danger); color: var(--danger); }
+#apercu-plan[hidden] { display: none; }
 body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 @media (max-width: 640px) { .plan-options-icones { margin-left: 0; } .barre-vue .puce-option span, .barre-vue .segment button span { font-size: .82rem; } }
 @media print { .barre-vue { display: none; } }
@@ -2738,3 +2749,40 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 .renommer-variante[open] > form { flex-wrap: nowrap; }
 .renommer-variante form input { flex: 0 0 14em; width: 14em; margin: 0; padding: 6px 8px; }
 .renommer-variante form button { margin: 0; white-space: nowrap; }
+
+/* ---------- Imprimer plusieurs plans de classe (./?p=imprimer_plans, PlanSalle.impression) ---------- */
+.impression-grille { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .impression-grille { grid-template-columns: 1fr; } }
+.impression-choix-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.impression-choix-tete h2, .impression-reglages h2 { margin: 0 0 6px; font-size: 1.05rem; }
+.impression-liste { max-height: 52vh; overflow: auto; margin-top: 8px; padding-right: 4px; }
+.impression-etab { margin: 12px 0 4px; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--doux); }
+.impression-classe { margin: 8px 0 2px; font-weight: 700; }
+.impression-ligne { display: flex; align-items: center; gap: 8px; margin: 0; padding: 5px 8px; border-radius: 8px; font-weight: 500; cursor: pointer; }
+.impression-ligne:hover { background: var(--code-fond); }
+.impression-ligne input[type=checkbox] { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--accent); }
+.impression-ligne span { flex: 1; min-width: 0; }
+.impression-ligne small { color: var(--doux); white-space: nowrap; }
+.impression-reglages { display: flex; flex-direction: column; gap: 10px; }
+.impression-reglages label { margin: 0; }
+.impression-reglages label.case { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.impression-reglages label.case input { width: 18px; height: 18px; margin: 0; flex: none; }
+.impression-apercu-titre { margin: 20px 0 10px; font-size: 1.05rem; }
+/* feuilles : aperçu à l'écran (format A4), puis impression */
+.feuilles { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.feuille { display: grid; gap: 4mm; box-sizing: border-box; width: min(100%, 1000px); padding: 6mm; background: #fff; color: #111;
+    border: 1px solid var(--bord); box-shadow: 0 4px 18px rgba(0, 0, 0, .12); aspect-ratio: 297 / 210; min-height: 0; overflow: hidden; }
+.feuilles.portrait .feuille { width: min(100%, 700px); aspect-ratio: 210 / 297; }
+.case-plan { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid #ccc; border-radius: 4px; padding: 2mm; }
+.case-plan-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-bottom: 1mm; font: 12px/1.25 system-ui, sans-serif; }
+.case-plan-tete strong { font-size: 13px; }
+.case-plan-tete span { color: #555; font-size: 11px; }
+.case-plan .plan-imprime { flex: 1 1 0; min-height: 0; width: 100%; height: 0; }   /* la salle se réduit pour tenir dans la case */
+@media print {
+    .impression-plans .feuilles, .impression-plans .feuilles * { visibility: visible; }
+    .impression-plans .feuilles { position: absolute; top: 0; left: 0; width: 100%; display: block; }
+    .impression-plans .feuille { width: 100%; height: 194mm; aspect-ratio: auto; padding: 0; border: 0; box-shadow: none; break-after: page; page-break-after: always; }
+    .impression-plans .feuilles.portrait .feuille { height: 281mm; }
+    .impression-plans .feuille:last-child { break-after: auto; page-break-after: auto; }
+    .impression-plans .ne-pas-imprimer, .impression-plans .pied-admin { display: none !important; }
+}

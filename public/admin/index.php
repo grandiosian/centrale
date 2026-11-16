@@ -736,6 +736,7 @@ match ($page) {
     'competences' => page_competences(),
     'projet_fichier' => telecharger_fichier_projet('projet', (int) ($_GET['id'] ?? 0)),
     'fourni' => telecharger_fichier_projet('fournis', (int) ($_GET['id'] ?? 0)),
+    'imprimer_plans' => page_imprimer_plans(),   // plusieurs plans de classe sur une feuille : lib/admin_organisation.php
     'placement' => page_placement((int) ($_GET['classe'] ?? 0), (int) ($_GET['salle'] ?? 0), (int) ($_GET['groupe'] ?? 0)),
     'fichiers' => page_fichiers(),
     'import'   => page_import(),

@@ -329,6 +329,72 @@ function action_organisation(string $action): bool
             flash('Variante « ' . $version['nom'] . ' » ouverte (' . count($propre) . ' élèves placés).');
             rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : '') . '&variante=' . (int) $p['version_id']);
 
+        case 'disposer_places':
+            // Page Plan de classe : ajouter des places élèves à la salle (« ＋ Place »), ou en déplacer (mode « Disposer les places »).
+            // La salle est commune à toutes les classes qui y ont cours.
+            $cid = (int) ($p['classe_id'] ?? 0);
+            $sid = (int) ($p['salle_id'] ?? 0);
+            $gid = (int) ($p['groupe_id'] ?? 0);
+            $vid = (int) ($p['variante_id'] ?? 0);
+            $retour_plan = './?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : '') . ($vid ? '&variante=' . $vid : '');
+            if (!salle_compatible($pdo, $cid, $sid)) {
+                flash('Cette salle n’appartient pas à l’établissement de la classe.', 'err');
+                rediriger($retour_plan);
+            }
+            $st = $pdo->prepare('SELECT plan FROM salles WHERE id = ?');
+            $st->execute([$sid]);
+            $plan = plan_propre((string) $st->fetchColumn());
+            if ($plan === null) {
+                flash('Plan de la salle illisible.', 'err');
+                rediriger($retour_plan);
+            }
+            $deplaces = json_decode((string) ($p['places'] ?? '[]'), true);
+            $par_id = [];
+            foreach (is_array($deplaces) ? $deplaces : [] as $d) {
+                if (is_array($d) && isset($d['id'])) {
+                    $par_id[(string) $d['id']] = $d;
+                }
+            }
+            $vue_l = fn(array $o) => in_array($o['r'], [90, 270], true) ? $o['h'] : $o['l'];
+            $vue_h = fn(array $o) => in_array($o['r'], [90, 270], true) ? $o['l'] : $o['h'];
+            foreach ($plan['objets'] as &$o) {
+                if (isset($par_id[$o['id']]) && in_array($o['type'], TYPES_PLACES, true)) {
+                    $o['x'] = max(0, min($plan['largeur'] - $vue_l($o), round((float) $par_id[$o['id']]['x'] * 2) / 2));
+                    $o['y'] = max(0, min($plan['hauteur'] - $vue_h($o), round((float) $par_id[$o['id']]['y'] * 2) / 2));
+                }
+            }
+            unset($o);
+            // Places ajoutées : la première case libre (1 × 1, sans chevaucher un objet), en partant du bas de la salle
+            $ajouter = max(0, min(3, (int) ($p['ajouter'] ?? 0)));
+            $ajoutees = 0;
+            for ($y = $plan['hauteur'] - 1.5; $y >= 0.5 && $ajoutees < $ajouter; $y -= 0.5) {
+                for ($x = 0.5; $x <= $plan['largeur'] - 1.5 && $ajoutees < $ajouter; $x += 0.5) {
+                    $libre = true;
+                    foreach ($plan['objets'] as $o) {
+                        if ($x < $o['x'] + $vue_l($o) + 0.25 && $x + 1 + 0.25 > $o['x'] && $y < $o['y'] + $vue_h($o) + 0.25 && $y + 1 + 0.25 > $o['y']) {
+                            $libre = false;
+                            break;
+                        }
+                    }
+                    if ($libre) {
+                        $plan['objets'][] = ['id' => 'pa' . bin2hex(random_bytes(3)), 'type' => 'place', 'x' => $x, 'y' => $y, 'l' => 1, 'h' => 1, 'r' => 0, 'label' => ''];
+                        $ajoutees++;
+                    }
+                }
+            }
+            $propre = plan_propre(json_encode($plan));
+            $pdo->prepare('UPDATE salles SET plan = ? WHERE id = ?')->execute([json_encode($propre, JSON_UNESCAPED_UNICODE), $sid]);
+            if ($ajouter) {
+                flash($ajoutees ? $ajoutees . ' place' . ($ajoutees > 1 ? 's' : '') . ' ajoutée' . ($ajoutees > 1 ? 's' : '') . ' à la salle, en bas du plan : « Disposer les places » pour la mettre où vous voulez.'
+                    : 'Plus de case libre dans la salle : agrandissez-la (Modifier la salle).', $ajoutees ? 'ok' : 'err');
+            }
+            if (($p['reponse'] ?? '') === 'json') {   // déplacement à la souris : la page reste ouverte
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => true]);
+                exit;
+            }
+            rediriger($retour_plan);
+
         case 'renommer_version':
             $cid = (int) ($p['classe_id'] ?? 0);
             $sid = (int) ($p['salle_id'] ?? 0);
@@ -1399,6 +1465,8 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
                         <?php endif; ?>
                         <span class="plan-non-enregistre">● modifications non enregistrées</span>
                         <button type="button" class="secondaire" onclick="window.print()">Imprimer</button>
+                        <a class="btn secondaire" href="./?p=imprimer_plans&amp;coche=<?= h($classe_id . '-' . $groupe_id . '-' . $salle_id . ($variante_id ? '-v' . $variante_id : '')) ?>"
+                           title="Choisir plusieurs plans (classes, variantes) et en mettre 1, 2, 4 ou 6 par feuille">Imprimer plusieurs plans…</a>
                         <span class="discret" id="compte-places"></span>
                     </div>
                 </div>
@@ -1408,6 +1476,120 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
         <script type="application/json" id="donnees-plan"><?= json_encode($donnees, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
         <script src="plan.js?v=<?= @filemtime(__DIR__ . '/../public/admin/plan.js') ?: 1 ?>"></script>
         <script>PlanSalle.placement();</script>
+    </main>
+    <?php
+    pied();
+}
+
+/* ---------- Imprimer plusieurs plans de classe sur une feuille (./?p=imprimer_plans) ---------- */
+
+/**
+ * Tous les plans de classe à imprimer : le plan en cours de chaque (classe, groupe, salle) qui a des élèves placés, puis ses
+ * variantes. [ ['cle', 'etablissement', 'classe', 'libelle', 'nb', 'donnees' => données du plan (salle, élèves, placement)] ]
+ * Rien de nominatif : les noms sont ajoutés par le navigateur de l'enseignant (CentraleNoms).
+ */
+function plans_imprimables(): array
+{
+    $pdo = db();
+    $res = [];
+    $leger = function (?array $d): ?array {
+        if (!$d) {
+            return null;
+        }
+        $d['eleves'] = array_map(fn($e) => ['id' => $e['id'], 'numero' => $e['numero'], 'simule' => $e['simule']], $d['eleves']);
+        return array_intersect_key($d, array_flip(['plan', 'classe', 'eleves', 'placement', 'salle', 'etablissement']));
+    };
+    $contextes = $pdo->query('SELECT DISTINCT p.classe_id, p.groupe_id, p.salle_id, c.nom AS classe, s.nom AS salle, g.nom AS groupe, COALESCE(e.nom, \'\') AS college
+                              FROM placements p JOIN classes c ON c.id = p.classe_id JOIN salles s ON s.id = p.salle_id
+                              LEFT JOIN groupes g ON g.id = p.groupe_id LEFT JOIN etablissements e ON e.id = c.etablissement_id
+                              ORDER BY college, c.nom, g.nom, s.nom')->fetchAll();
+    foreach ($contextes as $c) {
+        $d = $leger(donnees_plan_seance(['classe_id' => $c['classe_id'], 'groupe_id' => $c['groupe_id'], 'salle_id' => $c['salle_id']]));
+        if (!$d) {
+            continue;
+        }
+        $cle = $c['classe_id'] . '-' . (int) $c['groupe_id'] . '-' . $c['salle_id'];
+        $nom_classe = $c['classe'] . ($c['groupe'] ? ' · ' . $c['groupe'] : '');
+        $res[] = ['cle' => $cle, 'etablissement' => $c['college'] ?: 'Sans établissement', 'classe' => $nom_classe, 'salle' => $c['salle'],
+                  'libelle' => 'plan en cours', 'nb' => count((array) $d['placement']), 'donnees' => $d];
+        $st = $pdo->prepare('SELECT id, nom, carte FROM plans_versions WHERE classe_id = ? AND groupe_id = ? AND salle_id = ? ORDER BY id');
+        $st->execute([$c['classe_id'], (int) $c['groupe_id'], $c['salle_id']]);
+        foreach ($st->fetchAll() as $v) {
+            $carte = array_map('intval', json_decode((string) $v['carte'], true) ?: []);
+            $res[] = ['cle' => $cle . '-v' . $v['id'], 'etablissement' => $c['college'] ?: 'Sans établissement', 'classe' => $nom_classe, 'salle' => $c['salle'],
+                      'libelle' => 'variante « ' . $v['nom'] . ' »', 'nb' => count($carte), 'donnees' => ['placement' => (object) $carte] + $d];
+        }
+    }
+    return $res;
+}
+
+function page_imprimer_plans(): void
+{
+    $plans = plans_imprimables();
+    $coches = array_filter(explode(',', (string) ($_GET['coche'] ?? '')));
+    entete('Imprimer des plans');
+    barre('classes');
+    ?>
+    <main class="large impression-plans">
+        <div class="titre-section ne-pas-imprimer">
+            <h1>Imprimer des plans de classe</h1>
+        </div>
+        <?php messages(); ?>
+        <?php if (!$plans): ?>
+            <p class="vide">Aucun plan de classe enregistré pour l’instant.</p>
+        <?php else: ?>
+        <div class="impression-grille ne-pas-imprimer">
+            <section class="carte impression-choix">
+                <div class="impression-choix-tete">
+                    <h2>Plans à imprimer</h2>
+                    <span class="discret" id="imp-compte"></span>
+                </div>
+                <div class="ligne-actions">
+                    <button type="button" class="petit secondaire" id="imp-tout">Tout cocher</button>
+                    <button type="button" class="petit secondaire" id="imp-rien">Tout décocher</button>
+                </div>
+                <div class="impression-liste">
+                    <?php $etab = null; $classe = null; foreach ($plans as $i => $pl): ?>
+                        <?php if ($pl['etablissement'] !== $etab): $etab = $pl['etablissement']; $classe = null; ?>
+                            <p class="impression-etab"><?= h($etab) ?></p>
+                        <?php endif; ?>
+                        <?php if ($pl['classe'] !== $classe): $classe = $pl['classe']; ?>
+                            <p class="impression-classe"><?= h($classe) ?></p>
+                        <?php endif; ?>
+                        <label class="impression-ligne">
+                            <input type="checkbox" value="<?= $i ?>" data-cle="<?= h($pl['cle']) ?>" <?= in_array($pl['cle'], $coches, true) ? 'checked' : '' ?>>
+                            <span>Salle <?= h($pl['salle']) ?> — <?= h($pl['libelle']) ?></span>
+                            <small><?= (int) $pl['nb'] ?> élèves</small>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+            <section class="carte impression-reglages">
+                <h2>Mise en page</h2>
+                <label>Plans par feuille
+                    <select id="imp-par-feuille">
+                        <option value="1">1 (pleine page)</option>
+                        <option value="2" selected>2</option>
+                        <option value="4">4</option>
+                        <option value="6">6</option>
+                    </select></label>
+                <label>Feuille
+                    <select id="imp-orientation">
+                        <option value="landscape" selected>A4 paysage</option>
+                        <option value="portrait">A4 portrait</option>
+                    </select></label>
+                <label class="case"><input type="checkbox" id="imp-numeros" checked> Numéros des élèves avec le nom</label>
+                <button type="button" id="imp-imprimer">🖨 Imprimer</button>
+                <p class="aide">Les noms sont ceux chargés sur cet ordinateur (jamais envoyés au serveur) ; sans noms, les numéros des élèves.
+                    Les plans sont imprimés à plat, dans le sens de chaque salle.</p>
+            </section>
+        </div>
+        <h2 class="ne-pas-imprimer impression-apercu-titre">Aperçu <span class="discret" id="imp-feuilles"></span></h2>
+        <div id="feuilles" class="feuilles"></div>
+        <script type="application/json" id="donnees-impression"><?= json_encode(array_map(fn($p) => ['titre' => $p['classe'] . ' · salle ' . $p['salle'], 'sous' => $p['libelle'], 'etablissement' => $p['etablissement'], 'donnees' => $p['donnees']], $plans), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+        <script src="plan.js?v=<?= @filemtime(__DIR__ . '/../public/admin/plan.js') ?: 1 ?>"></script>
+        <script>PlanSalle.impression();</script>
+        <?php endif; ?>
     </main>
     <?php
     pied();
