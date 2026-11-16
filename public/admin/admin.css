@@ -2793,8 +2793,10 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
     .page-impression-plans .feuilles { position: static; display: block; gap: 0; }
     .page-impression-plans .feuille { width: 100%; margin: 0; padding: 0; border: 0; box-shadow: none; aspect-ratio: auto; overflow: hidden;
         break-inside: avoid; page-break-inside: avoid; break-after: page; page-break-after: always; }
-    .page-impression-plans .feuille.paysage { page: paysage; height: 195mm; }
-    .page-impression-plans .feuille.portrait { page: portrait; height: 282mm; }
+    /* hauteur = la zone imprimable réelle de la page (100vh à l'impression), quelles que soient les marges imposées par le
+       navigateur ou l'imprimante : une feuille ne déborde jamais sur une deuxième page */
+    .page-impression-plans .feuille.paysage { page: paysage; height: 195mm; height: min(195mm, calc(100vh - 1mm)); }
+    .page-impression-plans .feuille.portrait { page: portrait; height: 282mm; height: min(282mm, calc(100vh - 1mm)); }
     .page-impression-plans .feuille:last-child { break-after: auto; page-break-after: auto; }
 }
 /* plans imprimés : nom de l'élève sous sa photo (dessinerImprimable) */
