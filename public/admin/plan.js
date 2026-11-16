@@ -3825,9 +3825,11 @@ window.PlanSalle = (function () {
      ====================================================================== */
 
   /**
-   * Plan à plat pour l'impression : la salle dans son propre sens (portrait, miroirs) ; pour chaque élève, sa photo (si elle est
-   * chargée sur cet ordinateur) et son nom sur deux lignes, aussi grands que possible SANS SE CHEVAUCHER : chaque élève a une case
-   * autour de sa place, qui s'arrête à mi-chemin de chaque voisin, du côté (horizontal ou vertical) où il y a le plus de place.
+   * Plan à plat pour l'impression : la salle dans son propre sens (portrait, miroirs), et pour chaque élève sa photo (chargée sur
+   * cet ordinateur) et son nom (prénom en gras, nom dessous). Tout le monde a LA MÊME taille, la plus grande possible :
+   *  - photo : un même diamètre, centrée sur la place, juste assez petit pour que deux photos ne se touchent jamais ;
+   *  - nom : une même taille de police, la plus grande pour laquelle chaque nom trouve une position libre (dessous, dessus,
+   *    à droite ou à gauche de sa photo) sans toucher une photo ni un autre nom (deux voisins peuvent alterner dessus / dessous).
    */
   function dessinerImprimable(svg, d, avecNumero, avecPhotos) {
     var carte = d.placement || {};
@@ -3837,93 +3839,89 @@ window.PlanSalle = (function () {
     dessinerPlan(svg, p, {});
     svg.style.aspectRatio = '';
     var tr = transformation(p);
-    var MAXL = 2.6, MAXH = 3.2, JEU = 0.12;   // case la plus grande (en carreaux) et petit écart entre deux cases
     var places = p.objets.filter(function (o) { return estPlace(o) && carte[o.id] && eleve(carte[o.id]); }).map(function (o) {
-      var r = tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o));
-      // étendue de la case de chaque côté de la place (gauche, droite, haut, bas), en carreaux
-      return { o: o, e: eleve(carte[o.id]), cx: r.x + r.w / 2, cy: r.y + r.h / 2, g: MAXL / 2, d: MAXL / 2, h: MAXH / 2, b: MAXH / 2 };
-    });
-    // chaque paire de voisins se sépare à mi-chemin, sur l'axe où ils sont le plus loin l'un de l'autre (rapporté à la taille
-    // de case) : un côté libre (allée) garde toute son étendue
-    places.forEach(function (a, i) {
-      places.forEach(function (b, j) {
-        if (j <= i) return;
-        var dx = Math.abs(a.cx - b.cx), dy = Math.abs(a.cy - b.cy);
-        if (dx >= MAXL || dy >= MAXH) return;   // trop loin : les deux cases ne peuvent pas se toucher
-        var g = a.cx <= b.cx ? a : b, dr = g === a ? b : a, ha = a.cy <= b.cy ? a : b, ba = ha === a ? b : a;
-        if (dx / MAXL >= dy / MAXH) { g.d = Math.min(g.d, dx / 2); dr.g = Math.min(dr.g, dx / 2); }
-        else { ha.b = Math.min(ha.b, dy / 2); ba.h = Math.min(ba.h, dy / 2); }
-      });
-    });
-    var calque = el('g', { class: 'calque-imprime' }, svg);
-    // Disposition de chaque case : photo au-dessus du nom (case haute), ou à gauche du nom (case large et basse : deux places
-    // l'une au-dessus de l'autre). Les photos sont ramenées à la taille médiane du plan, pour un rendu régulier.
-    places.forEach(function (pl) {
-      pl.L = (pl.g + pl.d - JEU) * U; pl.H = (pl.h + pl.b - JEU) * U;
-      pl.X0 = (pl.cx - pl.g + JEU / 2) * U; pl.Y0 = (pl.cy - pl.h + JEU / 2) * U;
-      pl.MX = pl.X0 + pl.L / 2; pl.MY = pl.Y0 + pl.H / 2;   // milieu de la case (pas forcément la place : un côté libre l'élargit)
-      pl.cote = pl.L >= 1.6 * pl.H;   // nom à côté de la photo
-      pl.D = pl.cote ? Math.min(pl.H, pl.L * 0.42) : Math.max(0, Math.min(pl.L, pl.H - Math.max(0.45 * U, Math.min(0.8 * U, pl.H * 0.38))));
-    });
-    var tailles = places.map(function (pl) { return pl.D; }).sort(function (x, y) { return x - y; });
-    var mediane = tailles.length ? tailles[Math.floor(tailles.length / 2)] : 0;
-    places.forEach(function (pl) {
-      var D = Math.min(pl.D, mediane);
-      var l = pl.L, h = pl.H, x0 = pl.X0, y0 = pl.Y0;
-      var g = el('g', { class: 'case-eleve', 'data-boite': [x0, y0, l, h].map(function (v) { return v.toFixed(1); }).join(' ') }, calque);
-      var visage = avecPhotos ? photo(d.classe, pl.e.numero) : null;
-      if (!visage) D = 0;
-      var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, pl.e.numero) : '';
-      n = n || pl.e.simule || '';
-      // deux lignes : prénom (avec le numéro) puis nom ; sans nom chargé : le numéro seul
-      var mots = n.split(/\s+/).filter(Boolean), l1, l2;
-      if (!mots.length) { l1 = 'n° ' + pl.e.numero; l2 = ''; }
-      else if (mots.length === 1) { l1 = mots[0]; l2 = ''; }
+      var r = tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o)), e = eleve(carte[o.id]);
+      var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : '';
+      n = n || e.simule || '';
+      var mots = n.split(/\s+/).filter(Boolean), l1, l2;   // deux lignes : prénom (avec le numéro), puis nom
+      if (!mots.length) { l1 = 'n° ' + e.numero; l2 = ''; }
       else { l1 = mots[0]; l2 = mots.slice(1).join(' '); }
-      if (avecNumero && mots.length) l1 = pl.e.numero + ' · ' + l1;
-      var lignes = l2 ? 2 : 1;
-      // zone du texte, selon la disposition
-      var zx, zy, zl, zh, ancre;
-      if (D > 0 && pl.cote) {
-        var bloc = Math.min(l, D + 0.06 * U + l * 0.58), bx = pl.MX - bloc / 2;   // photo + nom, centrés ensemble dans la case
-        var Dc = D / 0.92;
-        photoPlace(el('g', { transform: 'translate(' + (bx - (Dc - D) / 2) + ',' + (pl.MY - Dc / 2) + ')' }, g), Dc, Dc, visage);
-        zx = bx + D + 0.06 * U; zl = bx + bloc - zx; zy = pl.MY - D / 2; zh = D; ancre = 'start';
-      } else if (D > 0) {
-        var Dc2 = D / 0.92, haut = D + Math.min(h - D, 0.9 * U), ys = pl.MY - haut / 2;   // photo + nom, centrés ensemble
-        photoPlace(el('g', { transform: 'translate(' + (pl.MX - Dc2 / 2) + ',' + (ys - (Dc2 - D) / 2) + ')' }, g), Dc2, Dc2, visage);
-        zx = x0; zl = l; zy = ys + D + 1; zh = haut - D - 1; ancre = 'middle';
-      } else {
-        zx = x0; zl = l; zh = Math.min(h, 0.9 * U); zy = pl.MY - zh / 2; ancre = 'middle';
+      if (avecNumero && mots.length) l1 = e.numero + ' · ' + l1;
+      return { e: e, x: (r.x + r.w / 2) * U, y: (r.y + r.h / 2) * U, l1: l1, l2: l2, visage: avecPhotos ? photo(d.classe, e.numero) : null };
+    });
+    if (!places.length) return;
+    var avecVisage = places.some(function (pl) { return pl.visage; });
+    // 1. diamètre commun des photos : 94 % de la plus petite distance entre deux places (au plus 1,7 carreau)
+    var dmin = Infinity;
+    places.forEach(function (a, i) { places.forEach(function (b, j) { if (j > i) dmin = Math.min(dmin, Math.hypot(a.x - b.x, a.y - b.y)); }); });
+    var D = avecVisage ? Math.min(1.7 * U, (isFinite(dmin) ? dmin : U) * 0.94) : 0;
+    var R = D / 2, ECART = 2;   // espace (en px du plan) entre une photo et son nom, et entre deux noms
+    // 2. taille commune des noms : la plus grande pour laquelle chaque nom trouve une position libre
+    var mesure = document.createElement('canvas').getContext('2d');
+    function largeurTexte(t, gras, F) { mesure.font = (gras ? '700 ' : '400 ') + F + 'px system-ui, sans-serif'; return mesure.measureText(t).width; }
+    var Lsalle = (tr.L + MARGE) * U, Hsalle = (tr.H + MARGE) * U, minX = -MARGE * U, minY = -MARGE * U;
+    function chevauche(a, b) { return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h; }
+    var photos = places.map(function (pl) { return { x: pl.x - R, y: pl.y - R, w: D, h: D }; });
+    // les places les plus serrées choisissent d'abord
+    var ordre = places.map(function (pl, i) {
+      var v = 0;
+      places.forEach(function (q) { if (q !== pl && Math.hypot(q.x - pl.x, q.y - pl.y) < 2.2 * U) v++; });
+      return { i: i, v: v };
+    }).sort(function (a, b) { return b.v - a.v; }).map(function (o) { return o.i; });
+    function disposer(F) {   // positions des noms pour une taille F, ou null si un nom ne trouve pas de place
+      var poses = [], res = [];
+      for (var k = 0; k < ordre.length; k++) {
+        var i = ordre[k], pl = places[i];
+        var w = Math.max(largeurTexte(pl.l1, true, F), pl.l2 ? largeurTexte(pl.l2, false, F) : 0) + 4;
+        var h = (pl.l2 ? 2.15 : 1) * F * 1.05 + 2;
+        var cands = [
+          { x: pl.x - w / 2, y: pl.y + R + ECART },            // dessous
+          { x: pl.x - w / 2, y: pl.y - R - ECART - h },        // dessus
+          { x: pl.x + R + ECART, y: pl.y - h / 2 },            // à droite
+          { x: pl.x - R - ECART - w, y: pl.y - h / 2 },        // à gauche
+        ];
+        var ok = null;
+        for (var c = 0; c < cands.length && !ok; c++) {
+          var z = { x: cands[c].x, y: cands[c].y, w: w, h: h };
+          if (z.x < minX || z.y < minY || z.x + z.w > Lsalle || z.y + z.h > Hsalle) continue;
+          var libre = photos.every(function (ph, j) { return j === i || !chevauche(z, ph); })
+            && poses.every(function (q) { return !chevauche({ x: z.x - ECART / 2, y: z.y - ECART / 2, w: z.w + ECART, h: z.h + ECART }, q); });
+          if (libre) ok = z;
+        }
+        if (!ok) return null;
+        poses.push(ok);
+        res[i] = ok;
       }
-      var taille = Math.min(0.36 * U, (zh - 2) / (lignes * 1.18));
-      var tx = ancre === 'middle' ? zx + zl / 2 : zx + 3;
-      var fond = el('rect', { class: 'imp-nom-fond', rx: 3 }, g);
-      var texte = el('text', { class: 'imp-nom', 'text-anchor': ancre, 'font-size': taille.toFixed(2) }, g);
-      [l1, l2].filter(Boolean).forEach(function (t, k) {
-        var ts = el('tspan', { x: tx.toFixed(2), dy: k ? (taille * 1.15).toFixed(2) : 0 }, texte);
+      return res;
+    }
+    var bas = 4, haut = 0.5 * U, meilleur = null, Fbon = bas;
+    for (var it = 0; it < 14; it++) {   // recherche par dichotomie de la plus grande taille qui marche
+      var F = (bas + haut) / 2, essai = disposer(F);
+      if (essai) { meilleur = essai; Fbon = F; bas = F; } else haut = F;
+    }
+    if (!meilleur) {   // même la plus petite taille ne passe pas partout : chaque nom sous sa photo, en petit
+      Fbon = 4;
+      meilleur = places.map(function (pl) {
+        var w = Math.max(largeurTexte(pl.l1, true, Fbon), pl.l2 ? largeurTexte(pl.l2, false, Fbon) : 0) + 4;
+        return { x: pl.x - w / 2, y: pl.y + R + ECART, w: w, h: (pl.l2 ? 2.15 : 1) * Fbon * 1.05 + 2 };
+      });
+    }
+    // 3. dessin : photos, puis noms (fond blanc)
+    var calque = el('g', { class: 'calque-imprime', 'data-taille-nom': Fbon.toFixed(2), 'data-photo': D.toFixed(1) }, svg);
+    places.forEach(function (pl, i) {
+      var g = el('g', { class: 'case-eleve' }, calque);
+      if (pl.visage && D > 0) {   // photoPlace dessine un rond de 92 % du cadre : le cadre est agrandi d'autant
+        var Dc = D / 0.92;
+        photoPlace(el('g', { transform: 'translate(' + (pl.x - Dc / 2) + ',' + (pl.y - Dc / 2) + ')' }, g), Dc, Dc, pl.visage);
+      }
+      var z = meilleur[i];
+      el('rect', { class: 'imp-nom-fond', rx: 2.5, x: z.x.toFixed(2), y: z.y.toFixed(2), width: z.w.toFixed(2), height: z.h.toFixed(2) }, g);
+      var texte = el('text', { class: 'imp-nom', 'text-anchor': 'middle', 'font-size': Fbon.toFixed(2), y: (z.y + 1 + Fbon * 0.88).toFixed(2) }, g);
+      [pl.l1, pl.l2].filter(Boolean).forEach(function (t, k) {
+        var ts = el('tspan', { x: (z.x + z.w / 2).toFixed(2), dy: k ? (Fbon * 1.1).toFixed(2) : 0 }, texte);
         ts.textContent = t;
         if (k === 0) ts.setAttribute('font-weight', '700');
       });
-      function poser() {   // texte centré verticalement dans sa zone
-        var hT = taille * (1 + 1.15 * (lignes - 1));
-        texte.setAttribute('y', (zy + (zh - hT) / 2 + taille * 0.86).toFixed(2));
-      }
-      poser();
-      // trop large pour sa zone : la police se réduit (mesurée une fois le texte posé)
-      var larg = 0;
-      try { larg = texte.getBBox().width; } catch (e) { /* hors page */ }
-      if (larg > zl - 6) {   // 2 px de fond de chaque côté, et 1 px de marge
-        taille = taille * (zl - 6) / larg;
-        texte.setAttribute('font-size', taille.toFixed(2));
-        Array.prototype.forEach.call(texte.querySelectorAll('tspan'), function (ts, k) { if (k) ts.setAttribute('dy', (taille * 1.15).toFixed(2)); });
-        poser();
-      }
-      try {
-        var bb = texte.getBBox();
-        fond.setAttribute('x', (bb.x - 2).toFixed(2)); fond.setAttribute('y', (bb.y - 1).toFixed(2));
-        fond.setAttribute('width', (bb.width + 4).toFixed(2)); fond.setAttribute('height', (bb.height + 2).toFixed(2));
-      } catch (e) { fond.remove(); }
     });
   }
 
