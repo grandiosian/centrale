@@ -3843,10 +3843,11 @@ window.PlanSalle = (function () {
       var r = tr.rect(o.x, o.y, largeurVue(o), hauteurVue(o)), e = eleve(carte[o.id]);
       var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : '';
       n = n || e.simule || '';
-      var mots = n.split(/\s+/).filter(Boolean), l1, l2;   // deux lignes : prénom (avec le numéro), puis nom
-      if (!mots.length) { l1 = 'n° ' + e.numero; l2 = ''; }
-      else { l1 = mots[0]; l2 = mots.slice(1).join(' '); }
-      if (avecNumero && mots.length) l1 = e.numero + ' · ' + l1;
+      // deux lignes : le prénom en gras (avec le numéro), puis le nom de famille (noms rangés « NOM Prénom », voir separerNom)
+      var l1, l2;
+      if (!n.trim()) { l1 = 'n° ' + e.numero; l2 = ''; }
+      else { var id = separerNom(n); l1 = id.prenom; l2 = id.nom; }
+      if (avecNumero && n.trim()) l1 = e.numero + ' · ' + l1;
       return { e: e, x: (r.x + r.w / 2) * U, y: (r.y + r.h / 2) * U, l1: l1, l2: l2, visage: avecPhotos ? photo(d.classe, e.numero) : null };
     });
     if (!places.length) return;
