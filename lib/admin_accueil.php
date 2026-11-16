@@ -42,6 +42,55 @@ function seances_semaine_tous(string $lundi): array
     return ['seances' => $res, 'vacances' => $vacances, 'samedi' => $samedi];
 }
 
+/**
+ * Pourquoi un établissement réel n'a aucun cours ce jour-là : vacances, cours arrêtés par leur date « Jusqu'au »,
+ * pas encore commencés, ou seulement l'autre semaine (A/B). Une ligne par établissement sans cours (classes simulées à part).
+ * Chaque ligne : ['etablissement', 'id', 'texte'].
+ */
+function pourquoi_pas_de_cours(string $date): array
+{
+    $res = [];
+    $j = jour_semaine($date);
+    foreach (db()->query('SELECT * FROM etablissements ORDER BY nom')->fetchAll() as $e) {
+        if (est_etablissement_simule($e['nom'])) {
+            continue;
+        }
+        $w = semaine_emploi_du_temps($e, lundi_de($date));
+        if (array_filter($w['seances'], fn($s) => $s['date'] === $date)) {
+            continue;
+        }
+        $ligne = fn(string $t) => ['etablissement' => $e['nom'], 'id' => (int) $e['id'], 'texte' => $t];
+        if (($w['jours'][$date] ?? null) !== null) {
+            $res[] = $ligne('vacances (' . $w['jours'][$date] . ').');
+            continue;
+        }
+        $st = db()->prepare('SELECT co.semaine, co.debut, co.fin FROM cours co JOIN classes cl ON cl.id = co.classe_id WHERE cl.etablissement_id = ? AND co.jour = ?');
+        $st->execute([(int) $e['id'], $j]);
+        $finis = $a_venir = $autre = [];
+        foreach ($st->fetchAll() as $c) {
+            if ($c['semaine'] !== '' && $w['semaine'] !== '' && $c['semaine'] !== $w['semaine']) {
+                $autre[] = $c;
+            } elseif ($c['fin'] !== '' && $c['fin'] < $date) {
+                $finis[] = $c['fin'];
+            } elseif ($c['debut'] !== '' && $c['debut'] > $date) {
+                $a_venir[] = $c['debut'];
+            }
+        }
+        $jour = mb_strtolower(JOURS[$j] ?? '');
+        $sem = $w['semaine'] !== '' ? ' en semaine ' . $w['semaine'] : '';
+        if ($finis) {
+            $t = count($finis) . ' cours du ' . $jour . $sem . ' se sont arrêtés le ' . date_lisible(max($finis), false)
+                . ' (date « Jusqu’au » de l’emploi du temps).';
+        } elseif ($a_venir) {
+            $t = count($a_venir) . ' cours du ' . $jour . $sem . ' ne commencent que le ' . date_lisible(min($a_venir), false) . '.';
+        } else {
+            $t = 'aucun cours le ' . $jour . $sem . ($autre ? ' (' . count($autre) . ' en semaine ' . ($w['semaine'] === 'A' ? 'B' : 'A') . ')' : '') . '.';
+        }
+        $res[] = $ligne($t);
+    }
+    return $res;
+}
+
 function minutes(string $hhmm): int
 {
     [$h, $m] = array_map('intval', explode(':', $hhmm . ':0'));
@@ -437,7 +486,8 @@ function page_tableau_de_bord(): void
                 'pastille' => $classe ? pastille_classe($classe, groupe_seance($s)) : h($s['classe']),
                 'classe_nom' => $classe ? (string) $classe['nom'] : (string) $s['classe']];   // les notes de la feuille sont rangées sous le nom de la classe
             $eid = (int) $s['etablissement_id'];
-            $grilles_jour[$eid] ??= ['nom' => $s['etablissement'], 'creneaux' => creneaux_de($eid), 'seances' => []];
+            $grilles_jour[$eid] ??= ['nom' => $s['etablissement'], 'simule' => est_etablissement_simule((string) $s['etablissement']),
+                                     'creneaux' => creneaux_de($eid), 'seances' => []];
             $grilles_jour[$eid]['seances'][] = ['k' => $k, 'creneau_id' => (int) $s['creneau_id'], 'duree' => (int) $s['duree']];
         }
         // grille resserrée : du premier au dernier créneau occupé (les créneaux libres entre deux cours restent visibles)
@@ -453,6 +503,10 @@ function page_tableau_de_bord(): void
             }
             $grilles_jour[$eid]['creneaux'] = $rangs ? array_slice($g['creneaux'], min($rangs), max($rangs) - min($rangs) + 1) : [];
         }
+        // les vraies classes d'abord ; les classes simulées (cours tous les jours) à la fin, sous leur propre titre
+        uasort($grilles_jour, fn($a, $b) => $a['simule'] <=> $b['simule']);
+        $jour_reel = (bool) array_filter($grilles_jour, fn($g) => !$g['simule']);
+        $sans_cours = $jour_reel ? [] : pourquoi_pas_de_cours($aujourdhui);
         ?>
         <div class="dashboard" id="dashboard">
             <div class="dash-vue" id="dash-vue">
@@ -508,11 +562,22 @@ function page_tableau_de_bord(): void
                                     <?php if ($n_cj): ?><b class="compte-pastille"><?= $n_cj ?></b><?php endif; ?>
                                 </button>
                                 <div class="cj-corps" id="cj-corps">
-                                    <?php if (!$grilles_jour): ?>
-                                        <p class="cj-rien">Pas de cours aujourd’hui.</p>
+                                    <?php if (!$jour_reel): ?>
+                                        <div class="cj-rien">
+                                            <p>Pas de cours de vos classes aujourd’hui.</p>
+                                            <?php if ($sans_cours): ?>
+                                                <ul class="cj-pourquoi">
+                                                    <?php foreach ($sans_cours as $x): ?>
+                                                        <li><strong><?= h($x['etablissement']) ?></strong> : <?= h($x['texte']) ?>
+                                                            <a href="./?p=edt&amp;etab=<?= (int) $x['id'] ?>">Emploi du temps</a></li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            <?php endif; ?>
+                                        </div>
                                     <?php endif; ?>
                                     <?php foreach ($grilles_jour as $g): ?>
-                                        <?php if (count($grilles_jour) > 1): ?><p class="cj-etab"><?= h($g['nom']) ?></p><?php endif; ?>
+                                        <?php if ($g['simule']): ?><p class="cj-etab cj-etab-simule"><?= h($g['nom']) ?> · classes simulées</p>
+                                        <?php elseif (count($grilles_jour) > 1): ?><p class="cj-etab"><?= h($g['nom']) ?></p><?php endif; ?>
                                         <ol class="cj-grille">
                                             <?php $couvert = 0; foreach ($g['creneaux'] as $i => $c):
                                                 $ici = array_values(array_filter($g['seances'], fn($x) => $x['creneau_id'] === (int) $c['id']));

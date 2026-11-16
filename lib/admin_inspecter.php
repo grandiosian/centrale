@@ -12,6 +12,16 @@
  */
 declare(strict_types=1);
 
+/**
+ * Où sont écrits les ateliers intégrés au code de chaque application (dépôt GitHub, fichiers ; regex : ids concernés).
+ * Inspecter y cherche l'objet de l'atelier (« {k:'id' », « id: 'id' » ou la clé sans préfixe tuto-/exo-/ex-).
+ */
+const SOURCES_CODE_ATELIERS = [
+    'netsim'       => ['depot' => 'grandiosian/NetSim', 'fichiers' => [['index.html', '']]],
+    'technostudio' => ['depot' => 'grandiosian/TechnoStudio', 'fichiers' => [['js/demos.js', ''], ['js/demos2.js', '']]],
+    'etabli3d'     => ['depot' => 'grandiosian/etabli3d', 'fichiers' => [['src/lessons.js', '^(tuto|exo)-'], ['src/examples.js', '^ex-']]],
+];
+
 /** Lien vers l'inspecteur d'un atelier du catalogue. */
 function lien_inspecter_atelier(string $app, string $atelier): string
 {
@@ -77,7 +87,8 @@ function page_inspecter_atelier(string $app, string $atelier): void
     $ouvrir = adresse_ouvrir_atelier($r);
     $ligne = array_diff_key($r, ['contenu' => 1, 'codes' => 1, 'nom_app' => 1, 'icone_app' => 1, 'url_app' => 1]);
     $donnees = ['app' => $app, 'atelier' => $atelier, 'catalogue' => $import['adresse'] ?? '',
-                'fichier' => (string) $r['fichier'], 'url_app' => (string) ($r['url_app'] ?? '')];
+                'fichier' => (string) $r['fichier'], 'url_app' => (string) ($r['url_app'] ?? ''),
+                'code' => SOURCES_CODE_ATELIERS[$app] ?? null];
     ?>
     <div class="titre-section">
         <h1><?= icone_app($app, $r['icone_app'] ?? '') ?> <?= h($r['titre']) ?></h1>
@@ -150,6 +161,13 @@ function page_inspecter_atelier(string $app, string $atelier): void
         <p class="aide">Lu à l’instant chez l’application (pas dans la Centrale) : sa fiche dans <code>ateliers.json</code> et, s’il existe,
             le fichier complet de l’atelier (feuilles, blocs, images).</p>
         <div id="inspect-contenu"><p class="discret">Lecture…</p></div>
+    </section>
+
+    <section class="carte" id="inspect-source">
+        <h2>5. Code source</h2>
+        <p class="aide">Ce qui définit vraiment l’atelier : son fichier complet, ou, pour un atelier intégré à l’application,
+            l’extrait de son code (lu sur GitHub, branche <code>main</code>).</p>
+        <div id="inspect-code"><p class="discret">Lecture…</p></div>
     </section>
 
     <details class="carte">

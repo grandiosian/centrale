@@ -1413,6 +1413,11 @@ a.dash-widget { text-decoration: none; color: inherit; }
     border-radius: 12px; box-shadow: var(--carte-ombre); }
 .cj-corps[hidden] { display: none; }
 .cj-rien { margin: 6px; color: var(--doux); font-size: .88rem; }
+.cj-rien p { margin: 0; }
+.cj-pourquoi { margin: 4px 0 0; padding-left: 16px; font-size: .8rem; line-height: 1.35; }
+.cj-pourquoi li { margin: 3px 0; }
+.cj-pourquoi a { white-space: nowrap; }
+.cj-etab-simule { margin-top: 10px; border-top: 1px dashed var(--bord); padding-top: 8px; }
 .cj-etab { margin: 6px 4px 2px; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--doux); }
 .cj-grille { list-style: none; margin: 0; padding: 0; }
 .cj-ligne { display: grid; grid-template-columns: 52px 1fr; gap: 6px; align-items: stretch; min-height: 30px; }
@@ -2646,5 +2651,7 @@ button.calat-epingle { border: 0; padding: 0 2px; }
 .inspect-liste { margin: 0; padding-left: 18px; }
 .inspect-json { max-height: 480px; overflow: auto; background: var(--fond); border: 1px solid var(--bord); border-radius: 8px; padding: 10px; font-size: .8rem; white-space: pre; }
 .inspect-brut { margin-top: 8px; }
+.inspect-source-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 6px; }
+.inspect-code { max-height: 70vh; tab-size: 2; }
 .inspecteur table td, .inspecteur table th { vertical-align: top; }
 @media (max-width: 640px) { .inspect-dl { grid-template-columns: 1fr; } .inspect-dl dd { margin-bottom: 6px; } }

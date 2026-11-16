@@ -3,6 +3,7 @@
  * Lit chez l'application sa fiche dans ateliers.json et, s'il existe, le fichier complet de l'atelier.
  * Un atelier TechnoStudio (format « Workshop », champ steps) est détaillé feuille par feuille : codes P1/R1/S1/E1
  * (comme js/passerelle.js de TechnoStudio), blocs, blocs notés, compétences, images. Rien n'est modifié.
+ * Partie 5 : le code source (le fichier complet, ou l'extrait du code de l'application lu sur GitHub, SOURCES_CODE_ATELIERS).
  */
 (function () {
   'use strict';
@@ -147,6 +148,108 @@
     return box;
   }
 
+  /* ---------- 5. Code source ---------- */
+  var zoneCode = document.getElementById('inspect-code');
+
+  /** Objet d'un atelier écrit dans le code d'une application : « {k:'id' », « { id: 'id' » ou « cle:{ » (cle = id sans tuto-/exo-/ex-).
+      Parcourt le texte en sautant chaînes, commentaires et expressions régulières ; renvoie {ligne, code} ou null. */
+  function extraireSource(txt, id) {
+    function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+    var pos = -1, dedans = false, r;
+    r = new RegExp('\\b(?:k|id)\\s*:\\s*([\'"])' + esc(id) + '\\1').exec(txt);
+    if (r) { pos = r.index; dedans = true; }
+    else {
+      var cles = [id], m = /^(?:tuto|exo|ex)-(.+)$/.exec(id);
+      if (m) cles.push(m[1]);
+      for (var c = 0; c < cles.length && pos < 0; c++) {
+        r = new RegExp('(^|[\\s,{])([\'"]?)' + esc(cles[c]) + '\\2\\s*:\\s*\\{', 'm').exec(txt);
+        if (r) pos = r.index + r[0].length - 1;
+      }
+    }
+    if (pos < 0) return null;
+    if (dedans) {   // « {k:'…' » ou « {\n id: '…' » : l'objet commence à l'accolade juste avant
+      for (pos--; pos >= 0 && /\s/.test(txt[pos]); pos--);
+      if (txt[pos] !== '{') return null;
+    }
+    var pile = [], cible = pos, fin = -1, i = pos, n = txt.length, ch, prec = '';
+    for (; i < n; i++) {
+      ch = txt[i];
+      if (ch === '"' || ch === "'" || ch === '`') {
+        for (i++; i < n && txt[i] !== ch; i++) { if (txt[i] === '\\') i++; if (ch !== '`' && txt[i] === '\n') break; }
+        prec = ch; continue;
+      }
+      if (ch === '/' && txt[i + 1] === '/') { while (i < n && txt[i] !== '\n') i++; continue; }
+      if (ch === '/' && txt[i + 1] === '*') { i = txt.indexOf('*/', i + 2); if (i < 0) break; i++; continue; }
+      if (ch === '/' && /[(,=:[!&|?{};+\-*%<>~^]|^$/.test(prec)) {
+        var classe = false;
+        for (i++; i < n; i++) {
+          if (txt[i] === '\\') { i++; continue; }
+          if (txt[i] === '[') classe = true; else if (txt[i] === ']') classe = false;
+          else if (txt[i] === '/' && !classe) break;
+          else if (txt[i] === '\n') break;
+        }
+        prec = '/'; continue;
+      }
+      if (ch === '{') pile.push(i);
+      else if (ch === '}') { var o = pile.pop(); if (o === cible && cible >= 0) { fin = i; break; } }
+      if (!/\s/.test(ch)) prec = ch;
+    }
+    if (cible < 0 || fin < 0) return null;
+    var ligneDebut = txt.lastIndexOf('\n', cible) + 1;
+    return { ligne: txt.slice(0, ligneDebut).split('\n').length, code: txt.slice(ligneDebut, fin + 1) };
+  }
+
+  function boutonCopier(texte) {
+    var b = el('button', 'btn petit secondaire', 'Copier');
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      (navigator.clipboard ? navigator.clipboard.writeText(texte) : Promise.reject()).then(function () { b.textContent = 'Copié ✓'; },
+        function () { b.textContent = 'Copie impossible'; });
+      setTimeout(function () { b.textContent = 'Copier'; }, 2000);
+    });
+    return b;
+  }
+  function github(f, ligne) { return D.code ? 'https://github.com/' + D.code.depot + '/blob/main/' + f + (ligne ? '#L' + ligne : '') : ''; }
+  /** Atelier avec un fichier : le fichier entier (images raccourcies à l'écran ; le téléchargement est complet). */
+  function sourceFichier(f, rel, txt, v) {
+    var tele = el('a', 'btn petit secondaire', 'Télécharger le fichier');
+    tele.href = f; tele.download = f.split('/').pop().split('?')[0];
+    var texte = jsonLisible(v);
+    zoneCode.replaceChildren(
+      el('p', 'inspect-source-tete', [code(rel || f.split('/').pop()), ' · ' + ko(txt.length) + ' ',
+        tele, ' ', boutonCopier(txt), ' ', rel && D.code ? lien(github(rel), 'Voir sur GitHub ↗') : null]),
+      el('p', 'discret', 'Images intégrées raccourcies à l’écran : « Copier » et « Télécharger » donnent le fichier complet.'),
+      el('pre', 'inspect-json inspect-code', texte));
+  }
+  /** Atelier intégré à l'application : l'extrait de son code, lu sur GitHub. */
+  function sourceCode() {
+    var cfg = D.code;
+    if (!cfg) { zoneCode.replaceChildren(el('p', 'discret', 'Pas de code source connu pour cette application.')); return; }
+    var fichiers = cfg.fichiers.filter(function (x) { return !x[1] || new RegExp(x[1]).test(D.atelier); });
+    (function suivant(i) {
+      if (i >= fichiers.length) {
+        zoneCode.replaceChildren(el('p', 'alerte', ['Atelier introuvable dans le code de l’application (',
+          fichiers.map(function (x) { return x[0]; }).join(', ') + ') : ', lien('https://github.com/' + cfg.depot, 'voir le dépôt ↗')]));
+        return;
+      }
+      var f = fichiers[i][0];
+      fetch('https://raw.githubusercontent.com/' + cfg.depot + '/main/' + f, { cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      }).then(function (txt) {
+        var x = extraireSource(txt, D.atelier);
+        if (!x) return suivant(i + 1);
+        zoneCode.replaceChildren(
+          el('p', 'inspect-source-tete', ['Écrit dans le code de l’application : ', code(f), ', ligne ' + x.ligne + ' · ',
+            lien(github(f, x.ligne), 'Voir sur GitHub ↗'), ' ', boutonCopier(x.code)]),
+          el('p', 'discret', 'Pour le modifier, il faut changer le code de l’application (voir son CLAUDE.md), puis la publier.'),
+          el('pre', 'inspect-json inspect-code', x.code));
+      }).catch(function (e) {
+        zoneCode.replaceChildren(el('p', 'alerte', ['Lecture impossible de ' + f + ' (' + e.message + ') : ', lien(github(f), 'voir sur GitHub ↗')]));
+      });
+    })(0);
+  }
+
   var catalogue = D.catalogue || (D.url_app ? adresse(D.url_app.replace(/[?#].*$/, '').replace(/\/?$/, '/'), 'ateliers.json') : '');
   zone.replaceChildren();
   var p1 = catalogue ? lire(catalogue).then(function (c) {
@@ -166,6 +269,7 @@
   p1.then(function (a) {
     var f = D.fichier || (a && a.fichier ? adresse(catalogue, a.fichier) : '');
     if (!f) {
+      if (zoneCode) sourceCode();
       zone.appendChild(el('p', 'discret', 'Pas de fichier séparé : l’atelier est écrit dans le code de l’application'
         + (D.app === 'technostudio' ? ' (js/demos.js ou js/demos2.js).' : '.')));
       return;
@@ -178,9 +282,10 @@
       var w = v && v.workshops ? v.workshops.filter(function (x) { return x.id === D.atelier; })[0] || v.workshops[0] : Array.isArray(v) ? v[0] : v;
       zone.appendChild(el('p', 'discret', ['Fichier : ', lien(f)]));
       zone.appendChild(w && w.steps ? technostudio(w, txt.length) : generique(v));
-      zone.appendChild(brut('Données brutes du fichier (images raccourcies)', v));
+      if (zoneCode) sourceFichier(f, a && a.fichier ? String(a.fichier).replace(/^\.?\//, '') : '', txt, v);
     }).catch(function (e) {
       zone.appendChild(el('p', 'alerte', 'Fichier illisible (' + e.message + ') : ' + f));
+      if (zoneCode) zoneCode.replaceChildren(el('p', 'alerte', 'Fichier illisible : ' + f));
     });
   });
 })();
