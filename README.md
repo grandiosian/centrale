@@ -680,6 +680,8 @@ L'empreinte d'un code élève est calculée ainsi : `HMAC-SHA256(clé secrète, 
    - `ALWAYSDATA_COMPTE` : le nom du compte ;
    - `ALWAYSDATA_SSH_KEY` : le contenu de `~/centrale_deploiement` (clé privée).
 
+**Version en cours** : le déploiement écrit `version.json` à la racine (commit, date du commit, message, heure de mise en ligne ; hors de la racine web, pas dans git). La barre du bas de l'espace enseignant l'affiche (« Centrale 1.0 · version 7455bf7 du … », détails au survol, lien vers le commit), avec le commit de chaque copie d'application (fichier `.copie` des miroirs). Sur une copie locale sans `version.json`, elle lit le dépôt git et l'indique « locale ».
+
 ---
 
 ## 10. Référence de l'API

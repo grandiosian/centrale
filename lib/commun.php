@@ -10,6 +10,56 @@ declare(strict_types=1);
 const DOSSIER_DATA = __DIR__ . '/../data';
 const VERSION_CENTRALE = '1.0';
 
+/**
+ * Version en cours de la Centrale : version.json, écrit par le déploiement (.github/workflows/deploy.yml : commit, date,
+ * message, mise en ligne), sinon le dépôt git local (essais). ['commit', 'date', 'message', 'deploye', 'source' => deploiement|local]
+ */
+function version_deployee(): array
+{
+    static $v = null;
+    if ($v !== null) {
+        return $v;
+    }
+    $racine = dirname(__DIR__);
+    $j = is_file($racine . '/version.json') ? json_decode((string) file_get_contents($racine . '/version.json'), true) : null;
+    if (is_array($j) && !empty($j['commit'])) {
+        return $v = array_map('strval', $j) + ['date' => '', 'message' => '', 'deploye' => '', 'source' => 'deploiement'];
+    }
+    $v = ['commit' => '', 'date' => '', 'message' => '', 'deploye' => '', 'source' => 'local'];
+    $git = $racine . '/.git';
+    $head = trim((string) @file_get_contents($git . '/HEAD'));
+    $sha = $head;
+    $fichier = $git . '/HEAD';
+    if (str_starts_with($head, 'ref: ')) {
+        $ref = substr($head, 5);
+        $fichier = $git . '/' . $ref;
+        $sha = trim((string) @file_get_contents($fichier));
+        if ($sha === '' && preg_match('/^([0-9a-f]{40}) ' . preg_quote($ref, '/') . '$/m', (string) @file_get_contents($git . '/packed-refs'), $m)) {
+            $sha = $m[1];
+            $fichier = $git . '/packed-refs';
+        }
+    }
+    if (preg_match('/^[0-9a-f]{7,40}$/', $sha)) {
+        $v['commit'] = substr($sha, 0, 7);
+        $v['date'] = date('c', (int) @filemtime($fichier));
+    }
+    return $v;
+}
+
+/** Copies des applications servies par la Centrale (miroirs.txt) : [nom => ['date' => ISO, 'commit' => court]], d'après leur fichier .copie. */
+function copies_applications(): array
+{
+    $res = [];
+    foreach (['/../public/miroir/', '/../prive/miroir/'] as $d) {
+        foreach (glob(__DIR__ . $d . '*/.copie') ?: [] as $f) {
+            $l = preg_split('/\s+/', trim((string) @file_get_contents($f)));
+            $res[basename(dirname($f))] = ['date' => (string) ($l[0] ?? ''), 'commit' => (string) ($l[1] ?? '')];
+        }
+    }
+    ksort($res);
+    return $res;
+}
+
 /** Connexion à la base SQLite (créée automatiquement au premier appel). */
 /**
  * Logos des applications, repris de leur charte graphique (NetSim/CHARTE-GRAPHIQUE.md, etabli3d/…, TechnoStudio/…).

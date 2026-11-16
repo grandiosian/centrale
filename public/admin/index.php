@@ -1674,8 +1674,49 @@ function entete(string $titre): void
     <?php
 }
 
+/** Date ISO → « 16/11/2026 07:12 » à l'heure de l'établissement ('' si illisible). */
+function date_pied(string $iso): string
+{
+    try {
+        return $iso === '' ? '' : (new DateTimeImmutable($iso))->setTimezone(fuseau())->format('d/m/Y H:i');
+    } catch (Throwable $e) {
+        return '';
+    }
+}
+
+/** Barre du bas de l'espace enseignant : version en cours de la Centrale, copies des applications, serveur. */
+function barre_pied(): void
+{
+    $v = version_deployee();
+    $noms = ['netsim' => 'NetSim', 'technostudio' => 'TechnoStudio', 'etabli3d' => 'Établi 3D', 'fichestudio' => 'FicheStudio'];
+    $commit = $v['commit'] !== '' ? $v['commit'] : '?';
+    $titre = 'Centrale ' . VERSION_CENTRALE . ($v['commit'] !== '' ? ' · commit ' . $v['commit'] : '')
+        . ($v['message'] !== '' ? ' — ' . $v['message'] : '')
+        . ($v['deploye'] !== '' ? ' · mise en ligne le ' . date_pied($v['deploye']) : '')
+        . ($v['source'] === 'local' ? ' · copie locale (pas de version.json du déploiement)' : '');
+    ?>
+    <footer class="pied-admin" aria-label="Version et informations">
+        <span class="pied-version" title="<?= h($titre) ?>">
+            <strong>Centrale <?= h(VERSION_CENTRALE) ?></strong>
+            · version <?php if ($v['commit'] !== ''): ?><a href="https://github.com/grandiosian/centrale/commit/<?= h($v['commit']) ?>" target="_blank" rel="noopener"><code><?= h($commit) ?></code></a><?php else: ?><code>?</code><?php endif; ?>
+            <?php if ($v['date'] !== ''): ?> du <?= h(date_pied($v['date'])) ?><?php endif; ?>
+            <?php if ($v['source'] === 'local'): ?> <span class="pied-local">locale</span><?php endif; ?>
+        </span>
+        <?php if (!empty($_SESSION['admin'])): ?>
+            <?php foreach (copies_applications() as $nom => $c): ?>
+                <span class="pied-copie" title="Copie de <?= h($noms[$nom] ?? $nom) ?> servie par la Centrale (miroirs.txt), faite le <?= h(date_pied($c['date'])) ?>">
+                    <?= h($noms[$nom] ?? $nom) ?> <code><?= h($c['commit'] ?: '?') ?></code></span>
+            <?php endforeach; ?>
+            <span class="pied-serveur" title="Heure du serveur (fuseau de l'établissement) et version de PHP">PHP <?= h(PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION) ?> · <?= h((new DateTimeImmutable('now', fuseau()))->format('H:i')) ?></span>
+            <a class="pied-lien" href="../passerelle/" target="_blank">Passerelle</a>
+        <?php endif; ?>
+    </footer>
+    <?php
+}
+
 function pied(): void
 {
+    barre_pied();
     $v = @filemtime(__DIR__ . '/admin.js') ?: 1;
     // Renommages de classes : chaque ordinateur déplace lui-même ses noms locaux (voir admin.js)
     if (!empty($_SESSION['admin'])) {

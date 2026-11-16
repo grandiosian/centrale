@@ -59,6 +59,19 @@ jobs:
           done
           ls public/miroir prive/miroir
 
+      - name: Noter la version déployée (barre du bas de l'espace enseignant)
+        run: |
+          # version.json, à la racine (hors de la racine web public/) : lu par version_deployee() dans lib/commun.php
+          git log -1 --format='%h%n%cI%n%s' > "$RUNNER_TEMP/version.txt"
+          python3 - "$RUNNER_TEMP/version.txt" <<'PY'
+          import json, sys, datetime
+          commit, date, message = (open(sys.argv[1], encoding='utf-8').read().split('\n') + ['', '', ''])[:3]
+          json.dump({'commit': commit, 'date': date, 'message': message,
+                     'deploye': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')},
+                    open('version.json', 'w', encoding='utf-8'), ensure_ascii=False)
+          PY
+          cat version.json
+
       - name: Vérifier que les secrets sont configurés
         id: config
         env:

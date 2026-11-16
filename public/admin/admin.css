@@ -2655,3 +2655,20 @@ button.calat-epingle { border: 0; padding: 0 2px; }
 .inspect-code { max-height: 70vh; tab-size: 2; }
 .inspecteur table td, .inspecteur table th { vertical-align: top; }
 @media (max-width: 640px) { .inspect-dl { grid-template-columns: 1fr; } .inspect-dl dd { margin-bottom: 6px; } }
+
+/* ---------- Barre du bas : version en cours de la Centrale, copies des applications (barre_pied() dans admin/index.php) ---------- */
+:root { --pied-h: 26px; }
+body { padding-bottom: var(--pied-h); }
+.pied-admin { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; height: var(--pied-h); box-sizing: border-box;
+    display: flex; align-items: center; gap: 14px; padding: 0 12px; overflow: hidden; white-space: nowrap;
+    font-size: .74rem; color: var(--doux); background: color-mix(in srgb, var(--surface) 94%, transparent); border-top: 1px solid var(--bord); }
+.pied-admin code { font-size: .72rem; background: none; padding: 0; }
+.pied-admin a { color: inherit; }
+.pied-admin a:hover { color: var(--accent); }
+.pied-version strong { color: var(--texte); }
+.pied-local { padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.pied-lien { margin-left: auto; }
+@media (max-width: 700px) { .pied-copie, .pied-serveur, .pied-lien { display: none; } }
+@media print { .pied-admin { display: none; } body { padding-bottom: 0; } }
+/* le tableau de bord plein écran laisse la place de la barre */
+.dashboard { height: calc(100dvh - var(--barre-h, 64px) - var(--pied-h)); }
