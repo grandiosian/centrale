@@ -479,15 +479,14 @@ details.fait .atelier { opacity: .85; }
     document.body.classList.add('connecte');
     // Widget de l'élève (comme dans NetSim, TechnoStudio, Établi 3D) : son identifiant
     const nomEleve = el('span', { class: 'tbid-nom' });
-    // Vue Enseignant d'un essai : le nom gardé sur cet ordinateur (« pas désanonymisé » sinon), jamais envoyé au serveur
+    // Vue Enseignant d'un essai : « Enseignant » ; un clic ouvre le choix de l'élève (Centrale.menuEssai, module récent)
     const majNom = () => {
       const id = Centrale.identifiant() || `${infos.classe} · ${infos.eleve}`;
       const prof = Centrale.nomEnseignant ? Centrale.nomEnseignant() : null;
-      nomEleve.textContent = prof === null ? id : (prof || 'pas désanonymisé');
+      nomEleve.textContent = prof === null ? id : 'Enseignant';
       nomEleve.classList.toggle('tbid-prof', prof !== null);
-      nomEleve.classList.toggle('tbid-sans-nom', prof === '');
-      nomEleve.title = prof === null ? '' : `${id} · ${infos.classe} n° ${infos.eleve}`
-        + (prof ? '' : ' — chargez la liste des noms dans l’espace enseignant pour voir le nom ici');
+      nomEleve.classList.remove('tbid-sans-nom');
+      nomEleve.title = prof === null ? '' : `À la place de ${prof || id} · ${infos.classe} n° ${infos.eleve} — clic : changer d’élève`;
     };
     majNom();
     const moi = el('button', { type: 'button', class: 'tbid-moi', 'aria-haspopup': 'true', 'aria-expanded': 'false',
@@ -499,7 +498,11 @@ details.fait .atelier { opacity: .85; }
       el('p', { class: 'menu-eleve-aide' }, 'Ton travail est enregistré automatiquement sur le serveur de la classe.'));
     menu.hidden = true;
     const ouvrirMenu = (oui) => { menu.hidden = !oui; moi.setAttribute('aria-expanded', String(oui)); };
-    moi.onclick = (ev) => { ev.stopPropagation(); ouvrirMenu(menu.hidden); };
+    moi.onclick = (ev) => {
+      ev.stopPropagation();
+      if (Centrale.menuEssai && Centrale.vue && Centrale.vue() === 'enseignant') { ouvrirMenu(false); Centrale.menuEssai(moi); return; }
+      ouvrirMenu(menu.hidden);
+    };
     document.addEventListener('click', (ev) => {   // chemin du clic : un bouton du menu retiré au clic (« Changer mon surnom ») compte encore
       const chemin = ev.composedPath();
       if (!menu.hidden && !chemin.includes(menu) && !chemin.includes(moi)) ouvrirMenu(false);

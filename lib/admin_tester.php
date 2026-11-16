@@ -15,11 +15,7 @@ declare(strict_types=1);
 /** Classes de test créées par le bouton « Créer les classes de test » : nom => nombre d'élèves. Le chiffre donne le niveau. */
 const CLASSES_TEST = ['5TEST' => 3, '4TEST' => 3];
 
-/** « TEST », « 5TEST », « 4 TEST », « 3-TEST » (et les classes simulées « 5SIM ») : classes réservées aux essais de l'enseignant. */
-function est_classe_test(string $nom): bool
-{
-    return (bool) preg_match('/^(?:[3-6][\s_-]?)?(?:TEST|SIM)$/i', trim($nom));
-}
+/* est_classe_test() : dans lib/commun.php (servi aussi à api/essai.php). */
 
 /**
  * Élèves actifs que l'enseignant peut tester, rangés par classe : classes de test et simulées d'abord, puis les vraies

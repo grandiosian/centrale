@@ -87,6 +87,13 @@
    * d'accueil du serveur de la Centrale. Comme retour(), ce qui n'est pas encore enregistré part d'abord.
    */
   function allerPortail() {
+    // Essai de l'enseignant, vue Enseignant : un clic sur le widget de l'élève (qui affiche « Enseignant ») ouvre le choix
+    // de l'élève (menuEssai) au lieu de quitter l'application. Les autres appels (« Mes ateliers »…) vont au portail.
+    var ev = global.event, cible = ev && ev.type === 'click' && ev.target && ev.target.closest ? ev.target.closest('button,a,[role="button"]') : null;
+    if (cible && vue() === 'enseignant' && !cible.closest('.centrale-vue') && /Enseignant/.test(cible.textContent || '')) {
+      menuEssai(cible);
+      return true;
+    }
     if (retour()) return true;
     var racine = String(config.api || '').replace(/api\/?$/, '');
     if (!racine) return false;
@@ -1329,11 +1336,13 @@
     } catch (e) { return ''; }
   }
 
-  /** Ce que la barre du haut affiche pour l'élève : son identifiant ; en vue Enseignant d'un essai, son nom (ou « pas désanonymisé »). */
+  /**
+   * Ce que la barre du haut affiche pour l'élève : son identifiant ; en vue Enseignant d'un essai, « Enseignant » (un clic
+   * ouvre alors menuEssai : se mettre à la place d'un autre élève, voir allerPortail).
+   */
   function nomAffiche() {
-    var n = nomEnseignant();
-    if (n === null) return identifiant();
-    return n || 'pas désanonymisé';
+    if (nomEnseignant() === null) return identifiant();
+    return 'Enseignant';
   }
 
   /** Change le surnom (fin de l'identifiant). Renvoie { identifiant, prefixe, surnom }. */
@@ -1524,6 +1533,151 @@
     return true;
   }
 
+  /* ---------- Essai de l'enseignant : se mettre à la place d'un autre élève ----------
+   * menuEssai(ancre) : sous le widget, la liste des classes et des élèves (classes de test d'abord, filtre), lue par
+   * api/essai.php (session d'essai seulement). Les noms viennent de cet ordinateur (« centrale-noms », comme nomEnseignant),
+   * jamais du serveur. Un choix ouvre une nouvelle session d'essai pour cet élève (même vue) et recharge l'application au même
+   * endroit ; ce qui n'était pas encore enregistré part d'abord. « Aller sur la Centrale » reste en bas du menu.
+   */
+  var STYLE_ESSAI = [
+    '.centrale-menu-eleve.cme-essai{width:min(340px,calc(100vw - 20px));max-height:min(70vh,560px);display:flex;flex-direction:column}',
+    '.cme-essai .cme-filtre{width:100%;box-sizing:border-box;margin:4px 0 6px;padding:5px 8px;font:inherit;font-size:.85rem;border:1px solid rgba(127,127,127,.4);border-radius:8px;background:transparent;color:inherit}',
+    '.cme-essai .cme-liste{flex:1;min-height:60px;overflow:auto;margin:0 -4px;padding:0 4px}',
+    '.cme-essai details{margin:2px 0}',
+    '.cme-essai summary{cursor:pointer;font-weight:700;font-size:.82rem;padding:4px 2px;list-style-position:inside}',
+    '.cme-essai summary small{font-weight:500;opacity:.65;margin-left:4px}',
+    '.cme-essai .cme-eleve{display:flex;gap:6px;align-items:baseline;width:100%;text-align:left;padding:4px 8px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;font-size:.84rem;cursor:pointer}',
+    '.cme-essai .cme-eleve:hover,.cme-essai .cme-eleve:focus-visible{background:rgba(127,127,127,.14)}',
+    '.cme-essai .cme-eleve.actuel{background:rgba(46,139,87,.16);font-weight:700}',
+    '.cme-essai .cme-eleve b{min-width:1.8em;font-variant-numeric:tabular-nums}',
+    '.cme-essai .cme-eleve span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.cme-essai .cme-eleve code{font-size:.72rem;opacity:.6}',
+    '.cme-essai .cme-vrais{color:#b3261e}',
+    '.cme-essai .cme-msg{font-size:.8rem;opacity:.75;margin:6px 2px}',
+  ].join('');
+
+  function menuEssai(ancre) {
+    if (menuOuvert) { var meme = menuOuvert.ancre === ancre; fermerMenuEleve(); if (meme) return true; }
+    var s = session();
+    if (!s || !s.essai) return false;
+    ajouterStyle();
+    if (!document.getElementById('centrale-style-menu')) {
+      var st = document.createElement('style'); st.id = 'centrale-style-menu'; st.textContent = STYLE_MENU; document.head.appendChild(st);
+    }
+    if (!document.getElementById('centrale-style-essai')) {
+      var st2 = document.createElement('style'); st2.id = 'centrale-style-essai'; st2.textContent = STYLE_ESSAI; document.head.appendChild(st2);
+    }
+    var noms = {};
+    try { noms = JSON.parse(localStorage.getItem('centrale-noms')) || {}; } catch (e) { /* noms non chargés ici */ }
+    var nomDe = function (classe, num) { return String(((noms[classe] || {})[num]) || ''); };
+    var el = function (tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+    var m = el('div', 'centrale-menu-eleve cme-essai');
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-label', 'Se mettre à la place d’un élève');
+    m.appendChild(el('p', 'cme-titre', 'Essai · vue Enseignant'));
+    var nomActuel = nomDe(s.classe, s.eleve);
+    m.appendChild(el('p', 'cme-classe', 'À la place de : ' + s.classe + ' · élève ' + s.eleve + (nomActuel ? ' · ' + nomActuel : '') + (s.identifiant ? ' (' + s.identifiant + ')' : '')));
+    var filtre = el('input', 'cme-filtre');
+    filtre.type = 'search';
+    filtre.placeholder = 'Chercher une classe, un numéro, un nom…';
+    m.appendChild(filtre);
+    var liste = el('div', 'cme-liste');
+    liste.appendChild(el('p', 'cme-msg', 'Chargement des classes…'));
+    m.appendChild(liste);
+    var act = el('div', 'cme-actions');
+    var portail = el('button', '', 'Aller sur la Centrale');
+    portail.type = 'button';
+    portail.onclick = function () { fermerMenuEleve(); if (!retour()) { var r = String(config.api || '').replace(/api\/?$/, ''); if (r) location.href = r; } };
+    act.appendChild(portail);
+    m.appendChild(act);
+    document.body.appendChild(m);
+
+    var choisir = function (e, bouton) {
+      bouton.disabled = true;
+      bouton.querySelector('span').textContent = 'Ouverture…';
+      requeteJSON('essai.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eleve: e.id }) })
+        .then(function (d) {
+          return avantDeQuitter().then(function () {
+            toutEnvoyer();
+            return Promise.resolve(viderFileProgression()).catch(function () { /* renvoyée plus tard */ });
+          }).then(function () {
+            var h = location.hash.replace(/^#/, '');
+            var r = adresseRetour();
+            var morceaux = ['centrale=' + encodeURIComponent(d.jeton)];
+            if (r) morceaux.push('retour=' + encodeURIComponent(r));
+            if (h) morceaux.push(h);
+            location.replace(location.pathname + location.search + '#' + morceaux.join('&'));
+            location.reload();
+          });
+        })
+        .catch(function (err) {
+          bouton.disabled = false;
+          bouton.querySelector('span').textContent = 'Impossible : ' + ((err && err.message) || 'erreur');
+        });
+    };
+
+    var tout = [];
+    requeteJSON('essai.php').then(function (d) {
+      liste.textContent = '';
+      (d.classes || []).forEach(function (c) {
+        var det = el('details');
+        var sum = el('summary', '', c.classe);
+        sum.appendChild(el('small', c.test ? '' : 'cme-vrais', c.test ? 'test' : 'vrais élèves : leur travail est modifié'));
+        det.appendChild(sum);
+        if (c.classe === s.classe) det.open = true;
+        c.eleves.forEach(function (e) {
+          var b = el('button', 'cme-eleve' + (c.classe === s.classe && e.etiquette === s.eleve ? ' actuel' : ''));
+          b.type = 'button';
+          var nom = nomDe(c.classe, e.etiquette);
+          b.appendChild(el('b', '', e.etiquette));
+          b.appendChild(el('span', '', nom || (c.test ? 'élève test' : 'pas désanonymisé')));
+          if (e.identifiant) b.appendChild(el('code', '', e.identifiant));
+          b.title = c.classe + ' · élève ' + e.etiquette + (nom ? ' · ' + nom : '') + (c.test ? '' : ' — vrai élève : ce que vous faites s’enregistre dans son dossier');
+          b.onclick = function () { choisir(e, b); };
+          det.appendChild(b);
+          tout.push({ det: det, b: b, texte: (c.classe + ' ' + e.etiquette + ' ' + nom + ' ' + e.identifiant).toLowerCase() });
+        });
+        liste.appendChild(det);
+      });
+      if (!tout.length) liste.appendChild(el('p', 'cme-msg', 'Aucun élève.'));
+      var actuel = liste.querySelector('.actuel');
+      if (actuel) actuel.scrollIntoView({ block: 'nearest' });
+    }).catch(function (err) {
+      liste.textContent = '';
+      liste.appendChild(el('p', 'cme-msg', 'Liste indisponible : ' + ((err && err.message) || 'erreur') + '.'));
+    });
+    filtre.addEventListener('input', function () {
+      var q = filtre.value.trim().toLowerCase();
+      var ouverts = {};
+      tout.forEach(function (x) { var ok = !q || x.texte.indexOf(q) >= 0; x.b.hidden = !ok; if (ok) ouverts[x.det.querySelector('summary').textContent] = x.det; });
+      liste.querySelectorAll('details').forEach(function (d) {
+        var vis = !!ouverts[d.querySelector('summary').textContent];
+        d.hidden = !vis;
+        if (q) d.open = vis;
+      });
+    });
+
+    var placer = function () {
+      var r = ancre.getBoundingClientRect(), l = Math.min(r.left, global.innerWidth - m.offsetWidth - 10);
+      m.style.left = Math.max(10, l) + 'px';
+      m.style.top = (r.bottom + 6) + 'px';
+    };
+    placer();
+    var dehors = function (ev) {
+      var chemin = ev.composedPath ? ev.composedPath() : [ev.target];
+      if (chemin.indexOf(m) < 0 && chemin.indexOf(ancre) < 0) fermerMenuEleve();
+    };
+    var echap = function (ev) { if (ev.key === 'Escape') { fermerMenuEleve(); if (ancre.focus) ancre.focus(); } };
+    document.addEventListener('pointerdown', dehors, true);
+    document.addEventListener('keydown', echap, true);
+    global.addEventListener('resize', placer);
+    if (ancre.setAttribute) ancre.setAttribute('aria-expanded', 'true');
+    menuOuvert = { el: m, ancre: ancre, dehors: dehors, echap: echap, placer: placer };
+    setTimeout(function () { try { filtre.focus(); } catch (e) { /* rien */ } }, 0);
+    return true;
+  }
+
   /* ---------- Essai de l'enseignant : vue élève / vue enseignant ----------
    * « Tester à la place d'un élève » (espace enseignant) ouvre une session marquée essai. Dans ces sessions seulement,
    * un interrupteur « Élève | Enseignant » permet de passer de la vue de l'élève (règles de l'atelier, fenêtres et
@@ -1699,6 +1853,7 @@
     afficherIdentifiant: afficherIdentifiant,
     menuEleve: menuEleve,
     fermerMenuEleve: fermerMenuEleve,
+    menuEssai: menuEssai,
     nomFichier: nomFichier,
     telecharger: telecharger,
     ouvrirDepot: ouvrirDepot,

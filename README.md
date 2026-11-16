@@ -565,7 +565,7 @@ Adresse : **https://technoversailles.alwaysdata.net/admin/**. Elle n'apparaît p
   - C'est la classe et l'établissement, puis un surnom tiré au hasard, attribué automatiquement.
   - L'élève le voit sur son portail et peut changer le surnom : 3 à 20 lettres ou chiffres, unique dans la classe, gros mots refusés.
   - Le début suit la classe et l'établissement. Les applications le lisent avec `Centrale.identifiant()`, ou l'affichent avec `Centrale.afficherIdentifiant(element)`.
-  - Essai de l'enseignant, vue **Enseignant** : le widget du portail affiche le **nom** de l'élève, lu dans les noms gardés sur cet ordinateur (liste chargée dans l'espace enseignant), ou « pas désanonymisé ». Rien n'est envoyé au serveur. Les applications font de même avec `Centrale.nomAffiche()` ; seules celles servies par la Centrale (`/miroir/…`) voient les noms, qui restent propres au site.
+  - Essai de l'enseignant, vue **Enseignant** : le widget du portail et des applications affiche **« Enseignant »** (`Centrale.nomAffiche()`). Un clic ouvre **le choix de l'élève** (`Centrale.menuEssai()`) : toutes les classes et leurs élèves (classes de test d'abord, vraies classes signalées en rouge, filtre), avec les noms gardés sur cet ordinateur (jamais envoyés au serveur ; seules les applications servies par la Centrale, `/miroir/…`, les voient). Choisir un élève ouvre une nouvelle session d'essai pour lui (même vue) et recharge la page au même endroit (`api/essai.php`). « Aller sur la Centrale » reste en bas du menu.
   - Côté enseignant (colonne « Identifiant ») : un surnom qui ressemble au vrai nom est signalé, et ↻ en donne un autre au hasard. La comparaison se fait sur votre ordinateur.
   - Le changement de surnom par les élèves peut être désactivé dans les Réglages.
   - L'identifiant sert à afficher l'élève. Pour se connecter, l'élève utilise toujours son code.
@@ -693,6 +693,7 @@ Toutes les requêtes, sauf `login.php`, `catalogue.php`, `atelier-fichier.php` e
 |---|---|
 | `POST login.php` `{code, app}` | → `{classe, eleve, jeton, expire, espace, depot}` |
 | `POST deconnexion.php` | Invalide le jeton |
+| `GET essai.php` / `POST essai.php` `{eleve}` | Session d'essai de l'enseignant seulement : classes et élèves (classe, numéro, identifiant ; classes de test d'abord) / nouvelle session d'essai pour cet élève, même vue → `{jeton, expire}` |
 | `GET donnees.php?app=&cle=` | → `{existe, valeur, maj}` |
 | `GET donnees.php?app=` | → `{cles: [{cle, taille, maj}]}` |
 | `POST donnees.php` `{app, cle, valeur, base?, age?}` | Enregistre (2 Mo max par clé). 409 si `base` est plus ancien que le serveur ; 410 `{remis: true}` si la version (`age` en ms) date d'avant une remise à zéro de l'élève |

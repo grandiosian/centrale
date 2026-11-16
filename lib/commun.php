@@ -46,6 +46,13 @@ function version_deployee(): array
     return $v;
 }
 
+/** « TEST », « 5TEST », « 4 TEST », « 3-TEST » (et les classes simulées « 5SIM ») : classes réservées aux essais de l'enseignant
+ * (espace enseignant, et api/essai.php : changer d'élève dans un essai). */
+function est_classe_test(string $nom): bool
+{
+    return (bool) preg_match('/^(?:[3-6][\s_-]?)?(?:TEST|SIM)$/i', trim($nom));
+}
+
 /** Copies des applications servies par la Centrale (miroirs.txt) : [nom => ['date' => ISO, 'commit' => court]], d'après leur fichier .copie. */
 function copies_applications(): array
 {
