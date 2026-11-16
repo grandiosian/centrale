@@ -551,7 +551,7 @@ Onglet **Fichiers** :
 
 Adresse : **https://technoversailles.alwaysdata.net/admin/**. Elle n'apparaît pas sur la page des élèves, qui ne montre que la connexion par code.
 
-- **Accueil, raccourci « Présentation »** (en bas, à côté de FicheStudio) : ouvre FicheStudio sur l'atelier papier en cours du cours en cours (sinon du prochain), en mode correction, repris là où la classe s'est arrêtée (même lien que « Correction en cours → » de la feuille de séance). Sans atelier présenté à cette classe : FicheStudio s'ouvre avec la classe choisie. « Feuille d'appel » dans FicheStudio ramène à l'accueil.
+- **Accueil, raccourci « Correction »** (en bas, à côté de FicheStudio) : la **version papier de l'atelier courant** de la classe du cours en cours (sinon du prochain), ouverte dans FicheStudio en mode correction, reprise là où la classe s'est arrêtée (même lien que « Correction en cours → » de la feuille de séance). Atelier courant (`atelier_courant_classe`) : le dernier ouvert dans le calendrier de la classe, sinon son parcours le plus récent, sinon ce sur quoi les élèves travaillent. Version papier (`fiche_pour_atelier`) : le document FicheStudio associé avec **✎** (réglage `fiche_atelier:<app|atelier>`), sinon le document rangé sur la Centrale dont le nom ressemble le plus au titre (à confirmer avec ✎). « Feuille d'appel » dans FicheStudio ramène à l'accueil.
 - **Importer depuis Pronote** (bouton sur la page Classes) :
   - Source : un export CSV de la liste des élèves de Pronote, ou un copier-coller de la liste (Ctrl+A, Ctrl+C).
   - Encodage et séparateur : UTF-8 ou Windows-1252, séparateur tabulation, « ; » ou « , ». Une ligne de titre au-dessus des en-têtes est acceptée.

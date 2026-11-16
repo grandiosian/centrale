@@ -290,6 +290,7 @@ if ($action !== null) {
     action_competences($action);  // progression par séquence
     action_catalogue($action);    // ateliers importés depuis les applications
     action_progression($action);  // progression des ateliers d'une classe (dates d'ouverture)
+    action_accueil($action);      // accueil : version papier (FicheStudio) d'un atelier
 
     switch ($action) {
         case 'deconnexion':

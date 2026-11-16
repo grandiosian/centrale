@@ -225,39 +225,156 @@ function donnees_plan_seance(array $s, bool $exiger_placement = true): ?array
 }
 
 /**
- * Atelier papier en cours d'une classe : le document FicheStudio présenté le plus récemment à cette classe (ou à ce
- * demi-groupe), d'après l'avancement de la correction enregistré par FicheStudio (table fichestudio_avancement).
- * La cible FicheStudio (« c5 », « c5g2 ») est toujours celle du cours : si le document n'a été présenté qu'à l'autre
- * demi-groupe (ou à la classe entière), on le propose quand même, sans position (la présentation part du début).
+ * Atelier courant d'une classe : le dernier atelier (ou parcours) ouvert dans son calendrier ; sinon le parcours de la classe
+ * (le plus récent) ; sinon ce sur quoi les élèves ont travaillé ces dernières semaines (atelier_en_cours, lib/reperes.php).
+ * ['cle' => « app|atelier » (« *parcours|3 »), 'titre', 'source' => calendrier|parcours|plateforme] ou null.
+ */
+function atelier_courant_classe(int $classe_id): ?array
+{
+    $classe = classe_par_id($classe_id);
+    if (!$classe) {
+        return null;
+    }
+    $titre_de = function (string $app, string $atelier): string {
+        if ($app === APP_PARCOURS) {
+            return (string) (parcours_par_id((int) $atelier)['nom'] ?? 'Parcours');
+        }
+        $st = db()->prepare('SELECT titre FROM catalogue_ateliers WHERE app = ? AND atelier = ?');
+        $st->execute([$app, $atelier]);
+        return (string) ($st->fetchColumn() ?: $atelier);
+    };
+    // 1. calendrier : l'atelier ouvert le plus récemment (date d'ouverture passée)
+    $ouverts = array_filter(progression_classe($classe_id), fn($r) => (string) $r['ouvre_le'] !== '' && (string) $r['ouvre_le'] <= aujourd_hui());
+    if ($ouverts) {
+        usort($ouverts, fn($u, $v) => strcmp((string) $v['ouvre_le'], (string) $u['ouvre_le']) ?: ((int) $v['ordre'] <=> (int) $u['ordre']));
+        $r = reset($ouverts);
+        return ['cle' => $r['app'] . '|' . $r['atelier'], 'titre' => $titre_de((string) $r['app'], (string) $r['atelier']), 'source' => 'calendrier'];
+    }
+    // 2. parcours proposés à la classe : le plus récent
+    $parcours = parcours_pour_classe((string) $classe['nom']);
+    if ($parcours) {
+        usort($parcours, fn($u, $v) => (int) $v['cree_le'] <=> (int) $u['cree_le']);
+        return ['cle' => APP_PARCOURS . '|' . $parcours[0]['id'], 'titre' => (string) $parcours[0]['nom'], 'source' => 'parcours'];
+    }
+    // 3. sur la plateforme : l'atelier où les élèves travaillent
+    $at = statistiques_classe($classe_id)['classe']['atelier'] ?? null;
+    if ($at) {
+        return ['cle' => $at['app'] . '|' . $at['atelier'], 'titre' => (string) ($at['titre'] ?: $at['atelier']), 'source' => 'plateforme'];
+    }
+    return null;
+}
+
+/** Nom d'un document FicheStudio tel qu'il est rangé sur la Centrale (même règle que FicheStudio : nomDocumentCentrale). */
+function nom_document_fichestudio(string $doc): string
+{
+    return mb_substr(ltrim(preg_replace('/[^\p{L}\p{N} _.()\'-]+/u', '_', preg_replace('/\.fstudio$/i', '', $doc)) ?? '', ". \t"), 0, 120) ?: 'Document';
+}
+
+/** Documents FicheStudio rangés sur la Centrale (data/fichestudio/*.fstudio), par nom. */
+function documents_fichestudio(): array
+{
+    $res = array_map(fn($f) => basename($f, '.fstudio'), glob(DOSSIER_DATA . '/fichestudio/*.fstudio') ?: []);
+    natcasesort($res);
+    return array_values($res);
+}
+
+/**
+ * Version papier (document FicheStudio) d'un atelier : celle associée par l'enseignant (réglage « fiche_atelier:<cle> »),
+ * sinon le document rangé dont le nom ressemble le plus au titre de l'atelier (au moins deux mots en commun) : 'devine' => true.
+ */
+function fiche_pour_atelier(string $cle, string $titre): ?array
+{
+    $associe = (string) reglage('fiche_atelier:' . $cle, '');
+    if ($associe !== '') {
+        return ['doc' => $associe, 'devine' => false];
+    }
+    $mots = function (string $t): array {
+        $t = strtolower(sans_accents_maj($t));
+        $t = preg_replace('/([a-z])([A-Z])/', '$1 $2', $t) ?? $t;
+        return array_values(array_unique(array_filter(preg_split('/[^a-z0-9]+/', $t) ?: [], fn($m) => strlen($m) >= 3 && !in_array($m, ['les', 'des', 'une', 'pour', 'avec', 'dans', 'atelier'], true))));
+    };
+    $cherches = $mots($titre . ' ' . explode('|', $cle, 2)[1]);
+    $meilleur = null;
+    foreach (documents_fichestudio() as $doc) {
+        $d = $mots(preg_replace('/([a-z])([A-Z])/', '$1 $2', $doc) ?? $doc);
+        $communs = count(array_intersect($cherches, $d));
+        if ($communs >= 2 && (!$meilleur || $communs > $meilleur[1])) {
+            $meilleur = [$doc, $communs];
+        }
+    }
+    return $meilleur ? ['doc' => $meilleur[0], 'devine' => true] : null;
+}
+
+/**
+ * Atelier papier à présenter à une classe (présentation et correction dans FicheStudio) : la version papier de son atelier
+ * courant (atelier_courant_classe, fiche_pour_atelier) ; à défaut, le document présenté le plus récemment à cette classe.
+ * La position (où la classe s'est arrêtée) vient de l'avancement enregistré par FicheStudio (table fichestudio_avancement),
+ * pour ce document et cette cible (« c5 », « c5g2 ») ; d'un autre groupe, elle n'est pas reprise (la présentation part du début).
  */
 function fiche_en_cours(int $classe_id, int $groupe_id): array
 {
     $cible = 'c' . $classe_id . ($groupe_id ? 'g' . $groupe_id : '');
-    $res = ['cible' => $cible, 'doc' => null];
+    $atelier = atelier_courant_classe($classe_id);
+    $fiche = $atelier ? fiche_pour_atelier($atelier['cle'], $atelier['titre']) : null;
+    $res = ['cible' => $cible, 'doc' => null, 'atelier' => $atelier, 'devine' => (bool) ($fiche['devine'] ?? false), 'documents' => documents_fichestudio()];
     try {
-        // le demi-groupe d'abord, puis la classe entière, puis n'importe quel groupe de la classe
+        // avancements de la classe : le demi-groupe d'abord, puis la classe entière, puis n'importe quel groupe ; le plus récent
         $st = db()->prepare("SELECT cible, doc, valeur, maj FROM fichestudio_avancement WHERE cible = ? OR cible = ? OR cible LIKE ?
-            ORDER BY CASE WHEN cible = ? THEN 0 WHEN cible = ? THEN 1 ELSE 2 END, maj DESC LIMIT 1");
+            ORDER BY CASE WHEN cible = ? THEN 0 WHEN cible = ? THEN 1 ELSE 2 END, maj DESC");
         $st->execute([$cible, 'c' . $classe_id, 'c' . $classe_id . 'g%', $cible, 'c' . $classe_id]);
-        $r = $st->fetch();
+        $lignes = $st->fetchAll();
     } catch (Throwable $e) {
-        $r = false;
+        $lignes = [];
     }
-    if (!$r) {
-        return $res;
+    if ($fiche) {   // la version papier de l'atelier courant : son avancement s'il y en a un
+        $fichier = nom_document_fichestudio($fiche['doc']);
+        $r = null;
+        foreach ($lignes as $l) {
+            if (nom_document_fichestudio((string) $l['doc']) === $fichier) {
+                $r = $l;
+                break;
+            }
+        }
+        $doc = $r ? (string) $r['doc'] : $fiche['doc'];
+    } else {          // pas d'atelier papier connu : le dernier présenté à la classe
+        $r = $lignes[0] ?? null;
+        if (!$r) {
+            return $res;
+        }
+        $doc = (string) $r['doc'];
+        $fichier = nom_document_fichestudio($doc);
     }
-    $v = json_decode((string) $r['valeur'], true) ?: [];
-    $pos = $v['mark'] ?? $v['last'] ?? null;   // fin du dernier cours (🏁), sinon dernière position vue
-    // nom du fichier rangé sur la Centrale (même règle que FicheStudio : nomDocumentCentrale)
-    $fichier = mb_substr(ltrim(preg_replace('/[^\p{L}\p{N} _.()\'-]+/u', '_', preg_replace('/\.fstudio$/i', '', (string) $r['doc'])) ?? '', ". \t"), 0, 120) ?: 'Document';
-    $autre = (string) $r['cible'] !== $cible;
-    if ($autre) {
-        $pos = null;   // la position est celle d'un autre groupe : pas pour ce cours
+    $pos = null;
+    $autre = $r && (string) $r['cible'] !== $cible;
+    if ($r && !$autre) {
+        $v = json_decode((string) $r['valeur'], true) ?: [];
+        $p = $v['mark'] ?? $v['last'] ?? null;   // fin du dernier cours (🏁), sinon dernière position vue
+        $pos = is_array($p) ? ['feuille' => (string) ($p['page'] ?? ''), 'etape' => (int) ($p['shown'] ?? 0), 'total' => (int) ($p['total'] ?? 0),
+            'fin_cours' => isset($v['mark']), 'quand' => isset($p['at']) ? (int) round($p['at'] / 1000) : null] : null;
     }
-    return ['cible' => $cible, 'autre' => $autre ? (string) $r['cible'] : null, 'doc' => (string) $r['doc'], 'fichier' => $fichier,
-        'present' => is_file(DOSSIER_DATA . '/fichestudio/' . $fichier . '.fstudio'), 'maj' => (int) $r['maj'],
-        'position' => is_array($pos) ? ['feuille' => (string) ($pos['page'] ?? ''), 'etape' => (int) ($pos['shown'] ?? 0), 'total' => (int) ($pos['total'] ?? 0),
-            'fin_cours' => isset($v['mark']), 'quand' => isset($pos['at']) ? (int) round($pos['at'] / 1000) : null] : null];
+    return ['doc' => $doc, 'fichier' => $fichier, 'present' => is_file(DOSSIER_DATA . '/fichestudio/' . $fichier . '.fstudio'),
+            'autre' => $autre ? (string) $r['cible'] : null, 'maj' => $r ? (int) $r['maj'] : 0, 'position' => $pos] + $res;
+}
+
+/** Actions de l'accueil : associer une version papier (document FicheStudio) à un atelier. */
+function action_accueil(string $action): void
+{
+    if ($action !== 'associer_fiche_atelier') {
+        return;
+    }
+    $cle = (string) ($_POST['cle'] ?? '');
+    $doc = (string) ($_POST['doc'] ?? '');
+    if (!preg_match('/^[*A-Za-z0-9_-]+\|[A-Za-z0-9_.\/-]+$/', $cle)) {
+        flash('Atelier inconnu.', 'err');
+        rediriger('./');
+    }
+    if ($doc !== '' && !in_array($doc, documents_fichestudio(), true)) {
+        flash('Document FicheStudio introuvable sur la Centrale.', 'err');
+        rediriger('./');
+    }
+    definir_reglage('fiche_atelier:' . $cle, $doc);
+    flash($doc !== '' ? 'Version papier associée : « ' . $doc . ' ».' : 'Association retirée.');
+    rediriger('./');
 }
 
 /** Icône de trait pour les widgets du tableau de bord (couleur héritée du bouton). */
@@ -743,29 +860,56 @@ function page_tableau_de_bord(): void
                         <a class="dash-widget" href="../miroir/technostudio/?mode=enseignant" target="_blank" rel="noopener" title="Ouvre TechnoStudio en mode enseignant : toute l’interface, sans verrou (vous êtes connecté ici)"><?= dash_icone('ts_prof') ?><span>TechnoStudio · enseignant</span></a>
                         <a class="dash-widget" href="../miroir/technostudio/?mode=eleve" target="_blank" rel="noopener" title="Ouvre TechnoStudio comme le voient les élèves : parcours guidé, questions débloquées une à une"><?= dash_icone('ts_eleve') ?><span>TechnoStudio · élève</span></a>
                         <?php
-                        // Présentation de l'atelier papier en cours (FicheStudio), pour la correction : le cours en cours, sinon le prochain.
-                        // Même lien que « Correction en cours → » de la feuille de séance (plan.js) ; même onglet : « Feuille d'appel » y ramène.
+                        // Présentation de l'atelier courant de la classe, version papier (FicheStudio), pour la correction : le cours en cours,
+                        // sinon le prochain. Même lien que « Correction en cours → » de la feuille de séance (plan.js) ; même onglet :
+                        // « Feuille d'appel » y ramène. ✎ : associer (ou changer) le document FicheStudio de cet atelier.
                         $cours_pres = $en_cours_maintenant[0] ?? $suivant;
                         if ($cours_pres):
                             $fi = fiche_en_cours((int) $cours_pres['classe_id'], (int) ($cours_pres['groupe_id'] ?? 0));
+                            $at_pres = $fi['atelier'];
                             $seance_pres = $cours_pres['date'] . ' ' . $cours_pres['debut'];
                             $pastille_pres = pastille_classe((int) $cours_pres['classe_id'], groupe_seance($cours_pres));
                             $moment = $en_cours_maintenant ? 'cours en cours' : 'prochain cours, ' . mb_strtolower(quand_seance($cours_pres['date'], $aujourdhui)) . ' à ' . $cours_pres['debut'];
+                            $source_pres = $at_pres ? ['calendrier' => 'calendrier de la classe', 'parcours' => 'parcours de la classe', 'plateforme' => 'travail des élèves'][$at_pres['source']] : '';
+                            $libelle_pres = $at_pres ? $at_pres['titre'] : ($fi['doc'] ? preg_replace('/\.fstudio$/i', '', $fi['doc']) : 'choisir');
                             if ($fi['doc']):
                                 $doc_pres = preg_replace('/\.fstudio$/i', '', $fi['doc']);
                                 $po = $fi['position'];
                                 $ou = $po ? $po['feuille'] . ($po['total'] ? ', étape ' . $po['etape'] . ' / ' . $po['total'] : ($po['etape'] ? ', étape ' . $po['etape'] : '')) : '';
                                 $href_pres = 'appli.php/fichestudio/#presenter=' . rawurlencode($fi['fichier']) . '&classe=' . rawurlencode($fi['cible'])
                                     . '&lancer=correction&seance=' . rawurlencode($seance_pres);
-                                $titre_pres = 'Présentation pour la correction (' . $moment . ') : ' . $doc_pres . ($ou !== '' ? ', reprise à ' . $ou : ', depuis le début')
-                                    . ($fi['present'] ? '' : ' — ⚠ document pas encore rangé sur la Centrale (☁ Enregistrer dans FicheStudio)') . ' · « Feuille d’appel » ramène ici'; ?>
-                                <a class="dash-widget dash-presentation" href="<?= h($href_pres) ?>" title="<?= h($titre_pres) ?>"><?= dash_icone('presentation') ?>
-                                    <span>Présentation <?= $pastille_pres ?> <small><?= h(mb_strimwidth($doc_pres, 0, 28, '…')) ?></small></span></a>
-                            <?php else: ?>
-                                <a class="dash-widget dash-presentation" href="<?= h('appli.php/fichestudio/#classe=' . rawurlencode($fi['cible']) . '&seance=' . rawurlencode($seance_pres)) ?>"
-                                   title="<?= h('Aucun atelier papier présenté à cette classe pour l’instant (' . $moment . ') : FicheStudio s’ouvre avec la classe choisie, ouvrez le document à présenter (☁ Ouvrir…)') ?>"><?= dash_icone('presentation') ?>
-                                    <span>Présentation <?= $pastille_pres ?> <small>choisir</small></span></a>
-                            <?php endif; ?>
+                                $titre_pres = 'Correction papier (' . $moment . ')' . ($at_pres ? ' · atelier courant : ' . $at_pres['titre'] . ' (' . $source_pres . ')' : '')
+                                    . ' · FicheStudio : ' . $doc_pres . ($fi['devine'] ? ' (trouvé par son nom : ✎ pour confirmer ou changer)' : '')
+                                    . ($ou !== '' ? ' · reprise à ' . $ou : ' · depuis le début')
+                                    . ($fi['present'] ? '' : ' — ⚠ document pas encore rangé sur la Centrale (☁ Enregistrer dans FicheStudio)') . ' · « Feuille d’appel » ramène ici';
+                            else:
+                                $href_pres = 'appli.php/fichestudio/#classe=' . rawurlencode($fi['cible']) . '&seance=' . rawurlencode($seance_pres);
+                                $titre_pres = ($at_pres ? 'Atelier courant : ' . $at_pres['titre'] . ' (' . $source_pres . '), sans version papier associée : ✎ pour choisir son document FicheStudio. '
+                                    : 'Aucun atelier courant pour cette classe. ') . 'Le bouton ouvre FicheStudio avec la classe choisie (' . $moment . ').';
+                            endif; ?>
+                            <div class="dash-presentation-groupe">
+                                <a class="dash-widget dash-presentation<?= $fi['doc'] ? '' : ' sans-fiche' ?>" href="<?= h($href_pres) ?>" title="<?= h($titre_pres) ?>"><?= dash_icone('presentation') ?>
+                                    <span>Correction <?= $pastille_pres ?> <small><?= h(mb_strimwidth($libelle_pres, 0, 30, '…')) ?></small><?= $fi['doc'] ? '' : ' <em>sans fiche</em>' ?></span></a>
+                                <?php if ($at_pres): ?>
+                                    <details class="dash-associer">
+                                        <summary class="dash-widget" title="Version papier de « <?= h($at_pres['titre']) ?> » : choisir le document FicheStudio" aria-label="Choisir la version papier">✎</summary>
+                                        <form method="post" class="dash-associer-form">
+                                            <?= csrf() ?>
+                                            <input type="hidden" name="action" value="associer_fiche_atelier">
+                                            <input type="hidden" name="cle" value="<?= h($at_pres['cle']) ?>">
+                                            <p><strong><?= h($at_pres['titre']) ?></strong><br><span class="discret">atelier courant (<?= h($source_pres) ?>) · version papier :</span></p>
+                                            <select name="doc">
+                                                <option value="">— aucune —</option>
+                                                <?php foreach ($fi['documents'] as $d): ?>
+                                                    <option value="<?= h($d) ?>" <?= $fi['doc'] && nom_document_fichestudio((string) $fi['doc']) === $d ? 'selected' : '' ?>><?= h($d) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <?php if (!$fi['documents']): ?><p class="discret">Aucun document rangé sur la Centrale : ☁ Enregistrer dans FicheStudio.</p><?php endif; ?>
+                                            <button class="petit">Associer</button>
+                                        </form>
+                                    </details>
+                                <?php endif; ?>
+                            </div>
                         <?php endif; ?>
                         <?php /* Outil réservé à l'enseignant : copie hors racine web, servie par admin/appli.php à la session enseignant */ ?>
                         <a class="dash-widget" href="appli.php/fichestudio/" target="_blank" rel="noopener" title="Ouvre FicheStudio : mise en page des fiches d’atelier, compatible Affinity (réservé à l’enseignant connecté)"><?= dash_icone('fiche') ?><span>FicheStudio</span></a>

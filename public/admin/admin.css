@@ -2807,3 +2807,13 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 .dash-presentation span { display: inline-flex; align-items: center; gap: 6px; }
 .dash-presentation .pastille-classe { font-size: .74rem; }
 .dash-presentation small { font-weight: 500; color: var(--doux); max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-presentation-groupe { display: inline-flex; align-items: center; gap: 4px; position: relative; }
+.dash-presentation em { font-style: normal; font-size: .75rem; font-weight: 600; color: #9a5b00; }
+.dash-associer > summary { list-style: none; cursor: pointer; padding: 7px 11px; }
+.dash-associer > summary::-webkit-details-marker { display: none; }
+.dash-associer[open] > summary { border-color: var(--accent); color: var(--accent); }
+.dash-associer-form { position: absolute; z-index: 30; bottom: calc(100% + 8px); right: 0; width: min(320px, 86vw); display: flex; flex-direction: column; gap: 8px;
+    padding: 12px; background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; box-shadow: 0 12px 30px rgba(0, 0, 0, .22); font-weight: 400; }
+.dash-associer-form p { margin: 0; font-size: .88rem; }
+.dash-associer-form select { width: 100%; margin: 0; }
+.dash-associer-form button { align-self: flex-start; margin: 0; }

@@ -2951,14 +2951,15 @@ window.PlanSalle = (function () {
     if (fi.doc) {
       var po = fi.position, ou = po ? po.feuille + (po.total ? ', étape ' + po.etape + ' / ' + po.total : po.etape ? ', étape ' + po.etape : '') : '';
       var quandP = po && po.quand ? new Date(po.quand * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
-      ligneP.append(creer('strong', '', fi.doc), creer('span', 'discret', ou ? ' · ' + (po.fin_cours ? 'arrêt du ' + quandP : 'vu en dernier' + (quandP ? ' le ' + quandP : '')) + ' : ' + ou
+      ligneP.append(creer('strong', '', String(fi.doc).replace(/\.fstudio$/i, '') + (fi.atelier ? ' · ' + fi.atelier.titre : '')), creer('span', 'discret', ou ? ' · ' + (po.fin_cours ? 'arrêt du ' + quandP : 'vu en dernier' + (quandP ? ' le ' + quandP : '')) + ' : ' + ou
         : fi.autre ? ' · commencé avec ' + (fi.autre.indexOf('g') > 0 ? 'l’autre groupe' : 'la classe entière') + ' : ce groupe part du début' : ' · pas encore commencé'));
       var cibleQ = 'presenter=' + encodeURIComponent(fi.fichier) + '&classe=' + encodeURIComponent(fi.cible);
       ligneP.appendChild(lienFiche('Correction en cours →', 'FicheStudio : ' + d.classe + ', ' + fi.doc + (ou ? ', correction reprise à ' + ou : ', correction depuis le début')
         + ' · « Feuille d’appel » y ramène ici', cibleQ + '&lancer=correction', true));
       if (!fi.present) ligneP.appendChild(creer('span', 'feuille-atelier-alerte', '⚠ document pas rangé sur la Centrale (☁ Enregistrer dans FicheStudio)'));
     } else {
-      ligneP.append(creer('span', 'discret', 'aucun présenté à cette classe dans FicheStudio pour l’instant'),
+      ligneP.append(creer('span', 'discret', fi.atelier ? 'atelier courant « ' + fi.atelier.titre + ' » sans version papier : choisissez son document FicheStudio sur l’accueil (✎ à côté de « Correction »)'
+        : 'aucun présenté à cette classe dans FicheStudio pour l’instant'),
         lienFiche('Choisir dans FicheStudio →', 'FicheStudio, espace Présentation, avec cette classe choisie : ouvrez le document à présenter (☁ Ouvrir…)', 'classe=' + encodeURIComponent(fi.cible || ('c' + d.classe_id)), false));
     }
     /** Une ligne de la barre : libellé | ce qui est en cours | bouton, alignés en colonnes d'une ligne à l'autre. */
