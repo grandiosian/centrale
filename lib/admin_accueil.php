@@ -271,6 +271,7 @@ function dash_icone(string $nom): string
         'cours'    => '<path d="M3 20.5V9l9-5.5 9 5.5v11.5"/><path d="M9 20.5v-6h6v6"/>',
         'connexions' => '<circle cx="9" cy="8" r="3.6"/><path d="M2.5 20c.8-3.6 3.4-5.6 6.5-5.6s5.7 2 6.5 5.6"/><path d="M16 4.6a3.6 3.6 0 0 1 0 6.8"/>',
         'prochain' => '<path d="M4 12h14M13 6l6 6-6 6"/>',
+        'presentation' => '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M12 16v4M8.5 20h7M7.5 12.5l3-3 2.5 2 3.5-4"/>',
         'ts_prof'  => '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M9 10l2 2 4-4"/>',
         'ts_eleve' => '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><circle cx="12" cy="9" r="2"/><path d="M8.5 14c.6-1.6 2-2.4 3.5-2.4s2.9.8 3.5 2.4"/>',
         'fiche'    => '<path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14.5 2.5V7H19"/><path d="M9 11h7M9 14.5h7M9 18h4"/>',
@@ -741,6 +742,31 @@ function page_tableau_de_bord(): void
                         <?php /* TechnoStudio copié sur ce serveur : il voit la session enseignant (même site) */ ?>
                         <a class="dash-widget" href="../miroir/technostudio/?mode=enseignant" target="_blank" rel="noopener" title="Ouvre TechnoStudio en mode enseignant : toute l’interface, sans verrou (vous êtes connecté ici)"><?= dash_icone('ts_prof') ?><span>TechnoStudio · enseignant</span></a>
                         <a class="dash-widget" href="../miroir/technostudio/?mode=eleve" target="_blank" rel="noopener" title="Ouvre TechnoStudio comme le voient les élèves : parcours guidé, questions débloquées une à une"><?= dash_icone('ts_eleve') ?><span>TechnoStudio · élève</span></a>
+                        <?php
+                        // Présentation de l'atelier papier en cours (FicheStudio), pour la correction : le cours en cours, sinon le prochain.
+                        // Même lien que « Correction en cours → » de la feuille de séance (plan.js) ; même onglet : « Feuille d'appel » y ramène.
+                        $cours_pres = $en_cours_maintenant[0] ?? $suivant;
+                        if ($cours_pres):
+                            $fi = fiche_en_cours((int) $cours_pres['classe_id'], (int) ($cours_pres['groupe_id'] ?? 0));
+                            $seance_pres = $cours_pres['date'] . ' ' . $cours_pres['debut'];
+                            $pastille_pres = pastille_classe((int) $cours_pres['classe_id'], groupe_seance($cours_pres));
+                            $moment = $en_cours_maintenant ? 'cours en cours' : 'prochain cours, ' . mb_strtolower(quand_seance($cours_pres['date'], $aujourdhui)) . ' à ' . $cours_pres['debut'];
+                            if ($fi['doc']):
+                                $doc_pres = preg_replace('/\.fstudio$/i', '', $fi['doc']);
+                                $po = $fi['position'];
+                                $ou = $po ? $po['feuille'] . ($po['total'] ? ', étape ' . $po['etape'] . ' / ' . $po['total'] : ($po['etape'] ? ', étape ' . $po['etape'] : '')) : '';
+                                $href_pres = 'appli.php/fichestudio/#presenter=' . rawurlencode($fi['fichier']) . '&classe=' . rawurlencode($fi['cible'])
+                                    . '&lancer=correction&seance=' . rawurlencode($seance_pres);
+                                $titre_pres = 'Présentation pour la correction (' . $moment . ') : ' . $doc_pres . ($ou !== '' ? ', reprise à ' . $ou : ', depuis le début')
+                                    . ($fi['present'] ? '' : ' — ⚠ document pas encore rangé sur la Centrale (☁ Enregistrer dans FicheStudio)') . ' · « Feuille d’appel » ramène ici'; ?>
+                                <a class="dash-widget dash-presentation" href="<?= h($href_pres) ?>" title="<?= h($titre_pres) ?>"><?= dash_icone('presentation') ?>
+                                    <span>Présentation <?= $pastille_pres ?> <small><?= h(mb_strimwidth($doc_pres, 0, 28, '…')) ?></small></span></a>
+                            <?php else: ?>
+                                <a class="dash-widget dash-presentation" href="<?= h('appli.php/fichestudio/#classe=' . rawurlencode($fi['cible']) . '&seance=' . rawurlencode($seance_pres)) ?>"
+                                   title="<?= h('Aucun atelier papier présenté à cette classe pour l’instant (' . $moment . ') : FicheStudio s’ouvre avec la classe choisie, ouvrez le document à présenter (☁ Ouvrir…)') ?>"><?= dash_icone('presentation') ?>
+                                    <span>Présentation <?= $pastille_pres ?> <small>choisir</small></span></a>
+                            <?php endif; ?>
+                        <?php endif; ?>
                         <?php /* Outil réservé à l'enseignant : copie hors racine web, servie par admin/appli.php à la session enseignant */ ?>
                         <a class="dash-widget" href="appli.php/fichestudio/" target="_blank" rel="noopener" title="Ouvre FicheStudio : mise en page des fiches d’atelier, compatible Affinity (réservé à l’enseignant connecté)"><?= dash_icone('fiche') ?><span>FicheStudio</span></a>
                     </div>

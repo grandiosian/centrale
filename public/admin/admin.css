@@ -2803,3 +2803,7 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 .plan-imprime .imp-nom { font-family: system-ui, sans-serif; fill: #111; }
 .plan-imprime .imp-nom-fond { fill: rgba(255, 214, 74, .62); stroke: rgba(176, 132, 0, .55); stroke-width: .8; }   /* le jaune des noms du plan de classe */
 .plan-imprime .anneau-photo { stroke: #fff; stroke-width: 1.2px; }
+/* accueil : raccourci « Présentation » de l'atelier papier en cours (FicheStudio, correction) */
+.dash-presentation span { display: inline-flex; align-items: center; gap: 6px; }
+.dash-presentation .pastille-classe { font-size: .74rem; }
+.dash-presentation small { font-weight: 500; color: var(--doux); max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
