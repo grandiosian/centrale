@@ -2783,14 +2783,19 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 .case-plan-etab { color: #666; font-size: 10.5px; white-space: nowrap; }
 .impression-classe .pastille-classe { font-size: .95rem; }
 .case-plan .plan-imprime { flex: 1 1 0; min-height: 0; width: 100%; height: 0; }   /* la salle se réduit pour tenir dans la case */
+/* Impression : seules les feuilles restent, dans le flux normal (une feuille = une page). Pas de position absolue : un bloc
+   positionné ne se découpe pas en pages et les feuilles se chevaucheraient. body.page-impression-plans est posé par plan.js. */
 @media print {
-    .impression-plans .feuilles, .impression-plans .feuilles * { visibility: visible; }
-    .impression-plans .feuilles { position: absolute; top: 0; left: 0; width: 100%; display: block; }
-    .impression-plans .feuille { width: 100%; padding: 0; border: 0; box-shadow: none; aspect-ratio: auto; break-after: page; page-break-after: always; }
-    .impression-plans .feuille.paysage { page: paysage; height: 197mm; }
-    .impression-plans .feuille.portrait { page: portrait; height: 284mm; }
-    .impression-plans .feuille:last-child { break-after: auto; page-break-after: auto; }
-    .impression-plans .ne-pas-imprimer, .impression-plans .pied-admin { display: none !important; }
+    body.page-impression-plans, body.page-impression-plans * { visibility: visible; }   /* annule « body * { visibility: hidden } » */
+    body.page-impression-plans > *:not(main), body.page-impression-plans main > *:not(.feuilles) { display: none !important; }
+    body.page-impression-plans { margin: 0; padding: 0; background: #fff; }
+    body.page-impression-plans main { margin: 0; padding: 0; max-width: none; }
+    .page-impression-plans .feuilles { position: static; display: block; gap: 0; }
+    .page-impression-plans .feuille { width: 100%; margin: 0; padding: 0; border: 0; box-shadow: none; aspect-ratio: auto; overflow: hidden;
+        break-inside: avoid; page-break-inside: avoid; break-after: page; page-break-after: always; }
+    .page-impression-plans .feuille.paysage { page: paysage; height: 195mm; }
+    .page-impression-plans .feuille.portrait { page: portrait; height: 282mm; }
+    .page-impression-plans .feuille:last-child { break-after: auto; page-break-after: auto; }
 }
 /* plans imprimés : nom de l'élève sous sa photo (dessinerImprimable) */
 .plan-imprime .imp-nom { font-family: system-ui, sans-serif; fill: #111; }

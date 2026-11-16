@@ -3930,6 +3930,7 @@ window.PlanSalle = (function () {
     var src = document.getElementById('donnees-impression'), zone = document.getElementById('feuilles-impression');
     if (!src || !zone) return;
     var plans = JSON.parse(src.textContent);
+    document.body.classList.add('page-impression-plans');   // règles d'impression de cette page (admin.css)
     var cases = Array.prototype.slice.call(document.querySelectorAll('.impression-liste input[type=checkbox]'));
     var parFeuille = document.getElementById('imp-par-feuille'), orientation = document.getElementById('imp-orientation');
     var numeros = document.getElementById('imp-numeros'), photos = document.getElementById('imp-photos');
