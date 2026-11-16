@@ -1348,7 +1348,7 @@ window.PlanSalle = (function () {
           creer('span', 'discret', (c.voisins ? 'côte à côte' : 'tout proches') + ' · ' + resumePaire(c.paire)));
         ul.appendChild(li);
       });
-      boiteDuos.append(ul, creer('p', 'discret', 'Glissez l’un des deux ailleurs, ou « Placement aléatoire » : il les éloigne.'));
+      boiteDuos.append(ul, creer('p', 'discret', 'Glissez l’un des deux ailleurs, ou « 🎲 Aléatoire » : il les éloigne.'));
     }
     /** Vue à plat : les liens entre élèves assis (à séparer : rouge, jaune ; bonne dynamique : vert), plus marqués s'ils sont voisins. */
     function tracerDuos() {
@@ -1356,6 +1356,14 @@ window.PlanSalle = (function () {
       if ((p.vue || {}).iso || svg.style.display === 'none') return;
       tracerLiens2D(svg, plan, transformation(p), liensPlaces(d, carte, nomNumero), duosTropPres(carte));
     }
+
+    /* Filtre de la liste des élèves (numéro ou nom) */
+    var champFiltre = document.getElementById('filtre-eleves');
+    function filtrerListe() {
+      var q = champFiltre ? champFiltre.value.trim().toLowerCase() : '';
+      liste.querySelectorAll('li').forEach(function (li) { li.hidden = !!q && (li.dataset.cherche || '').indexOf(q) < 0; });
+    }
+    if (champFiltre) champFiltre.addEventListener('input', filtrerListe);
 
     function rendre() {
       orientationPage(affichage(plan));
@@ -1405,18 +1413,25 @@ window.PlanSalle = (function () {
         var place = placeDe(e.id);
         li.className = (place ? 'place ' : '') + (e.id === choisi ? 'choisi ' : '') + (e.actif && !sorti(d.classe, e.numero) ? '' : 'inactif');
         li.draggable = true;
-        li.innerHTML = '<span class="vignette"></span><span class="numero"></span><span class="nom"></span><span class="ou"></span>';
+        li.innerHTML = '<span class="vignette"></span><span class="numero"></span><span class="nom-cellule"><span class="nom"></span></span><span class="ou"></span>';
         var visage = photo(d.classe, e.numero);
         if (visage) window.CentraleNoms.styleVisage(li.querySelector('.vignette'), visage, 26 / visage.l, 26, 32);
         else li.querySelector('.vignette').title = window.CentraleNoms && window.CentraleNoms.raison ? window.CentraleNoms.raison(d.classe, e.numero) : '';
         li.querySelector('.numero').textContent = e.numero;
-        li.querySelector('.nom').textContent = nom(e);
+        var vraiNom = nom(e), sansNom = vraiNom === 'n° ' + e.numero;   // noms pas chargés ici : le numéro suffit
+        li.querySelector('.nom').textContent = sansNom ? '' : vraiNom;
+        li.querySelector('.nom').title = sansNom ? '' : vraiNom;
+        var cellule = li.querySelector('.nom-cellule');
         var b = window.CentraleNoms && window.CentraleNoms.besoins ? window.CentraleNoms.besoins(d.classe, e.numero) : [];
-        if (b.length) li.querySelector('.nom').after(window.CentraleNoms.pastilles(b));
+        if (b.length) cellule.appendChild(window.CentraleNoms.pastilles(b));
         var nbCartons = window.CentraleNoms && window.CentraleNoms.cartons ? window.CentraleNoms.cartons(d.classe, e.numero).length : 0;
-        if (nbCartons) li.querySelector('.nom').after(creer('span', 'pastille-carton', String(nbCartons)));
+        if (nbCartons) cellule.appendChild(creer('span', 'pastille-carton', String(nbCartons)));
         var dhl = dehors(d.classe, e.numero);
-        li.querySelector('.ou').textContent = (place ? 'place ' + nums[place] : '') + (dhl ? (place ? ' · ' : '') + 'dehors' : '');
+        var ou = li.querySelector('.ou');
+        ou.textContent = dhl ? 'dehors' : place ? 'place ' + nums[place] : 'non placé';
+        ou.classList.toggle('non-place', !place && !dhl);
+        ou.classList.toggle('ou-dehors', !!dhl);
+        li.dataset.cherche = (e.numero + ' ' + (sansNom ? '' : vraiNom)).toLowerCase();
         if (dhl) li.title = dhl.texte;
         li.onclick = function () { choisi = choisi === e.id ? null : e.id; rendre(); };
         var fiche = creer('button', 'bouton-fiche', '🗂');
@@ -1427,6 +1442,12 @@ window.PlanSalle = (function () {
         li.addEventListener('dragstart', function (ev) { ev.dataTransfer.setData('text/plain', String(e.id)); });
         liste.appendChild(li);
       });
+      filtrerListe();
+      var compteListe = document.getElementById('compte-liste');
+      if (compteListe) {
+        var nbPlaces = Object.keys(carte).length;
+        compteListe.textContent = nbPlaces + ' / ' + d.eleves.length + ' placés';
+      }
       rendreDehors();
       tracerDuos();
       rendreDuos();

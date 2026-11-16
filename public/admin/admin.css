@@ -359,15 +359,24 @@ tr.choisie td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .plan-svg .bloc-nom.grand .nom-place { font: 600 11.5px system-ui, sans-serif; }
 @media print { .plan-svg .cadre-nom { fill: rgba(255, 214, 74, .35); } }
 .plan-svg .numero-place { font-size: 11px; fill: var(--doux); }
-.liste-eleves { list-style: none; margin: 8px 0 12px; padding: 0; max-height: 60vh; overflow: auto; }
-.liste-eleves li { display: grid; grid-template-columns: 26px 32px 1fr auto; gap: 6px; align-items: center; padding: 6px 6px; border-radius: 6px; cursor: grab; font-size: .92rem; }
+.liste-eleves { list-style: none; margin: 6px -6px 10px; padding: 0 6px; max-height: 62vh; overflow: auto; }
+/* une ligne par élève : photo | numéro | nom (et pastilles) | place | fiche */
+.liste-eleves li { display: grid; grid-template-columns: 26px 2.1em minmax(0, 1fr) auto 26px; gap: 8px; align-items: center;
+    min-height: 36px; padding: 3px 4px 3px 6px; border-radius: 8px; cursor: grab; font-size: .9rem; }
+.liste-eleves li + li { border-top: 1px solid color-mix(in srgb, var(--bord) 60%, transparent); }
+.liste-eleves li[hidden] { display: none; }
 .liste-eleves .vignette { width: 26px; height: 32px; border-radius: 4px; overflow: hidden; background: var(--code-fond); display: block; }
 .plan-svg .anneau-photo { fill: none; stroke: #fff; stroke-width: 1.5px; pointer-events: none; }
 .liste-eleves li:hover { background: var(--code-fond); }
 .liste-eleves li.choisi { background: color-mix(in srgb, var(--accent) 18%, transparent); outline: 2px solid var(--accent); }
 .liste-eleves li.place { color: var(--doux); }
 .liste-eleves li .numero { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 600; }
-.liste-eleves li .ou { font-size: .78rem; color: var(--ok); }
+.liste-eleves li .nom-cellule { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.liste-eleves li .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.liste-eleves li .ou { justify-self: end; font-size: .74rem; font-weight: 600; white-space: nowrap; padding: 1px 7px; border-radius: 999px;
+    color: var(--ok); background: var(--ok-fond); }
+.liste-eleves li .ou.non-place { color: #9a5b00; background: color-mix(in srgb, #f0a020 18%, transparent); }
+.liste-eleves li .ou.ou-dehors { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .impression-titre { display: none; }
 @media print {
     body * { visibility: hidden; }
@@ -1217,7 +1226,8 @@ main.accueil-dash { padding: 0; }
 .dialogue-fiche-eleve::backdrop { background: rgba(15, 25, 35, .35); }
 .dialogue-fiche-eleve .dialogue-fermer { position: absolute; top: 4px; right: 8px; margin: 0; }
 .dialogue-fiche-eleve .fiche-trois-corps { padding: 22px 24px 20px; }
-.liste-eleves .bouton-fiche { flex: none; margin: 0 0 0 6px; padding: 0 6px; border: 0; background: none; cursor: pointer; font-size: 1rem; line-height: 1; }
+.liste-eleves .bouton-fiche { flex: none; width: 26px; height: 26px; margin: 0; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; font-size: .95rem; line-height: 1; opacity: .7; }
+.liste-eleves .bouton-fiche:hover { opacity: 1; background: var(--code-fond); }
 
 /* Cartons : préremplis en rang, décollés au survol ; formulaire et liste dessous */
 .cartons-rang { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 10px; margin: 6px 0 10px; }
@@ -2704,3 +2714,27 @@ body { padding-bottom: var(--pied-h); }
 body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 @media (max-width: 640px) { .plan-options-icones { margin-left: 0; } .barre-vue .puce-option span, .barre-vue .segment button span { font-size: .82rem; } }
 @media print { .barre-vue { display: none; } }
+
+/* ---------- Plan de classe : colonne des élèves (en-tête, filtre, aide repliée, boutons) et renommer une variante ---------- */
+.palette-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.palette-tete h2 { margin: 0; font-size: 1.05rem; }
+.palette-compte { font-size: .8rem; font-weight: 600; color: var(--doux); }
+.palette .filtre-eleves { margin: 8px 0 6px; padding: 7px 10px; font-size: .88rem; border-radius: 8px; }
+.aide-placement { margin: 0 0 4px; font-size: .82rem; color: var(--doux); }
+.aide-placement summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 2px 0; }
+.aide-placement ul { margin: 4px 0 6px; padding-left: 18px; }
+.aide-placement li { margin: 3px 0; }
+.palette-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+.palette-actions > button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette-actions > button { width: 100%; margin: 0; }
+.palette-actions > #p-proposer { grid-column: 1 / -1; }
+.renommer-variante { position: relative; }
+.renommer-variante > summary { list-style: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; cursor: pointer;
+    border: 1px solid var(--bord); border-radius: 999px; color: var(--doux); background: var(--surface); font-size: .95rem; }
+.renommer-variante > summary:hover, .renommer-variante[open] > summary { color: var(--accent); border-color: var(--accent); }
+.renommer-variante > summary::-webkit-details-marker { display: none; }
+.renommer-variante[open] > form { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; display: flex; gap: 6px; align-items: center; padding: 8px;
+    background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .15); }
+.renommer-variante[open] > form { flex-wrap: nowrap; }
+.renommer-variante form input { flex: 0 0 14em; width: 14em; margin: 0; padding: 6px 8px; }
+.renommer-variante form button { margin: 0; white-space: nowrap; }

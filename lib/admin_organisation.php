@@ -329,6 +329,28 @@ function action_organisation(string $action): bool
             flash('Variante « ' . $version['nom'] . ' » ouverte (' . count($propre) . ' élèves placés).');
             rediriger('./?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : '') . '&variante=' . (int) $p['version_id']);
 
+        case 'renommer_version':
+            $cid = (int) ($p['classe_id'] ?? 0);
+            $sid = (int) ($p['salle_id'] ?? 0);
+            $gid = (int) ($p['groupe_id'] ?? 0);
+            $vid = (int) ($p['version_id'] ?? 0);
+            $retour_plan = './?p=placement&classe=' . $cid . '&salle=' . $sid . ($gid ? '&groupe=' . $gid : '') . '&variante=' . $vid;
+            $nom = mb_substr(trim((string) ($p['nom_version'] ?? '')), 0, 60);
+            if ($nom === '') {
+                flash('Donnez un nom à la variante.', 'err');
+                rediriger($retour_plan);
+            }
+            $st = $pdo->prepare('SELECT COUNT(*) FROM plans_versions WHERE classe_id = ? AND salle_id = ? AND groupe_id = ? AND id <> ? AND lower(nom) = lower(?)');
+            $st->execute([$cid, $sid, $gid, $vid, $nom]);
+            if ((int) $st->fetchColumn()) {
+                flash('Une autre variante s’appelle déjà « ' . $nom . ' ».', 'err');
+                rediriger($retour_plan);
+            }
+            $st = $pdo->prepare('UPDATE plans_versions SET nom = ? WHERE id = ? AND classe_id = ? AND salle_id = ? AND groupe_id = ?');
+            $st->execute([$nom, $vid, $cid, $sid, $gid]);
+            flash($st->rowCount() ? 'Variante renommée « ' . $nom . ' ».' : 'Variante introuvable.', $st->rowCount() ? 'ok' : 'err');
+            rediriger($retour_plan);
+
         case 'supprimer_version':
             $cid = (int) ($p['classe_id'] ?? 0);
             $sid = (int) ($p['salle_id'] ?? 0);
@@ -1290,6 +1312,21 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
                                 title="<?= h($v['nom'] . ' · ' . $v['cree_le'] . ' · ' . count(json_decode((string) $v['carte'], true) ?: []) . ' élèves placés' . ($actif ? ' (ouverte)' : ' : ouvrir cette variante')) ?>"><?= h($v['nom']) ?></button>
                     </form>
                 <?php endforeach; ?>
+                <?php if ($variante_id): ?>
+                    <details class="renommer-variante">
+                        <summary class="renommer-bouton" title="Changer le nom de la variante ouverte" aria-label="Renommer la variante ouverte">✎</summary>
+                        <form method="post" class="versions-form">
+                            <?= csrf() ?>
+                            <input type="hidden" name="action" value="renommer_version">
+                            <input type="hidden" name="classe_id" value="<?= $classe_id ?>">
+                            <input type="hidden" name="salle_id" value="<?= $salle_id ?>">
+                            <input type="hidden" name="groupe_id" value="<?= $groupe_id ?>">
+                            <input type="hidden" name="version_id" value="<?= $variante_id ?>">
+                            <input type="text" name="nom_version" maxlength="60" required value="<?= h((string) $nom_applique) ?>" aria-label="Nouveau nom de la variante">
+                            <button type="submit" class="petit">Renommer</button>
+                        </form>
+                    </details>
+                <?php endif; ?>
                 <form method="post" class="versions-form" id="form-dupliquer">
                     <?= csrf() ?>
                     <input type="hidden" name="action" value="dupliquer_version">
@@ -1325,13 +1362,25 @@ function page_placement(int $classe_id, int $salle_id, int $groupe_id = 0): void
             <input type="hidden" name="variante_id" value="<?= $variante_id ?>">
             <div class="editeur">
                 <aside class="palette carte">
-                    <p class="aide">Glissez un élève (de la liste ou du plan) sur une place : si elle est prise, les deux élèves échangent leurs places.
-                        Glissez un élève du plan vers la liste pour le retirer. On peut aussi cliquer sur un élève puis sur une place. Avec « ⇄ Échanger » (au-dessus du plan), un clic sur un élève puis sur un autre : ils échangent leurs places.</p>
+                    <div class="palette-tete">
+                        <h2>Élèves</h2>
+                        <span class="palette-compte" id="compte-liste"></span>
+                    </div>
+                    <input type="search" id="filtre-eleves" class="filtre-eleves" placeholder="Chercher (numéro, nom)…" aria-label="Chercher un élève dans la liste">
+                    <details class="aide-placement">
+                        <summary>Comment placer les élèves ?</summary>
+                        <ul>
+                            <li><strong>Glisser</strong> un élève (de la liste ou du plan) sur une place : si elle est prise, les deux échangent leurs places.</li>
+                            <li><strong>Cliquer</strong> sur un élève de la liste, puis sur une place.</li>
+                            <li><strong>⇄ Échanger</strong> (au-dessus du plan) : un clic sur un élève du plan, puis sur un autre.</li>
+                            <li>Glisser un élève du plan <strong>vers la liste</strong> le retire du plan.</li>
+                        </ul>
+                    </details>
                     <ul class="liste-eleves" id="liste-eleves"></ul>
-                    <div class="ligne-actions">
+                    <div class="ligne-actions palette-actions">
                         <button type="button" class="petit" id="p-proposer" title="Calcule un plan qui éloigne les élèves à séparer et rapproche les bonnes dynamiques (feuille de séance) : vous le voyez avant de le garder">Proposer un nouveau plan…</button>
-                        <button type="button" class="petit secondaire" id="p-aleatoire">Placement aléatoire</button>
-                        <button type="button" class="petit secondaire" id="p-vider">Tout vider</button>
+                        <button type="button" class="petit secondaire" id="p-aleatoire" title="Placement aléatoire : plusieurs tirages, en gardant celui qui éloigne les élèves à séparer">🎲 Aléatoire</button>
+                        <button type="button" class="petit secondaire" id="p-vider" title="Retirer tous les élèves du plan">Tout vider</button>
                     </div>
                 </aside>
                 <div class="zone-plan carte">
