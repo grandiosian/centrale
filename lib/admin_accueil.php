@@ -904,9 +904,40 @@ function page_tableau_de_bord(): void
                                                     <option value="<?= h($d) ?>" <?= $fi['doc'] && nom_document_fichestudio((string) $fi['doc']) === $d ? 'selected' : '' ?>><?= h($d) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <?php if (!$fi['documents']): ?><p class="discret">Aucun document rangé sur la Centrale : ☁ Enregistrer dans FicheStudio.</p><?php endif; ?>
+                                            <?php if (!$fi['documents']): ?><p class="discret">Aucun document FicheStudio sur ce serveur pour l’instant : envoyez-les ci-dessous.</p><?php endif; ?>
                                             <button class="petit">Associer</button>
+                                            <div class="dash-envoyer-fiches">
+                                                <label class="btn petit secondaire">Envoyer des fiches (.fstudio)…
+                                                    <input type="file" id="envoi-fiches" accept=".fstudio,application/json" multiple hidden></label>
+                                                <p class="discret" id="envoi-fiches-etat">Depuis cet ordinateur (par exemple le dossier <code>data/fichestudio</code> de la Centrale locale) :
+                                                    elles sont rangées sur ce serveur, comme « ☁ Enregistrer » dans FicheStudio. Une fiche du même nom est remplacée.</p>
+                                            </div>
                                         </form>
+                                        <script>
+                                        /* Envoi de fiches FicheStudio vers ce serveur (api/fichestudio.php?document=…, session enseignant), puis rechargement. */
+                                        (function () {
+                                            var champ = document.getElementById('envoi-fiches'), etat = document.getElementById('envoi-fiches-etat');
+                                            if (!champ) return;
+                                            champ.addEventListener('change', async function () {
+                                                var fichiers = Array.prototype.slice.call(champ.files || []), ok = 0, erreurs = [];
+                                                for (var i = 0; i < fichiers.length; i++) {
+                                                    var f = fichiers[i], nom = f.name.replace(/\.fstudio$/i, '');
+                                                    etat.textContent = 'Envoi ' + (i + 1) + ' / ' + fichiers.length + ' : ' + nom + '…';
+                                                    try {
+                                                        var texte = await f.text();
+                                                        if (!/"format"\s*:\s*"fichestudio"/.test(texte.slice(0, 2000))) throw new Error('pas un document FicheStudio');
+                                                        var r = await fetch('../api/fichestudio.php?document=' + encodeURIComponent(nom), { method: 'POST', credentials: 'same-origin',
+                                                            headers: { 'Content-Type': 'application/json' }, body: texte });
+                                                        var j = await r.json().catch(function () { return {}; });
+                                                        if (!r.ok || j.ok === false) throw new Error(j.erreur || ('erreur ' + r.status));
+                                                        ok++;
+                                                    } catch (e) { erreurs.push(nom + ' : ' + e.message); }
+                                                }
+                                                etat.textContent = ok + ' fiche' + (ok > 1 ? 's' : '') + ' envoyée' + (ok > 1 ? 's' : '') + (erreurs.length ? ' · non envoyées : ' + erreurs.join(' ; ') : '') + '.';
+                                                if (ok && !erreurs.length) setTimeout(function () { location.reload(); }, 900);
+                                            });
+                                        })();
+                                        </script>
                                     </details>
                                 <?php endif; ?>
                             </div>

@@ -2817,3 +2817,6 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 .dash-associer-form p { margin: 0; font-size: .88rem; }
 .dash-associer-form select { width: 100%; margin: 0; }
 .dash-associer-form button { align-self: flex-start; margin: 0; }
+.dash-envoyer-fiches { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--bord); }
+.dash-envoyer-fiches label.btn { align-self: flex-start; margin: 0; cursor: pointer; }
+.dash-envoyer-fiches p { font-size: .78rem; }
