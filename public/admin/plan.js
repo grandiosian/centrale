@@ -632,22 +632,52 @@ window.PlanSalle = (function () {
    * ordinateur et s'appliquent à tous les plans affichés ici ; « Réglages de chaque salle » les retire.
    * plan (facultatif) : la salle affichée, pour partir de ses réglages.
    */
+  /** Petits dessins de la barre de présentation et des options du plan (traits, couleur du texte). */
+  var ICONES_BARRE = {
+    plan: '<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M3.5 9.5h17M9.5 3.5v17"/>',
+    iso: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
+    portrait: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M10.5 17.5h3"/>',
+    miroirX: '<path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7l-5 5 5 5z"/><path d="M15 7l5 5-5 5z"/>',
+    miroirY: '<path d="M3 12h18" stroke-dasharray="2 2"/><path d="M7 9l5-5 5 5z"/><path d="M7 15l5 5 5-5z"/>',
+    sol: '<path d="M3 15l9-4 9 4-9 4z"/><path d="M7.5 13l9 4M16.5 13l-9 4"/>',
+    tour: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4.5h-4.5"/>',
+    reset: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4.5h4.5"/>',
+    echange: '<path d="M4 8h14l-3.5-3.5"/><path d="M20 16H6l3.5 3.5"/>',
+    classe: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8.5 10h7M8.5 14h7M8.5 18h4"/>',
+    progression: '<path d="M4 20h16"/><path d="M6.5 16v-3M11 16V9M15.5 16v-6M20 7l-4.5 3-4.5-3-4.5 4"/>',
+  };
+  function iconeBarre(nom) {
+    return '<svg class="ico-barre" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+      + (ICONES_BARRE[nom] || '') + '</svg>';
+  }
+  /** Bouton à bascule de la barre (remplace les cases à cocher) : aria-pressed porte l'état. */
+  function puceBarre(attrs, icone, texte, titre) {
+    return '<button type="button" class="puce-option" aria-pressed="false" ' + attrs + ' title="' + titre + '">' + iconeBarre(icone)
+      + '<span>' + texte + '</span></button>';
+  }
+
   function barreVue(conteneur, plan) {
     if (!conteneur) return;
     conteneur.innerHTML = '<div class="barre-vue">'
+      + '<div class="barre-ligne">'
       + '<span class="barre-titre">Présentation</span>'
       + '<div class="segment" role="group" aria-label="Vue">'
-      + '<button type="button" data-iso="0">Plan</button><button type="button" data-iso="1">3/4</button></div>'
+      + '<button type="button" data-iso="0" title="Vue à plat">' + iconeBarre('plan') + '<span>Plan</span></button>'
+      + '<button type="button" data-iso="1" title="Vue en 3/4 (perspective)">' + iconeBarre('iso') + '<span>3/4</span></button></div>'
       + '<div class="angle-vue" data-angle hidden>'
       + '<input type="range" min="0" max="359" step="1" value="0" data-curseur aria-label="Angle de la vue 3/4">'
       + '<span class="angle-valeur" data-valeur>0°</span>'
-      + '<button type="button" class="lien-bouton tour" data-tour>▶ Tour</button></div>'
-      + '<label data-plan-only><input type="checkbox" data-cle="portrait"> Portrait</label>'
-      + '<label data-plan-only><input type="checkbox" data-cle="miroirX"> Miroir horizontal</label>'
-      + '<label data-plan-only><input type="checkbox" data-cle="miroirY"> Miroir vertical</label>'
-      + '<label>Sol <select data-sol><option value="">Celui de la salle</option><option value="uni">Uni</option>'
-      + '<option value="bois">Bois</option><option value="parquet">Parquet</option></select></label>'
-      + '<button type="button" class="lien-bouton" data-reset>Réglages de chaque salle</button>'
+      + '<button type="button" class="puce-option" data-tour title="Faire tourner la salle d’un quart de tour toutes les 2,5 s">' + iconeBarre('tour') + '<span data-tour-txt>Tour</span></button></div>'
+      + '<div class="barre-groupe" data-plan-only role="group" aria-label="Orientation du plan">'
+      + puceBarre('data-cle="portrait"', 'portrait', 'Portrait', 'Salle tournée en hauteur (et impression en portrait)')
+      + puceBarre('data-cle="miroirX"', 'miroirX', 'Miroir ↔', 'Miroir horizontal : la gauche et la droite échangées')
+      + puceBarre('data-cle="miroirY"', 'miroirY', 'Miroir ↕', 'Miroir vertical : le haut et le bas échangés (vue depuis le fond de la salle)')
+      + '</div>'
+      + '<label class="barre-sol" title="Revêtement du sol">' + iconeBarre('sol') + '<span class="visuel-cache">Sol</span><select data-sol aria-label="Sol">'
+      + '<option value="">Sol de la salle</option><option value="uni">Sol uni</option>'
+      + '<option value="bois">Sol en bois</option><option value="parquet">Parquet</option></select></label>'
+      + '<button type="button" class="bouton-icone" data-reset title="Revenir aux réglages de chaque salle (oublier ceux de cet ordinateur)" aria-label="Réglages de chaque salle">' + iconeBarre('reset') + '</button>'
+      + '</div>'
       + '</div>';
     var boutons = conteneur.querySelectorAll('[data-iso]'), cases = conteneur.querySelectorAll('[data-cle]');
     var sel = conteneur.querySelector('[data-sol]'), reset = conteneur.querySelector('[data-reset]');
@@ -663,14 +693,15 @@ window.PlanSalle = (function () {
       var v = reglages(), l = vueLocale() || {};
       boutons.forEach(function (b) { b.classList.toggle('actif', !!v.iso === (b.dataset.iso === '1')); });
       angle.hidden = !v.iso;
+      conteneur.querySelectorAll('[data-plan-only]').forEach(function (x) { x.hidden = !!v.iso; });   // portrait, miroirs : vue à plat seulement
       curseur.value = String(Math.round(angleActuel()) % 360);
       valeur.textContent = (Math.round(angleActuel()) % 360) + '°';
-      cases.forEach(function (c) { c.checked = !!v[c.dataset.cle]; });
+      cases.forEach(function (c) { c.setAttribute('aria-pressed', String(!!v[c.dataset.cle])); });
       sel.value = l.sol || '';
     }
     function ecrire(iso, deg) {
       var vue = { iso: !!iso, angle: Math.round(((deg % 360) + 360) % 360) % 360 };
-      cases.forEach(function (c) { vue[c.dataset.cle] = c.checked; });
+      cases.forEach(function (c) { vue[c.dataset.cle] = c.getAttribute('aria-pressed') === 'true'; });
       try { localStorage.setItem(CLE_VUE, JSON.stringify({ sol: sel.value || '', vue: vue })); } catch (e) { /* stockage bloqué */ }
       remplir();
       document.dispatchEvent(new Event('centrale-vue'));
@@ -678,8 +709,8 @@ window.PlanSalle = (function () {
     function arreterTour() {
       if (minuteur) clearInterval(minuteur);
       minuteur = null;
-      tour.textContent = '▶ Tour';
-      tour.classList.remove('actif');
+      tour.querySelector('[data-tour-txt]').textContent = 'Tour';
+      tour.setAttribute('aria-pressed', 'false');
     }
     function enregistrer(iso, deg) { arreterTour(); ecrire(iso, deg); }
 
@@ -687,11 +718,14 @@ window.PlanSalle = (function () {
     curseur.addEventListener('input', function () { ecrire(true, parseFloat(curseur.value)); });
     tour.addEventListener('click', function () {
       if (minuteur) { arreterTour(); return; }
-      tour.textContent = '■ Arrêter';
-      tour.classList.add('actif');
+      tour.querySelector('[data-tour-txt]').textContent = 'Arrêter';
+      tour.setAttribute('aria-pressed', 'true');
       minuteur = setInterval(function () { ecrire(true, angleActuel() + 90); }, 2500);
     });
-    cases.forEach(function (c) { c.addEventListener('change', function () { enregistrer(isoActuel(), angleActuel()); }); });
+    cases.forEach(function (c) { c.addEventListener('click', function () {
+      c.setAttribute('aria-pressed', String(c.getAttribute('aria-pressed') !== 'true'));
+      enregistrer(isoActuel(), angleActuel());
+    }); });
     sel.addEventListener('change', function () { enregistrer(isoActuel(), angleActuel()); });
     reset.addEventListener('click', function () {
       arreterTour();
@@ -1075,8 +1109,9 @@ window.PlanSalle = (function () {
     var liste = document.getElementById('liste-eleves');
     var choisi = null;                                 // id de l'élève sélectionné
     barreVue(document.getElementById('barre-vue'), plan);
-    var barreOptions = creer('div', 'plan-options');
-    document.getElementById('barre-vue').after(barreOptions);
+    // options du plan : deuxième ligne de la même barre (voir « Options du plan » plus bas)
+    var barreOptions = creer('div', 'barre-ligne plan-options');
+    (document.querySelector('#barre-vue .barre-vue') || document.getElementById('barre-vue')).appendChild(barreOptions);
 
     function nom(e) {
       var n = window.CentraleNoms ? window.CentraleNoms.nomLocal(d.classe, e.numero) : '';
@@ -1404,43 +1439,49 @@ window.PlanSalle = (function () {
 
     /* ---------- Options du plan : mode échange, icônes au-dessus des élèves (réglages gardés sur cet ordinateur) ---------- */
     (function () {
-      var echange = creer('button', 'petit secondaire bouton-echange', '⇄ Mode échange');
-      echange.type = 'button';
-      echange.title = 'Cliquer sur un élève du plan, puis sur un autre : ils échangent leurs places (sur une place libre : il s’y déplace). Échap annule.';
-      var aideEchange = creer('span', 'discret plan-options-aide', '');
+      var puce = function (icone, texte, titre) {
+        var b = creer('button', 'puce-option');
+        b.type = 'button';
+        b.title = titre;
+        b.innerHTML = iconeBarre(icone) + '<span></span>';
+        b.querySelector('span').textContent = texte;
+        return b;
+      };
+      var echange = puce('echange', 'Échanger', 'Mode échange : cliquer sur un élève du plan, puis sur un autre, et ils échangent leurs places (sur une place libre : il s’y déplace). Échap annule.');
+      echange.classList.add('bouton-echange');
+      var aideEchange = creer('span', 'plan-options-aide', '');
       function majEchange() {
         echange.setAttribute('aria-pressed', String(modeEchange));
-        echange.classList.toggle('actif', modeEchange);
         document.body.classList.toggle('mode-echange', modeEchange);
-        aideEchange.textContent = !modeEchange ? '' : placeChoisie ? 'Cliquez sur l’élève avec qui échanger (ou sur une place libre).' : 'Cliquez sur un premier élève du plan.';
+        aideEchange.hidden = !modeEchange;
+        aideEchange.textContent = placeChoisie ? 'Cliquez sur l’élève avec qui échanger, ou sur une place libre.' : 'Cliquez sur un premier élève du plan.';
       }
       echange.addEventListener('click', function () {
         modeEchange = !modeEchange;
         placeChoisie = null;
         try { localStorage.setItem('centrale-plan-echange', modeEchange ? '1' : ''); } catch (e) { /* rien */ }
-        majEchange();
         rendre();
       });
       document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && placeChoisie) { placeChoisie = null; rendre(); } });
-      var icones = creer('span', 'plan-options-icones');
-      icones.appendChild(creer('span', 'plan-options-titre', 'Icônes'));
+      var icones = creer('div', 'barre-groupe plan-options-icones');
+      icones.setAttribute('role', 'group');
+      icones.setAttribute('aria-label', 'Icônes au-dessus des élèves');
+      icones.appendChild(creer('span', 'barre-titre', 'Icônes'));
       // mêmes réglages que « Repères des élèves » de l'accueil (classes sans-classe / sans-reperes de <html>)
-      [['sans-classe', 'centrale-classe-cache', 'Observé en classe', 'Appel, cartons, absences et retards répétés'],
-       ['sans-reperes', 'centrale-reperes-caches', 'Progression', 'Repères de la plateforme : activité et avancement dans les ateliers']].forEach(function (x) {
-        var lab = creer('label', 'plan-options-case'), c = creer('input');
-        c.type = 'checkbox';
-        lab.title = x[3];
-        function appliquer(cache) { document.documentElement.classList.toggle(x[0], cache); c.checked = !cache; }
+      [['sans-classe', 'centrale-classe-cache', 'classe', 'En classe', 'Ce qui est observé en classe : appel, cartons, absences et retards répétés'],
+       ['sans-reperes', 'centrale-reperes-caches', 'progression', 'Progression', 'Repères de la plateforme : activité et avancement dans les ateliers']].forEach(function (x) {
+        var b = puce(x[2], x[3], x[4] + ' — montrer ou cacher sur le plan');
+        function appliquer(cache) { document.documentElement.classList.toggle(x[0], cache); b.setAttribute('aria-pressed', String(!cache)); }
         try { appliquer(localStorage.getItem(x[1]) === '1'); } catch (e) { appliquer(false); }
-        c.addEventListener('change', function () {
-          try { localStorage.setItem(x[1], c.checked ? '' : '1'); } catch (e) { /* rien */ }
-          appliquer(!c.checked);
+        b.addEventListener('click', function () {
+          var cache = b.getAttribute('aria-pressed') === 'true';
+          try { localStorage.setItem(x[1], cache ? '1' : ''); } catch (e) { /* rien */ }
+          appliquer(cache);
           rendre();
         });
-        lab.append(c, ' ' + x[2]);
-        icones.appendChild(lab);
+        icones.appendChild(b);
       });
-      barreOptions.append(echange, aideEchange, icones);
+      barreOptions.append(creer('span', 'barre-titre', 'Plan de classe'), echange, aideEchange, icones);
       majEchange();
       var rendreAvant = rendre;
       rendre = function () { rendreAvant(); majEchange(); };

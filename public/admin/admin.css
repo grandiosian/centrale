@@ -283,18 +283,42 @@ tr.choisie td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .plan-svg .etiquettes .etiquette { font: 700 11px system-ui, sans-serif; paint-order: stroke; stroke: var(--sol); stroke-width: 3px; }
 .plan-svg .etiquettes .numero-place { font-weight: 700; }
 
-/* Barre de présentation (accueil, placement) */
-.barre-vue { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 0 0 12px; padding: 8px 12px;
-             background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; font-size: .9rem; }
-.barre-vue label { margin: 0; display: flex; gap: 5px; align-items: center; font-weight: 500; }
-.barre-vue select { width: auto; margin: 0; }
-.barre-vue .barre-titre { font-weight: 700; color: var(--doux); }
-.barre-vue .segment { display: inline-flex; border: 1px solid var(--bord); border-radius: 999px; overflow: hidden; }
-.barre-vue .segment button { border: 0; border-radius: 0; background: transparent; color: var(--texte); padding: 4px 12px; cursor: pointer; font-weight: 500; }
-.barre-vue .segment button.actif { background: var(--accent); color: var(--accent-texte); }
+/* Barre de présentation (page Plan de classe) : une ou deux lignes (présentation, puis options du plan), boutons à bascule
+   avec icône (aria-pressed), jamais de cases à cocher (les champs ont width:100% par défaut) */
+.barre-vue { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; padding: 8px 12px;
+             background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; font-size: .88rem; }
+.barre-vue .barre-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-height: 34px; }
+.barre-vue .barre-ligne + .barre-ligne { padding-top: 8px; border-top: 1px solid var(--bord); }
+.barre-vue .barre-titre { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--doux); margin-right: 2px; }
+.barre-vue .barre-groupe { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .barre-vue [hidden] { display: none !important; }
-.barre-vue .segment-angle button.tour { color: var(--accent); font-weight: 600; }
-.barre-vue .segment-angle button.tour.actif { background: var(--accent); color: var(--accent-texte); }
+.ico-barre { width: 17px; height: 17px; flex: 0 0 auto; display: block; }
+/* segment Plan | 3/4 */
+.barre-vue .segment { display: inline-flex; border: 1px solid var(--bord); border-radius: 999px; overflow: hidden; background: var(--fond); }
+.barre-vue .segment button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 0; margin: 0; background: transparent;
+    color: var(--texte); padding: 5px 12px; cursor: pointer; font: inherit; font-weight: 600; line-height: 1.2; }
+.barre-vue .segment button + button { border-left: 1px solid var(--bord); }
+.barre-vue .segment button.actif { background: var(--accent); color: var(--accent-texte); }
+/* bouton à bascule */
+.puce-option { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 5px 11px; font: inherit; font-weight: 600; line-height: 1.2;
+    color: var(--texte); background: var(--fond); border: 1px solid var(--bord); border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.puce-option:hover { border-color: var(--accent); color: var(--accent); }
+.puce-option[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-color: var(--accent); color: var(--accent); }
+.puce-option[aria-pressed="true"]:hover { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
+.puce-option:focus-visible, .barre-vue .segment button:focus-visible, .bouton-icone:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bouton-icone { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: 0; padding: 0;
+    color: var(--doux); background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer; }
+.bouton-icone:hover { color: var(--accent); border-color: var(--bord); background: var(--fond); }
+/* sol : icône + liste */
+.barre-vue .barre-sol { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 0 4px 0 10px; color: var(--doux);
+    background: var(--fond); border: 1px solid var(--bord); border-radius: 999px; font-weight: 500; }
+.barre-vue .barre-sol select { width: auto; margin: 0; padding: 5px 6px; border: 0; background: transparent; color: var(--texte); font: inherit; font-weight: 600; cursor: pointer; }
+.barre-vue .barre-sol select:focus { outline: none; }
+.barre-vue .barre-sol:focus-within { border-color: var(--accent); }
+.visuel-cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* angle de la vue 3/4 */
+.barre-vue .angle-vue { display: inline-flex; align-items: center; gap: 8px; }
+.barre-vue .angle-vue input[type=range] { width: 140px; padding: 0; margin: 0; accent-color: var(--accent); }
 .plan-svg { width: 100%; height: auto; display: block; user-select: none; touch-action: none; }
 .plan-svg .sol { fill: var(--sol); }
 .plan-svg .sol-fond { fill: var(--sol); }
@@ -897,7 +921,6 @@ a.usage.app::before { content: "⚙ "; }
 .plan-svg .calque-survol .bulle.montre { opacity: 1; transform: scale(1); }
 .plan-svg .calque-survol .bulle .anneau-photo { stroke: #fff; stroke-width: 2.5px; }
 .angle-vue { display: inline-flex; align-items: center; gap: 8px; }
-.angle-vue input[type=range] { width: 160px; padding: 0; margin: 0; }
 .angle-valeur { font-variant-numeric: tabular-nums; min-width: 3em; color: var(--doux); }
 .curseur-angle { display: flex; flex-direction: column; gap: 4px; }
 .curseur-angle input[type=range] { width: 100%; padding: 0; }
@@ -2673,15 +2696,11 @@ body { padding-bottom: var(--pied-h); }
 /* le tableau de bord plein écran laisse la place de la barre */
 .dashboard { height: calc(100dvh - var(--barre-h, 64px) - var(--pied-h)); }
 
-/* ---------- Plan de classe : options (mode échange, icônes au-dessus des élèves), plan.js placement() ---------- */
-.plan-options { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: -4px 0 12px; padding: 6px 12px;
-    background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; }
-.plan-options .bouton-echange.actif { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
-.plan-options-aide { font-size: .85rem; }
-.plan-options-icones { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-left: auto; }
-.plan-options-titre { font-weight: 700; color: var(--doux); }
-.plan-options-case { margin: 0; display: flex; gap: 5px; align-items: center; font-weight: 500; white-space: nowrap; }
+/* ---------- Plan de classe : options du plan (2e ligne de .barre-vue : mode échange, icônes), plan.js placement() ---------- */
+.plan-options-aide { font-size: .82rem; color: var(--accent); }
+.plan-options-icones { margin-left: auto; }
 .plan-svg .echange-choisi .forme { stroke: var(--accent); stroke-width: 4; stroke-dasharray: 4 3; }
 .plan-svg .echange-choisi { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)); }
 body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
-@media print { .plan-options { display: none; } }
+@media (max-width: 640px) { .plan-options-icones { margin-left: 0; } .barre-vue .puce-option span, .barre-vue .segment button span { font-size: .82rem; } }
+@media print { .barre-vue { display: none; } }
