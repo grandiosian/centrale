@@ -1510,14 +1510,15 @@ function plans_imprimables(): array
         }
         $cle = $c['classe_id'] . '-' . (int) $c['groupe_id'] . '-' . $c['salle_id'];
         $nom_classe = $c['classe'] . ($c['groupe'] ? ' · ' . $c['groupe'] : '');
+        $pastille = pastille_classe((int) $c['classe_id'], (string) ($c['groupe'] ?? ''));
         $res[] = ['cle' => $cle, 'etablissement' => $c['college'] ?: 'Sans établissement', 'classe' => $nom_classe, 'salle' => $c['salle'],
-                  'libelle' => 'plan en cours', 'nb' => count((array) $d['placement']), 'donnees' => $d];
+                  'pastille' => $pastille, 'libelle' => 'plan en cours', 'nb' => count((array) $d['placement']), 'donnees' => $d];
         $st = $pdo->prepare('SELECT id, nom, carte FROM plans_versions WHERE classe_id = ? AND groupe_id = ? AND salle_id = ? ORDER BY id');
         $st->execute([$c['classe_id'], (int) $c['groupe_id'], $c['salle_id']]);
         foreach ($st->fetchAll() as $v) {
             $carte = array_map('intval', json_decode((string) $v['carte'], true) ?: []);
             $res[] = ['cle' => $cle . '-v' . $v['id'], 'etablissement' => $c['college'] ?: 'Sans établissement', 'classe' => $nom_classe, 'salle' => $c['salle'],
-                      'libelle' => 'variante « ' . $v['nom'] . ' »', 'nb' => count($carte), 'donnees' => ['placement' => (object) $carte] + $d];
+                      'pastille' => $pastille, 'libelle' => 'variante « ' . $v['nom'] . ' »', 'nb' => count($carte), 'donnees' => ['placement' => (object) $carte] + $d];
         }
     }
     return $res;
@@ -1554,7 +1555,7 @@ function page_imprimer_plans(): void
                             <p class="impression-etab"><?= h($etab) ?></p>
                         <?php endif; ?>
                         <?php if ($pl['classe'] !== $classe): $classe = $pl['classe']; ?>
-                            <p class="impression-classe"><?= h($classe) ?></p>
+                            <p class="impression-classe"><?= $pl['pastille'] ?: h($classe) ?></p>
                         <?php endif; ?>
                         <label class="impression-ligne">
                             <input type="checkbox" value="<?= $i ?>" data-cle="<?= h($pl['cle']) ?>" <?= in_array($pl['cle'], $coches, true) ? 'checked' : '' ?>>
@@ -1587,7 +1588,7 @@ function page_imprimer_plans(): void
         </div>
         <h2 class="ne-pas-imprimer impression-apercu-titre">Aperçu <span class="discret" id="imp-feuilles"></span></h2>
         <div id="feuilles" class="feuilles"></div>
-        <script type="application/json" id="donnees-impression"><?= json_encode(array_map(fn($p) => ['titre' => $p['classe'] . ' · salle ' . $p['salle'], 'sous' => $p['libelle'], 'etablissement' => $p['etablissement'], 'donnees' => $p['donnees']], $plans), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+        <script type="application/json" id="donnees-impression"><?= json_encode(array_map(fn($p) => ['classe' => $p['classe'], 'pastille' => $p['pastille'], 'salle' => $p['salle'], 'sous' => $p['libelle'], 'etablissement' => $p['etablissement'], 'donnees' => $p['donnees']], $plans), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
         <script src="plan.js?v=<?= @filemtime(__DIR__ . '/../public/admin/plan.js') ?: 1 ?>"></script>
         <script>PlanSalle.impression();</script>
         <?php endif; ?>

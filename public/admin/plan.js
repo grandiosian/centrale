@@ -3886,8 +3886,11 @@ window.PlanSalle = (function () {
         zone.appendChild(feuille);   // dans la page avant de dessiner : la taille des noms se mesure
         choisis.slice(i, i + n).forEach(function (pl) {
           var cas = creer('section', 'case-plan');
-          var tete = creer('div', 'case-plan-tete');
-          tete.append(creer('strong', '', pl.titre), creer('span', '', pl.sous + (pl.etablissement ? ' · ' + pl.etablissement : '')));
+          // en-tête : pastille de la classe (couleurs du niveau et de l'établissement), salle et variante ; à droite l'établissement et la date
+          var tete = creer('div', 'case-plan-tete'), gauche = creer('div', 'case-plan-titre'), pastille = creer('span', 'case-plan-pastille');
+          if (pl.pastille) pastille.innerHTML = pl.pastille; else pastille.textContent = pl.classe;   // HTML produit par la Centrale (pastille_classe)
+          gauche.append(pastille, creer('span', 'case-plan-salle', 'Salle ' + pl.salle), creer('span', 'case-plan-sous', pl.sous));
+          tete.append(gauche, creer('span', 'case-plan-etab', (pl.etablissement || '') + ' · ' + new Date().toLocaleDateString('fr-FR')));
           var svg = document.createElementNS(NS, 'svg');
           svg.setAttribute('class', 'plan-svg plan-imprime');
           cas.append(tete, svg);
