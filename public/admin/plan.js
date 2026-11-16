@@ -3849,7 +3849,7 @@ window.PlanSalle = (function () {
   }
 
   function impression() {
-    var src = document.getElementById('donnees-impression'), zone = document.getElementById('feuilles');
+    var src = document.getElementById('donnees-impression'), zone = document.getElementById('feuilles-impression');
     if (!src || !zone) return;
     var plans = JSON.parse(src.textContent);
     var cases = Array.prototype.slice.call(document.querySelectorAll('.impression-liste input[type=checkbox]'));

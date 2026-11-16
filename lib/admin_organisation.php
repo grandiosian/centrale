@@ -1587,7 +1587,7 @@ function page_imprimer_plans(): void
             </section>
         </div>
         <h2 class="ne-pas-imprimer impression-apercu-titre">Aperçu <span class="discret" id="imp-feuilles"></span></h2>
-        <div id="feuilles" class="feuilles"></div>
+        <div id="feuilles-impression" class="feuilles"></div>
         <script type="application/json" id="donnees-impression"><?= json_encode(array_map(fn($p) => ['classe' => $p['classe'], 'pastille' => $p['pastille'], 'salle' => $p['salle'], 'sous' => $p['libelle'], 'etablissement' => $p['etablissement'], 'donnees' => $p['donnees']], $plans), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
         <script src="plan.js?v=<?= @filemtime(__DIR__ . '/../public/admin/plan.js') ?: 1 ?>"></script>
         <script>PlanSalle.impression();</script>
