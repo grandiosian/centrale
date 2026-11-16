@@ -272,7 +272,7 @@ function corps_catalogue_ateliers(): void
             <div class="defile"><table class="table-catalogue">
                 <thead><tr><th>Atelier</th><th>Application</th><th>Niveau</th><th>Compétences</th><th>Activités</th><th>Disponibilité</th><th>Source</th><th></th></tr></thead>
                 <tbody>
-                <?php foreach ($tous as $r): $ouvrir = adresse_ouvrir_atelier($r); $nb = count($r['activites']); ?>
+                <?php $titre_essai = titre_essayer_atelier(); foreach ($tous as $r): $ouvrir = adresse_ouvrir_atelier($r); $nb = count($r['activites']); ?>
                     <tr data-app="<?= h($r['app']) ?>" data-niveau="<?= h($r['niveau']) ?>" <?= $r['etat'] !== 'actif' ? 'data-retire="1" class="inactif" hidden' : '' ?>
                         data-texte="<?= h(mb_strtolower($r['titre'] . ' ' . $r['atelier'] . ' ' . $r['resume'] . ' ' . $r['competences'])) ?>">
                         <td><?php if ($r['theme']): ?><span class="pastille-theme" style="--t:<?= h(couleur_theme($r['theme'])) ?>"><?= h($r['theme']) ?></span> <?php endif; ?>
@@ -312,7 +312,7 @@ function corps_catalogue_ateliers(): void
                             <?php if ($r['source'] === 'fichier'): ?><br><span class="alerte" title="Il ne restera disponible sans serveur qu’une fois publié avec l’application">pas encore dans l’application</span><?php endif; ?></td>
                         <td class="actions">
                             <a class="btn petit secondaire" href="<?= h(lien_inspecter_atelier((string) $r['app'], (string) $r['atelier'])) ?>" title="Voir comment cet atelier est rangé : fiche, activités, où il sert, fichier publié">Inspecter</a>
-                            <?php if ($ouvrir !== ''): ?><a class="btn petit secondaire" href="<?= h($ouvrir) ?>" target="_blank" rel="noopener" title="Ouvrir l’atelier dans l’application, sans connexion">Ouvrir</a><?php endif; ?>
+                            <?php if ($ouvrir !== ''): ?><a class="btn petit secondaire" href="<?= h(lien_essayer_atelier((string) $r['app'], (string) $r['atelier'])) ?>" target="_blank" rel="noopener" title="<?= h($titre_essai) ?>">Ouvrir</a><?php endif; ?>
                             <?php if ($r['contenu'] !== ''): ?><a class="btn petit secondaire" href="./?p=ateliers&gestion=1&app=<?= rawurlencode($r['app']) ?>&telecharger=<?= rawurlencode($r['atelier']) ?>" title="Fichier à ajouter aux ateliers publiés par l’application">Fichier</a><?php endif; ?>
                             <?php if ($r['etat'] !== 'actif' || $r['source'] === 'fichier'): ?>
                                 <?= bouton('supprimer_atelier_catalogue', 'Enlever', ['app' => $r['app'], 'atelier' => $r['atelier']], 'danger', 'Enlever cet atelier du catalogue ?') ?>

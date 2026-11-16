@@ -257,3 +257,74 @@ function bouton_tester(string $cible, string $titre): string
 {
     return '<button class="petit" form="form-tester" name="cible" value="' . h($cible) . '" title="' . h($titre) . '">Tester ↗</button>';
 }
+
+/* ---------- « Ouvrir » un atelier (pages Ateliers, Détail, Inspecter) : en session d'essai, comme « Tester » ---------- */
+
+/**
+ * Élève de l'essai pour « Ouvrir » : toujours un élève des classes de test (jamais un vrai élève, dont le travail serait modifié) :
+ * celui choisi en dernier dans « Tester à la place d'un élève » s'il est de test, sinon le premier ; null s'il n'y en a pas.
+ */
+function eleve_essai_choisi(): ?array
+{
+    $eleves = eleves_test();
+    $choisi = (int) ($_SESSION['eleve_teste'] ?? 0);
+    foreach ($eleves as $e) {
+        if ($e['id'] === $choisi && $e['test']) {
+            return $e;
+        }
+    }
+    foreach ($eleves as $e) {
+        if ($e['test']) {
+            return $e;
+        }
+    }
+    return null;
+}
+
+/** Lien « Ouvrir » d'un atelier : passe par ./?p=essayer (session d'essai), avec le jeton de sécurité de la page. */
+function lien_essayer_atelier(string $app, string $atelier): string
+{
+    return './?' . http_build_query(['p' => 'essayer', 'app' => $app, 'atelier' => $atelier, 't' => $_SESSION['csrf'] ?? '']);
+}
+
+/** Libellé de l'infobulle du lien « Ouvrir ». */
+function titre_essayer_atelier(): string
+{
+    $e = eleve_essai_choisi();
+    return $e ? 'Ouvrir l’atelier comme l’élève ' . $e['classe'] . ' · ' . $e['etiquette'] . ' (session d’essai de 2 h : interrupteur Élève | Enseignant en haut ; élève test choisi dans Applications → Tester)'
+              : 'Ouvrir l’atelier dans l’application, en visiteur (créez des élèves test dans Applications → Tester pour l’ouvrir comme un élève)';
+}
+
+/**
+ * ./?p=essayer&app=…&atelier=…&t=… : ouvre l'atelier dans son application (copie de la Centrale d'abord), connecté comme
+ * l'élève de l'essai (session « essai » : interrupteur Élève | Enseignant), comme une carte d'atelier du portail
+ * (activite, centrale_atelier : « ← » et « Suivant » de la Centrale). Sans élève test : l'adresse sans connexion.
+ */
+function page_essayer_atelier(): never
+{
+    if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_GET['t'] ?? ''))) {
+        http_response_code(400);
+        exit('Lien périmé : rechargez la page des ateliers et recommencez.');
+    }
+    $app = (string) ($_GET['app'] ?? '');
+    $atelier = (string) ($_GET['atelier'] ?? '');
+    $r = null;
+    foreach (catalogue_ateliers($app) as $x) {
+        if ($x['atelier'] === $atelier) {
+            $r = $x;
+        }
+    }
+    $adresse = $r ? adresse_ouvrir_atelier($r) : '';
+    if ($adresse === '') {
+        flash('Atelier introuvable, ou application sans adresse.', 'err');
+        rediriger('./?p=ateliers');
+    }
+    $e = eleve_essai_choisi();
+    if (!$e) {
+        rediriger($adresse);   // pas d'élève test : en visiteur, comme avant
+    }
+    $morceaux = ['centrale=' . rawurlencode(jeton_session_eleve($e['id'])), 'retour=' . rawurlencode(url_base() . '/'),
+                 'centrale_atelier=' . rawurlencode($atelier)];
+    [$base, $hash] = array_pad(explode('#', $adresse, 2), 2, '');
+    rediriger($base . '#' . implode('&', array_merge($morceaux, $hash !== '' ? [$hash] : [])));
+}

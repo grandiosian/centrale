@@ -723,6 +723,7 @@ match ($page) {
     'eleve'    => page_eleve((int) ($_GET['id'] ?? 0)),
     'suivi'    => page_suivi(),
     'parcours' => page_parcours(),
+    'essayer'  => page_essayer_atelier(),   // « Ouvrir » un atelier en session d'essai (élève test, Élève | Enseignant) : lib/admin_tester.php
     'ateliers' => page_ateliers(),           // ateliers des applications (cartes, imports, disponibilité) : lib/admin_catalogue.php
     'applications' => page_applications(),   // applications du portail des élèves : lib/admin_suivi.php
     'calendrier' => page_calendrier_ateliers(),   // progression des ateliers d'une classe, avec leurs dates : lib/admin_progression.php

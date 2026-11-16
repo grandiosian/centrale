@@ -100,7 +100,7 @@ function page_inspecter_atelier(string $app, string $atelier): void
     <div class="titre-section">
         <h1><?= icone_app($app, $r['icone_app'] ?? '') ?> <?= h($r['titre']) ?></h1>
         <div class="titre-actions">
-            <?php if ($ouvrir !== ''): ?><a class="btn secondaire" href="<?= h($ouvrir) ?>" target="_blank" rel="noopener">Ouvrir dans l’application ↗</a><?php endif; ?>
+            <?php if ($ouvrir !== ''): ?><a class="btn secondaire" href="<?= h(lien_essayer_atelier($app, $atelier)) ?>" target="_blank" rel="noopener" title="<?= h(titre_essayer_atelier()) ?>">Ouvrir dans l’application ↗</a><?php endif; ?>
             <a class="btn secondaire" href="../passerelle/?doc=creer-atelier" target="_blank">Procédure de création</a>
         </div>
     </div>
