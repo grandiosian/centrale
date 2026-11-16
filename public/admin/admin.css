@@ -2794,5 +2794,5 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 }
 /* plans imprimés : nom de l'élève sous sa photo (dessinerImprimable) */
 .plan-imprime .imp-nom { font-family: system-ui, sans-serif; fill: #111; }
-.plan-imprime .imp-nom-fond { fill: rgba(255, 255, 255, .88); stroke: rgba(0, 0, 0, .18); stroke-width: .6; }
+.plan-imprime .imp-nom-fond { fill: rgba(255, 214, 74, .62); stroke: rgba(176, 132, 0, .55); stroke-width: .8; }   /* le jaune des noms du plan de classe */
 .plan-imprime .anneau-photo { stroke: #fff; stroke-width: 1.2px; }
