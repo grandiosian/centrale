@@ -348,9 +348,12 @@ function fiche_en_cours(int $classe_id, int $groupe_id): array
     $autre = $r && (string) $r['cible'] !== $cible;
     if ($r && !$autre) {
         $v = json_decode((string) $r['valeur'], true) ?: [];
-        $p = $v['mark'] ?? $v['last'] ?? null;   // fin du dernier cours (🏁), sinon dernière position vue
+        // dernier repère de fin de cours (📍) s'il est du dernier cours, sinon dernière position vue (même règle que FicheStudio)
+        $mk = $v['mark'] ?? null;
+        $ls = $v['last'] ?? null;
+        $p = $mk && (!$ls || empty($ls['session']) || ($mk['session'] ?? null) === $ls['session']) ? $mk : ($ls ?? $mk);
         $pos = is_array($p) ? ['feuille' => (string) ($p['page'] ?? ''), 'etape' => (int) ($p['shown'] ?? 0), 'total' => (int) ($p['total'] ?? 0),
-            'fin_cours' => isset($v['mark']), 'quand' => isset($p['at']) ? (int) round($p['at'] / 1000) : null] : null;
+            'fin_cours' => $p === $mk, 'quand' => isset($p['at']) ? (int) round($p['at'] / 1000) : null] : null;
     }
     return ['doc' => $doc, 'fichier' => $fichier, 'present' => is_file(DOSSIER_DATA . '/fichestudio/' . $fichier . '.fstudio'),
             'autre' => $autre ? (string) $r['cible'] : null, 'maj' => $r ? (int) $r['maj'] : 0, 'position' => $pos] + $res;
