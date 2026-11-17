@@ -452,7 +452,8 @@ function page_tableau_de_bord(): void
             }
         }
     }
-    $prochains = array_slice(array_values($prochains), 0, 8);
+    $prochains_tous = array_values($prochains);   // widget « Correction » : le prochain cours de la classe choisie
+    $prochains = array_slice($prochains_tous, 0, 8);
 
     // En cours maintenant : séance d'aujourd'hui dont l'heure courante est dans [début, fin[ (la plus proche de la fin d'abord)
     $en_cours_maintenant = array_values(array_filter($sem['seances'],
@@ -522,7 +523,7 @@ function page_tableau_de_bord(): void
         // en sont les dérivés (sous-menu) ; les classes sans plan ont une entrée à part
         $contextes = [];
         $avec_plan = [];
-        $nouveau_contexte = fn(array $l) => ['classe' => $l['classe'], 'college' => (string) ($l['college'] ?? ''), 'libelle' => $l['salle'],
+        $nouveau_contexte = fn(array $l) => ['classe_id' => (int) $l['classe_id'], 'groupe_id' => (int) ($l['groupe_id'] ?? 0), 'classe' => $l['classe'], 'college' => (string) ($l['college'] ?? ''), 'libelle' => $l['salle'],
             'pastille' => pastille_menu(['nom' => $l['classe'], 'etablissement_id' => $l['etablissement_id']], (string) ($l['groupe'] ?? '')),
             'donnees' => null, 'versions' => []];
         foreach (db()->query('SELECT DISTINCT p.classe_id, p.groupe_id, p.salle_id, c.nom AS classe, c.etablissement_id, s.nom AS salle, g.nom AS groupe, e.nom AS college
@@ -553,7 +554,7 @@ function page_tableau_de_bord(): void
         }
         foreach (db()->query('SELECT c.id, c.nom, c.etablissement_id, e.nom AS college FROM classes c LEFT JOIN etablissements e ON e.id = c.etablissement_id')->fetchAll() as $classe) {
             if (empty($avec_plan[(int) $classe['id']])) {
-                $contextes['sans-' . $classe['id']] = ['classe' => $classe['nom'], 'college' => (string) ($classe['college'] ?? ''), 'libelle' => 'sans plan de classe',
+                $contextes['sans-' . $classe['id']] = ['classe_id' => (int) $classe['id'], 'groupe_id' => 0, 'classe' => $classe['nom'], 'college' => (string) ($classe['college'] ?? ''), 'libelle' => 'sans plan de classe',
                     'pastille' => pastille_menu($classe), 'donnees' => null, 'versions' => []];
             }
         }
@@ -571,6 +572,25 @@ function page_tableau_de_bord(): void
                     }
                 }
             }
+        }
+        // widget « Correction » : atelier papier de chaque classe et son cours (en cours, sinon le prochain), pour suivre la classe choisie
+        foreach ($contextes as $k => $ctx) {
+            $cid = $ctx['classe_id'];
+            $gid = $ctx['groupe_id'];
+            $cours_ctx = null;
+            foreach (array_merge($en_cours_maintenant, $prochains_tous) as $sc) {
+                if ((int) $sc['classe_id'] === $cid && (!$gid || !(int) ($sc['groupe_id'] ?? 0) || (int) $sc['groupe_id'] === $gid) && $sc['statut'] !== 'annule') {
+                    $cours_ctx = $sc;
+                    break;
+                }
+            }
+            $fi_ctx = $ctx['donnees']['fiche'] ?? ($ctx['versions'][0]['donnees']['fiche'] ?? fiche_en_cours($cid, $gid));
+            unset($fi_ctx['documents']);
+            $contextes[$k]['correction'] = ['fiche' => $fi_ctx,
+                'seance' => $cours_ctx ? $cours_ctx['date'] . ' ' . $cours_ctx['debut'] : '',
+                'moment' => !$cours_ctx ? 'aucun cours prévu'
+                    : (in_array($cours_ctx, $en_cours_maintenant, true) ? 'cours en cours'
+                    : 'prochain cours, ' . mb_strtolower(quand_seance($cours_ctx['date'], $aujourdhui)) . ' à ' . $cours_ctx['debut'])];
         }
         $contextes = array_values($contextes);
         usort($contextes, fn($a, $b) => strcasecmp($a['college'], $b['college']) ?: strcasecmp($a['classe'], $b['classe']) ?: strcasecmp($a['pastille'], $b['pastille']));
@@ -864,7 +884,25 @@ function page_tableau_de_bord(): void
                         // sinon le prochain. Même lien que « Correction en cours → » de la feuille de séance (plan.js) ; même onglet :
                         // « Feuille d'appel » y ramène. ✎ : associer (ou changer) le document FicheStudio de cet atelier.
                         $cours_pres = $en_cours_maintenant[0] ?? $suivant;
-                        if ($cours_pres):
+                        if (!$cours_pres): ?>
+                            <div class="dash-presentation-groupe" id="dash-correction" hidden>
+                                <a class="dash-widget dash-presentation sans-fiche" href="appli.php/fichestudio/"><?= dash_icone('presentation') ?><span></span></a>
+                                <details class="dash-associer" hidden>
+                                    <summary class="dash-widget" aria-label="Choisir la version papier">✎</summary>
+                                    <form method="post" class="dash-associer-form">
+                                        <?= csrf() ?>
+                                        <input type="hidden" name="action" value="associer_fiche_atelier">
+                                        <input type="hidden" name="cle" value="">
+                                        <p><strong></strong><br><span class="discret"></span></p>
+                                        <select name="doc">
+                                            <option value="">— aucune —</option>
+                                            <?php foreach (documents_fichestudio() as $d): ?><option value="<?= h($d) ?>"><?= h($d) ?></option><?php endforeach; ?>
+                                        </select>
+                                        <button class="petit">Associer</button>
+                                    </form>
+                                </details>
+                            </div>
+                        <?php else:
                             $fi = fiche_en_cours((int) $cours_pres['classe_id'], (int) ($cours_pres['groupe_id'] ?? 0));
                             $at_pres = $fi['atelier'];
                             $seance_pres = $cours_pres['date'] . ' ' . $cours_pres['debut'];
@@ -887,17 +925,17 @@ function page_tableau_de_bord(): void
                                 $titre_pres = ($at_pres ? 'Atelier courant : ' . $at_pres['titre'] . ' (' . $source_pres . '), sans version papier associée : ✎ pour choisir son document FicheStudio. '
                                     : 'Aucun atelier courant pour cette classe. ') . 'Le bouton ouvre FicheStudio avec la classe choisie (' . $moment . ').';
                             endif; ?>
-                            <div class="dash-presentation-groupe">
+                            <div class="dash-presentation-groupe" id="dash-correction">
                                 <a class="dash-widget dash-presentation<?= $fi['doc'] ? '' : ' sans-fiche' ?>" href="<?= h($href_pres) ?>" title="<?= h($titre_pres) ?>"><?= dash_icone('presentation') ?>
                                     <span>Correction <?= $pastille_pres ?> <small><?= h(mb_strimwidth($libelle_pres, 0, 30, '…')) ?></small><?= $fi['doc'] ? '' : ' <em>sans fiche</em>' ?></span></a>
-                                <?php if ($at_pres): ?>
-                                    <details class="dash-associer">
-                                        <summary class="dash-widget" title="Version papier de « <?= h($at_pres['titre']) ?> » : choisir le document FicheStudio" aria-label="Choisir la version papier">✎</summary>
+                                <?php /* toujours là (caché sans atelier courant) : le choix d'une autre classe peut l'afficher */ ?>
+                                    <details class="dash-associer"<?= $at_pres ? '' : ' hidden' ?>>
+                                        <summary class="dash-widget" title="Version papier de « <?= h($at_pres['titre'] ?? '') ?> » : choisir le document FicheStudio" aria-label="Choisir la version papier">✎</summary>
                                         <form method="post" class="dash-associer-form">
                                             <?= csrf() ?>
                                             <input type="hidden" name="action" value="associer_fiche_atelier">
-                                            <input type="hidden" name="cle" value="<?= h($at_pres['cle']) ?>">
-                                            <p><strong><?= h($at_pres['titre']) ?></strong><br><span class="discret">atelier courant (<?= h($source_pres) ?>) · version papier :</span></p>
+                                            <input type="hidden" name="cle" value="<?= h($at_pres['cle'] ?? '') ?>">
+                                            <p><strong><?= h($at_pres['titre'] ?? '') ?></strong><br><span class="discret">atelier courant (<?= h($source_pres) ?>) · version papier :</span></p>
                                             <select name="doc">
                                                 <option value="">— aucune —</option>
                                                 <?php foreach ($fi['documents'] as $d): ?>
@@ -939,7 +977,6 @@ function page_tableau_de_bord(): void
                                         })();
                                         </script>
                                     </details>
-                                <?php endif; ?>
                             </div>
                         <?php endif; ?>
                         <?php /* Outil réservé à l'enseignant : copie hors racine web, servie par admin/appli.php à la session enseignant */ ?>
@@ -1495,9 +1532,57 @@ function page_tableau_de_bord(): void
                     }
                     montrerPlan(blocPour(valeur, cle, donnees));
                 }
+                /* Widget « Correction » : il suit la classe choisie (son atelier papier, son cours) ; « Voir une classe… » le remet
+                   sur le cours en cours (ou le prochain). Mêmes liens et textes que le rendu PHP. */
+                var corr = document.getElementById('dash-correction'), corrInitial = null;
+                function majCorrection(p) {
+                    if (!corr) return;
+                    var lien = corr.querySelector('a.dash-presentation'), ed = corr.querySelector('details.dash-associer');
+                    var f = ed && ed.querySelector('form');
+                    if (!corrInitial) corrInitial = { cache: corr.hidden, href: lien.getAttribute('href'), title: lien.title, span: lien.querySelector('span').innerHTML,
+                        sans: lien.classList.contains('sans-fiche'), ed: ed && { cache: ed.hidden, title: ed.querySelector('summary').title, cle: f.cle.value,
+                        p: f.querySelector('p').innerHTML, doc: f.doc.value } };
+                    var i = corrInitial;
+                    if (!p) {
+                        corr.hidden = i.cache; lien.setAttribute('href', i.href); lien.title = i.title; lien.querySelector('span').innerHTML = i.span;
+                        lien.classList.toggle('sans-fiche', i.sans);
+                        if (ed) { ed.hidden = i.ed.cache; ed.open = false; ed.querySelector('summary').title = i.ed.title; f.cle.value = i.ed.cle; f.querySelector('p').innerHTML = i.ed.p; f.doc.value = i.ed.doc; }
+                        return;
+                    }
+                    var c = p.correction || {}, fi = c.fiche || {}, at = fi.atelier, esc = function (t) { var d = document.createElement('span'); d.textContent = t; return d.innerHTML; };
+                    var source = at ? ({ calendrier: 'calendrier de la classe', parcours: 'parcours de la classe', plateforme: 'travail des élèves' }[at.source] || '') : '';
+                    var seance = c.seance ? '&seance=' + encodeURIComponent(c.seance) : '', moment = c.moment || '';
+                    var docN = fi.doc ? String(fi.doc).replace(/\.fstudio$/i, '') : '', libelle = at ? at.titre : (docN || 'choisir');
+                    if (libelle.length > 30) libelle = libelle.slice(0, 29) + '…';
+                    if (fi.doc) {
+                        var po = fi.position, ou = po ? po.feuille + (po.total ? ', étape ' + po.etape + ' / ' + po.total : po.etape ? ', étape ' + po.etape : '') : '';
+                        lien.setAttribute('href', 'appli.php/fichestudio/#presenter=' + encodeURIComponent(fi.fichier) + '&classe=' + encodeURIComponent(fi.cible) + '&lancer=correction' + seance);
+                        lien.title = 'Correction papier (' + p.classe + ', ' + moment + ')' + (at ? ' · atelier courant : ' + at.titre + ' (' + source + ')' : '')
+                            + ' · FicheStudio : ' + docN + (fi.devine ? ' (trouvé par son nom : ✎ pour confirmer ou changer)' : '')
+                            + (ou ? ' · reprise à ' + ou : ' · depuis le début') + (fi.present ? '' : ' — ⚠ document pas encore rangé sur la Centrale (☁ Enregistrer dans FicheStudio)')
+                            + ' · « Feuille d’appel » ramène ici';
+                    } else {
+                        lien.setAttribute('href', 'appli.php/fichestudio/#classe=' + encodeURIComponent(fi.cible || ('c' + p.classe_id)) + seance);
+                        lien.title = (at ? 'Atelier courant : ' + at.titre + ' (' + source + '), sans version papier associée : ✎ pour choisir son document FicheStudio. '
+                            : 'Aucun atelier courant pour cette classe. ') + 'Le bouton ouvre FicheStudio avec la classe ' + p.classe + ' (' + moment + ').';
+                    }
+                    lien.classList.toggle('sans-fiche', !fi.doc);
+                    lien.querySelector('span').innerHTML = 'Correction ' + p.pastille + ' <small>' + esc(libelle) + '</small>' + (fi.doc ? '' : ' <em>sans fiche</em>');
+                    corr.hidden = false;
+                    if (ed) {
+                        ed.hidden = !at; ed.open = false;
+                        if (at) {
+                            ed.querySelector('summary').title = 'Version papier de « ' + at.titre + ' » : choisir le document FicheStudio';
+                            f.cle.value = at.cle;
+                            f.querySelector('p').innerHTML = '<strong>' + esc(at.titre) + '</strong><br><span class="discret">atelier courant (' + esc(source) + ') · version papier :</span>';
+                            f.doc.value = fi.doc && fi.fichier && f.doc.querySelector('option[value="' + CSS.escape(fi.fichier) + '"]') ? fi.fichier : '';
+                        }
+                    }
+                }
                 function choisir(valeur) {
                     choixListe.hidden = true;
                     choixBouton.setAttribute('aria-expanded', 'false');
+                    majCorrection(valeur === '' ? null : plansClasses[valeur]);
                     if (valeur === '') {
                         valeurCourante = null;
                         choixCourant.textContent = libelleDefaut;
@@ -1512,6 +1597,7 @@ function page_tableau_de_bord(): void
                 }
                 window.dashPlansClasses = plansClasses;
                 window.dashChoisirClasse = choisir;
+                window.dashMajCorrection = majCorrection;
                 choixBouton.addEventListener('click', function () {
                     var ouvrir = choixListe.hidden;
                     choixListe.hidden = !ouvrir;
@@ -1592,10 +1678,13 @@ function page_tableau_de_bord(): void
                     if (!b) return;
                     document.querySelectorAll('.cj-cours[aria-pressed="true"]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
                     cjTitre.textContent = cjTitreDefaut;
-                    if (cjChoisi === b.dataset.cours) { cjChoisi = null; montrerPlan(planParDefaut()); return; }
+                    if (cjChoisi === b.dataset.cours) { cjChoisi = null; montrerPlan(planParDefaut()); if (window.dashMajCorrection) dashMajCorrection(null); return; }
                     cjChoisi = b.dataset.cours;
                     b.setAttribute('aria-pressed', 'true');
                     var c = coursJour[cjChoisi];
+                    // widget « Correction » : la classe de cette séance (son atelier papier), avec cette séance pour « Feuille d'appel »
+                    var ctx = (window.dashPlansClasses || []).filter(function (p) { return p.classe_id === c.classe_id && (!c.groupe_id || !p.groupe_id || p.groupe_id === c.groupe_id); })[0];
+                    if (ctx && window.dashMajCorrection) dashMajCorrection(Object.assign({}, ctx, { correction: Object.assign({}, ctx.correction, { seance: c.cle, moment: 'cours de ' + c.debut }) }));
                     if (c.plan) { montrerPlan(cjBloc(cjChoisi)); return; }
                     montrerPlan(null);
                     cjTitre.textContent = c.classe + ' (' + c.debut + '–' + c.fin + ') : pas de salle dans l’emploi du temps, donc pas de plan de classe.';
