@@ -3831,8 +3831,15 @@ window.PlanSalle = (function () {
    *  - photo : un même diamètre, centrée sur la place, juste assez petit pour que deux photos ne se touchent jamais ;
    *  - nom : une même taille de police, la plus grande pour laquelle chaque nom trouve une position libre (dessous, dessus,
    *    à droite ou à gauche de sa photo) sans toucher une photo ni un autre nom (deux voisins peuvent alterner dessus / dessous).
+   * cote : 'auto' (ci-dessus) ou 'exterieur' : chaque nom à côté de sa photo, du côté opposé à son voisin de table (table de
+   * deux : nom à gauche pour l'élève de gauche, à droite pour celui de droite), aligné sur la photo ; une place seule ou
+   * entourée des deux côtés garde le placement au mieux. Les photos rapetissent alors s'il le faut (meilleur compromis).
+   * rot : 0, -90 (bloc du nom tourné vers la gauche, lu de bas en haut) ou 90 (vers la droite, lu de haut en bas) ;
+   * le bloc tourné occupe alors une case haute et étroite (largeur et hauteur échangées pour les positions).
    */
-  function dessinerImprimable(svg, d, avecNumero, avecPhotos) {
+  function dessinerImprimable(svg, d, avecNumero, avecPhotos, cote, rot) {
+    cote = cote === 'exterieur' ? cote : 'auto';
+    rot = rot === -90 || rot === 90 ? rot : 0;
     var carte = d.placement || {};
     var vueSalle = Object.assign({}, (d.plan && d.plan.vue) || {}, { iso: false });
     var p = Object.assign({}, d.plan, { vue: vueSalle });
@@ -3852,18 +3859,28 @@ window.PlanSalle = (function () {
       return { e: e, x: (r.x + r.w / 2) * U, y: (r.y + r.h / 2) * U, l1: l1, l2: l2, visage: avecPhotos ? photo(d.classe, e.numero) : null };
     });
     if (!places.length) return;
+    if (cote === 'exterieur') {   // côté de chaque nom : à l'opposé du voisin de table (même rangée, tout près)
+      places.forEach(function (pl) {
+        var g = false, dr = false;
+        places.forEach(function (q) {
+          if (q === pl || Math.abs(q.y - pl.y) > 0.6 * U || Math.abs(q.x - pl.x) > 2.2 * U) return;
+          if (q.x < pl.x) g = true; else dr = true;
+        });
+        pl.cote = dr && !g ? 'gauche' : g && !dr ? 'droite' : null;
+      });
+    }
     var avecVisage = places.some(function (pl) { return pl.visage; });
     // 1. diamètre commun des photos : 94 % de la plus petite distance entre deux places (au plus 1,7 carreau)
     var dmin = Infinity;
     places.forEach(function (a, i) { places.forEach(function (b, j) { if (j > i) dmin = Math.min(dmin, Math.hypot(a.x - b.x, a.y - b.y)); }); });
-    var D = avecVisage ? Math.min(1.7 * U, (isFinite(dmin) ? dmin : U) * 0.94) : 0;
-    var R = D / 2, ECART = 2;   // espace (en px du plan) entre une photo et son nom, et entre deux noms
+    var Dmax = avecVisage ? Math.min(1.7 * U, (isFinite(dmin) ? dmin : U) * 0.94) : 0;
+    var D = Dmax, R = D / 2, ECART = 2;   // espace (en px du plan) entre une photo et son nom, et entre deux noms
     // 2. taille commune des noms : la plus grande pour laquelle chaque nom trouve une position libre
     var mesure = document.createElement('canvas').getContext('2d');
     function largeurTexte(t, gras, F) { mesure.font = (gras ? '700 ' : '400 ') + F + 'px system-ui, sans-serif'; return mesure.measureText(t).width; }
     var Lsalle = (tr.L + MARGE) * U, Hsalle = (tr.H + MARGE) * U, minX = -MARGE * U, minY = -MARGE * U;
     function chevauche(a, b) { return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h; }
-    var photos = places.map(function (pl) { return { x: pl.x - R, y: pl.y - R, w: D, h: D }; });
+    var photos = [];
     // les places les plus serrées choisissent d'abord
     var ordre = places.map(function (pl, i) {
       var v = 0;
@@ -3876,11 +3893,12 @@ window.PlanSalle = (function () {
         var i = ordre[k], pl = places[i];
         var w = Math.max(largeurTexte(pl.l1, true, F), pl.l2 ? largeurTexte(pl.l2, false, F) : 0) + 4;
         var h = (pl.l2 ? 2.15 : 1) * F * 1.05 + 2;
-        var cands = [
+        if (rot) { var t = w; w = h; h = t; }   // bloc tourné : haut et étroit
+        var droite = { x: pl.x + R + ECART, y: pl.y - h / 2 }, gauche = { x: pl.x - R - ECART - w, y: pl.y - h / 2 };
+        var cands = pl.cote === 'droite' ? [droite] : pl.cote === 'gauche' ? [gauche] : [
           { x: pl.x - w / 2, y: pl.y + R + ECART },            // dessous
           { x: pl.x - w / 2, y: pl.y - R - ECART - h },        // dessus
-          { x: pl.x + R + ECART, y: pl.y - h / 2 },            // à droite
-          { x: pl.x - R - ECART - w, y: pl.y - h / 2 },        // à gauche
+          droite, gauche,
         ];
         var ok = null;
         for (var c = 0; c < cands.length && !ok; c++) {
@@ -3888,7 +3906,7 @@ window.PlanSalle = (function () {
           if (z.x < minX || z.y < minY || z.x + z.w > Lsalle || z.y + z.h > Hsalle) continue;
           var libre = photos.every(function (ph, j) { return j === i || !chevauche(z, ph); })
             && poses.every(function (q) { return !chevauche({ x: z.x - ECART / 2, y: z.y - ECART / 2, w: z.w + ECART, h: z.h + ECART }, q); });
-          if (libre) ok = z;
+          if (libre) { ok = z; ok.cote = cands[c] === droite ? 'droite' : cands[c] === gauche ? 'gauche' : null; }
         }
         if (!ok) return null;
         poses.push(ok);
@@ -3896,16 +3914,35 @@ window.PlanSalle = (function () {
       }
       return res;
     }
-    var bas = 4, haut = 0.5 * U, meilleur = null, Fbon = bas;
-    for (var it = 0; it < 14; it++) {   // recherche par dichotomie de la plus grande taille qui marche
-      var F = (bas + haut) / 2, essai = disposer(F);
-      if (essai) { meilleur = essai; Fbon = F; bas = F; } else haut = F;
+    function chercher(Dv) {   // pour un diamètre de photo : la plus grande taille de nom qui marche (dichotomie)
+      D = Dv; R = D / 2;
+      photos = places.map(function (pl) { return { x: pl.x - R, y: pl.y - R, w: D, h: D }; });
+      var bas = 4, haut = 0.5 * U, res = null, Fok = bas;
+      for (var it = 0; it < 14; it++) {
+        var F = (bas + haut) / 2, essai = disposer(F);
+        if (essai) { res = essai; Fok = F; bas = F; } else haut = F;
+      }
+      return { D: Dv, F: Fok, poses: res };
     }
-    if (!meilleur) {   // même la plus petite taille ne passe pas partout : chaque nom sous sa photo, en petit
+    // noms vers l'extérieur : on essaie des photos plus petites et l'on garde le meilleur compromis
+    var choix = chercher(Dmax);
+    if (cote !== 'auto' && avecVisage) {
+      [0.9, 0.8, 0.7, 0.6, 0.5].forEach(function (f) {
+        var c = chercher(Dmax * f);
+        if (c.poses && (!choix.poses || c.F * c.D > choix.F * choix.D)) choix = c;
+      });
+    }
+    D = choix.D; R = D / 2;
+    var meilleur = choix.poses, Fbon = choix.F;
+    if (!meilleur) {   // même la plus petite taille ne passe pas partout : chaque nom à sa place habituelle, en petit
       Fbon = 4;
       meilleur = places.map(function (pl) {
         var w = Math.max(largeurTexte(pl.l1, true, Fbon), pl.l2 ? largeurTexte(pl.l2, false, Fbon) : 0) + 4;
-        return { x: pl.x - w / 2, y: pl.y + R + ECART, w: w, h: (pl.l2 ? 2.15 : 1) * Fbon * 1.05 + 2 };
+        var h = (pl.l2 ? 2.15 : 1) * Fbon * 1.05 + 2;
+        if (rot) { var t = w; w = h; h = t; }
+        return pl.cote === 'droite' ? { x: pl.x + R + ECART, y: pl.y - h / 2, w: w, h: h, cote: 'droite' }
+          : pl.cote === 'gauche' ? { x: pl.x - R - ECART - w, y: pl.y - h / 2, w: w, h: h, cote: 'gauche' }
+          : { x: pl.x - w / 2, y: pl.y + R + ECART, w: w, h: h };
       });
     }
     // 3. dessin : photos, puis noms (fond blanc)
@@ -3918,9 +3955,15 @@ window.PlanSalle = (function () {
       }
       var z = meilleur[i];
       el('rect', { class: 'imp-nom-fond', rx: 2.5, x: z.x.toFixed(2), y: z.y.toFixed(2), width: z.w.toFixed(2), height: z.h.toFixed(2) }, g);
-      var texte = el('text', { class: 'imp-nom', 'text-anchor': 'middle', 'font-size': Fbon.toFixed(2), y: (z.y + 1 + Fbon * 0.88).toFixed(2) }, g);
+      // nom à côté de la photo : aligné sur elle (calé à gauche quand il est à droite de la photo, et inversement)
+      // bloc tourné : le texte est écrit dans la case non tournée (même centre), puis tourné autour du centre ; centré
+      var cx = z.x + z.w / 2, cy = z.y + z.h / 2, bw = rot ? z.h : z.w, bh = rot ? z.w : z.h, bx = cx - bw / 2, by = cy - bh / 2;
+      var ancre = rot ? 'middle' : z.cote === 'droite' ? 'start' : z.cote === 'gauche' ? 'end' : 'middle';
+      var tx = ancre === 'start' ? bx + 2 : ancre === 'end' ? bx + bw - 2 : cx;
+      var texte = el('text', { class: 'imp-nom', 'text-anchor': ancre, 'font-size': Fbon.toFixed(2), y: (by + 1 + Fbon * 0.88).toFixed(2) }, g);
+      if (rot) texte.setAttribute('transform', 'rotate(' + rot + ' ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')');
       [pl.l1, pl.l2].filter(Boolean).forEach(function (t, k) {
-        var ts = el('tspan', { x: (z.x + z.w / 2).toFixed(2), dy: k ? (Fbon * 1.1).toFixed(2) : 0 }, texte);
+        var ts = el('tspan', { x: tx.toFixed(2), dy: k ? (Fbon * 1.1).toFixed(2) : 0 }, texte);
         ts.textContent = t;
         if (k === 0) ts.setAttribute('font-weight', '700');
       });
@@ -3934,13 +3977,15 @@ window.PlanSalle = (function () {
     document.body.classList.add('page-impression-plans');   // règles d'impression de cette page (admin.css)
     var cases = Array.prototype.slice.call(document.querySelectorAll('.impression-liste input[type=checkbox]'));
     var parFeuille = document.getElementById('imp-par-feuille'), orientation = document.getElementById('imp-orientation');
-    var numeros = document.getElementById('imp-numeros'), photos = document.getElementById('imp-photos');
+    var numeros = document.getElementById('imp-numeros'), photos = document.getElementById('imp-photos'), cote = document.getElementById('imp-cote'), sens = document.getElementById('imp-sens');
     try {   // derniers réglages de cet ordinateur
       var r = JSON.parse(localStorage.getItem('centrale-impression-plans')) || {};
       if (r.n) parFeuille.value = r.n;
       if (r.o) orientation.value = r.o;
       if (r.num === false) numeros.checked = false;
       if (r.ph === false && photos) photos.checked = false;
+      if (r.cote && cote) cote.value = r.cote;
+      if (r.sens && sens) sens.value = r.sens;
     } catch (e) { /* rien */ }
     // Mise en page qui donne les plus grands plans : pour chaque feuille, l'orientation (si « Automatique ») et la grille
     // (colonnes × rangées) qui maximisent l'échelle du plus petit plan de la feuille. Surface imprimable A4 avec 6 mm de marge.
@@ -3970,7 +4015,7 @@ window.PlanSalle = (function () {
 
     function rendre() {
       var n = +parFeuille.value, o = orientation.value;
-      try { localStorage.setItem('centrale-impression-plans', JSON.stringify({ n: n, o: o, num: numeros.checked, ph: !photos || photos.checked })); } catch (e) { /* rien */ }
+      try { localStorage.setItem('centrale-impression-plans', JSON.stringify({ n: n, o: o, num: numeros.checked, ph: !photos || photos.checked, cote: cote ? cote.value : 'auto', sens: sens ? sens.value : '0' })); } catch (e) { /* rien */ }
       zone.replaceChildren();
       var choisis = cases.filter(function (c) { return c.checked; }).map(function (c) { return plans[+c.value]; });
       document.getElementById('imp-compte').textContent = choisis.length + ' plan' + (choisis.length > 1 ? 's' : '') + ' coché' + (choisis.length > 1 ? 's' : '');
@@ -3995,12 +4040,12 @@ window.PlanSalle = (function () {
           svg.setAttribute('class', 'plan-svg plan-imprime');
           cas.append(tete, svg);
           feuille.appendChild(cas);
-          dessinerImprimable(svg, pl.donnees, numeros.checked, !photos || photos.checked);
+          dessinerImprimable(svg, pl.donnees, numeros.checked, !photos || photos.checked, cote ? cote.value : 'auto', sens ? +sens.value : 0);
         });
       }
     }
     cases.forEach(function (c) { c.addEventListener('change', rendre); });
-    [parFeuille, orientation, numeros, photos].forEach(function (x) { if (x) x.addEventListener('change', rendre); });
+    [parFeuille, orientation, numeros, photos, cote, sens].forEach(function (x) { if (x) x.addEventListener('change', rendre); });
     document.getElementById('imp-tout').addEventListener('click', function () { cases.forEach(function (c) { c.checked = true; }); rendre(); });
     document.getElementById('imp-rien').addEventListener('click', function () { cases.forEach(function (c) { c.checked = false; }); rendre(); });
     document.getElementById('imp-imprimer').addEventListener('click', function () { window.print(); });

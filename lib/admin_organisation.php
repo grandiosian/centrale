@@ -1580,6 +1580,17 @@ function page_imprimer_plans(): void
                         <option value="landscape">A4 paysage</option>
                         <option value="portrait">A4 portrait</option>
                     </select></label>
+                <label>Noms des élèves
+                    <select id="imp-cote">
+                        <option value="auto" selected>Placés au mieux (dessous, dessus ou à côté)</option>
+                        <option value="exterieur">À côté des photos, vers l'extérieur des tables (gauche / droite)</option>
+                    </select></label>
+                <label>Sens des noms
+                    <select id="imp-sens">
+                        <option value="0" selected>Horizontal</option>
+                        <option value="-90">Tourné de 90° vers la gauche (lu de bas en haut)</option>
+                        <option value="90">Tourné de 90° vers la droite (lu de haut en bas)</option>
+                    </select></label>
                 <label class="case"><input type="checkbox" id="imp-photos" checked> Photos des élèves</label>
                 <label class="case"><input type="checkbox" id="imp-numeros" checked> Numéros des élèves avec le nom</label>
                 <button type="button" id="imp-imprimer">🖨 Imprimer</button>
