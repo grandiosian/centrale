@@ -3835,7 +3835,8 @@ window.PlanSalle = (function () {
    * deux : nom à gauche pour l'élève de gauche, à droite pour celui de droite), aligné sur la photo ; une place seule ou
    * entourée des deux côtés garde le placement au mieux. Les photos rapetissent alors s'il le faut (meilleur compromis).
    * rot : 0, -90 (bloc du nom tourné vers la gauche, lu de bas en haut) ou 90 (vers la droite, lu de haut en bas) ;
-   * le bloc tourné occupe alors une case haute et étroite (largeur et hauteur échangées pour les positions).
+   * le bloc tourné occupe alors une case haute et étroite (largeur et hauteur échangées pour les positions) ; les photos
+   * tournent du même angle.
    */
   function dessinerImprimable(svg, d, avecNumero, avecPhotos, cote, rot) {
     cote = cote === 'exterieur' ? cote : 'auto';
@@ -3951,7 +3952,8 @@ window.PlanSalle = (function () {
       var g = el('g', { class: 'case-eleve' }, calque);
       if (pl.visage && D > 0) {   // photoPlace dessine un rond de 92 % du cadre : le cadre est agrandi d'autant
         var Dc = D / 0.92;
-        photoPlace(el('g', { transform: 'translate(' + (pl.x - Dc / 2) + ',' + (pl.y - Dc / 2) + ')' }, g), Dc, Dc, pl.visage);
+        // même rotation que le nom (sens des noms), autour du centre de la photo
+        photoPlace(el('g', { transform: 'translate(' + (pl.x - Dc / 2) + ',' + (pl.y - Dc / 2) + ')' + (rot ? ' rotate(' + rot + ' ' + (Dc / 2).toFixed(2) + ' ' + (Dc / 2).toFixed(2) + ')' : '') }, g), Dc, Dc, pl.visage);
       }
       var z = meilleur[i];
       el('rect', { class: 'imp-nom-fond', rx: 2.5, x: z.x.toFixed(2), y: z.y.toFixed(2), width: z.w.toFixed(2), height: z.h.toFixed(2) }, g);
