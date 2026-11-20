@@ -1521,6 +1521,43 @@ function plans_imprimables(): array
                       'pastille' => $pastille, 'libelle' => 'variante « ' . $v['nom'] . ' »', 'nb' => count($carte), 'donnees' => ['placement' => (object) $carte] + $d];
         }
     }
+    // Groupes (GR1, GR2…) sans plan à eux dans une salle : le plan de la classe entière (et ses variantes), réduit aux élèves
+    // du groupe. Sans cela, un groupe n'était proposé que si on avait placé ses élèves à part.
+    $propres = array_flip(array_column($res, 'cle'));
+    $membres = $pdo->prepare('SELECT id FROM eleves WHERE classe_id = ? AND groupe_id = ?');
+    $derives = [];
+    foreach ($res as $pl) {
+        [$cid, $gid, $sid] = array_map('intval', explode('-', $pl['cle']));
+        if ($gid) {
+            continue;
+        }
+        foreach (groupes_de($cid) as $g) {
+            if (isset($propres[$cid . '-' . $g['id'] . '-' . $sid])) {
+                continue;   // le groupe a son propre plan dans cette salle : déjà proposé
+            }
+            $membres->execute([$cid, $g['id']]);
+            $ids = array_flip(array_map('intval', $membres->fetchAll(PDO::FETCH_COLUMN)));
+            $carte = array_filter((array) $pl['donnees']['placement'], fn($eid) => isset($ids[(int) $eid]));
+            if (!$carte) {
+                continue;
+            }
+            $d = $pl['donnees'];
+            $d['placement'] = (object) $carte;
+            $d['eleves'] = array_values(array_filter($d['eleves'], fn($e) => isset($ids[(int) $e['id']])));
+            $derives[] = ['cle' => $pl['cle'] . '-g' . $g['id'], 'etablissement' => $pl['etablissement'],
+                          'classe' => preg_replace('/ · .*$/', '', $pl['classe']) . ' · ' . $g['nom'], 'salle' => $pl['salle'],
+                          'pastille' => pastille_classe($cid, (string) $g['nom']),
+                          'libelle' => ($pl['libelle'] === 'plan en cours' ? 'plan de la classe' : $pl['libelle'] . ' de la classe') . ', élèves du groupe',
+                          'nb' => count($carte), 'donnees' => $d];
+        }
+    }
+    if ($derives) {
+        // rangés avec les plans du même groupe : par établissement, puis classe (« 5A » avant « 5A · GR1 »), ordre d'origine sinon
+        $res = array_merge($res, $derives);
+        $etab = array_flip(array_unique(array_column($res, 'etablissement')));   // établissements dans l'ordre d'origine
+        $tri = array_map(fn($i, $pl) => [$etab[$pl['etablissement']], $pl['classe'], $i], array_keys($res), $res);
+        array_multisort($tri, $res);
+    }
     return $res;
 }
 
