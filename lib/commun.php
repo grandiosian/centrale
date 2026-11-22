@@ -502,6 +502,7 @@ function creer_tables(PDO $pdo): void
     creer_tables_catalogue($pdo);     // ateliers importés depuis les applications
     creer_tables_progression($pdo);   // progression des ateliers par classe (dates, étapes une à une)
     creer_tables_hors_ligne($pdo);    // ateliers hors ligne (portables) : fichiers préparés, rendus ; validation de l'enseignant
+    creer_tables_evaluations_ateliers($pdo);   // évaluation d'un atelier : fermée par défaut, ouverte par l'enseignant
     // Mesures envoyées avec la progression (monitoring) : cumuls de l'application, remplacés à chaque envoi
     foreach (['temps_actif', 'essais', 'questions', 'premier_coup', 'revelees', 'delai_median'] as $c) {
         ajouter_colonne($pdo, 'progression', $c, 'INTEGER');
@@ -1910,4 +1911,5 @@ require_once __DIR__ . '/catalogue_ateliers.php';
 require_once __DIR__ . '/ateliers_centrale.php';   // ateliers transférés par la Centrale (dossier ateliers/<app>/)
 require_once __DIR__ . '/progression.php';    // progression des ateliers d'une classe
 require_once __DIR__ . '/hors_ligne.php';     // travail hors ligne et écriture commune de la progression
+require_once __DIR__ . '/evaluations_ateliers.php';   // évaluation des ateliers ouverte par l'enseignant (tout de suite ou à une date)
 require_once __DIR__ . '/organisation.php';   // emploi du temps : utilisé par l'activation calendaire des ateliers (portail)

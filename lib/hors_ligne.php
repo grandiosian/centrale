@@ -295,7 +295,7 @@ function ateliers_transferes_hl(string $app, array $ids): array
         if ($j === null) {
             throw new RuntimeException($err);
         }
-        $res[$id] = $j;
+        $res[$id] = atelier_sans_evaluation($j);   // jamais l'évaluation dans un fichier emporté
     }
     return $res;
 }

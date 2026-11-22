@@ -23,7 +23,7 @@ const TAILLE_MAX_ATELIER_CENTRALE = 16 * 1024 * 1024;
 const DEPOT_ATELIERS_CENTRALE = 'grandiosian/centrale';
 /** Types de champs notés de TechnoStudio (descripteur : graded), si son centrale.json n'est pas encore enregistré. */
 const TYPES_NOTES_TECHNOSTUDIO = ['qcm', 'vraifaux', 'cloze', 'numeric', 'match', 'order', 'sort', 'table', 'boxes', 'chain', 'label',
-    'bits', 'graph', 'draw', 'mindmap', 'procedure', 'questions', 'report', 'circuit', 'blocks', 'mblock', 'robot', 'code'];
+    'bits', 'graph', 'draw', 'barre', 'mindmap', 'procedure', 'questions', 'report', 'circuit', 'blocks', 'mblock', 'robot', 'code'];
 
 function id_atelier_centrale_valide(string $id): bool
 {

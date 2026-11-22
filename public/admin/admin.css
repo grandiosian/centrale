@@ -2836,3 +2836,4 @@ body.mode-echange .plan-svg .place-cliquable { cursor: alias; }
 .hl-import { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 8px 0 12px; }
 .hl-suivi { margin-top: 14px; } .hl-suivi summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 table.hl-detail td { padding: 2px 8px; font-size: .88rem; }
+.eval-atelier { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--bord, #d6dbe6); font-size: .9rem; }

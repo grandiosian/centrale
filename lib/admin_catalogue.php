@@ -96,6 +96,28 @@ function action_catalogue(string $action): bool
             flash('Période retirée.');
             rediriger($retour . ($r ? '&app=' . rawurlencode($r['app']) . '#dispo-' . rawurlencode($r['atelier']) : ''));
 
+        case 'ouvrir_evaluation_atelier':   // évaluation de l'atelier : fermée par défaut
+            $app = normaliser_app((string) ($_POST['app'] ?? ''));
+            $atelier = (string) ($_POST['atelier'] ?? '');
+            $date = trim((string) ($_POST['ouvre_le'] ?? ''));
+            $cid = (int) ($_POST['classe_id'] ?? 0);
+            if ($date !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                flash('Date non reconnue.', 'err');
+            } else {
+                db()->prepare('INSERT INTO ouverture_evaluations (app, atelier, classe_id, ouvre_le, cree_le) VALUES (?, ?, ?, ?, ?)')
+                    ->execute([$app, $atelier, $cid ?: null, $date, time()]);
+                flash($date === '' ? 'Évaluation ouverte.' : 'Évaluation programmée.');
+            }
+            rediriger($retour . '&app=' . rawurlencode($app) . '#dispo-' . rawurlencode($atelier));
+
+        case 'fermer_evaluation_atelier':
+            $st = db()->prepare('SELECT app, atelier FROM ouverture_evaluations WHERE id = ?');
+            $st->execute([(int) ($_POST['ouverture_id'] ?? 0)]);
+            $r = $st->fetch();
+            db()->prepare('DELETE FROM ouverture_evaluations WHERE id = ?')->execute([(int) ($_POST['ouverture_id'] ?? 0)]);
+            flash('Ouverture de l’évaluation retirée.');
+            rediriger($retour . ($r ? '&app=' . rawurlencode($r['app']) . '#dispo-' . rawurlencode($r['atelier']) : ''));
+
         case 'supprimer_atelier_catalogue':
             $app = normaliser_app((string) ($_POST['app'] ?? ''));
             db()->prepare('DELETE FROM catalogue_ateliers WHERE app = ? AND atelier = ?')->execute([$app, (string) ($_POST['atelier'] ?? '')]);
@@ -209,6 +231,7 @@ function corps_catalogue_ateliers(): void
         $derniers[$i['app']] = $i;
     }
     $periodes = periodes_ateliers();
+    $ouv_evals = ouvertures_evaluations();
     $classes = db()->query('SELECT id, nom FROM classes ORDER BY nom')->fetchAll(PDO::FETCH_KEY_PAIR);
     $niveaux = array_values(array_unique(array_filter(array_column($tous, 'niveau'))));
     usort($niveaux, fn($a, $b) => strcmp($b, $a));
@@ -308,7 +331,29 @@ function corps_catalogue_ateliers(): void
                                     <label>Au<input type="date" name="fin"></label>
                                     <button class="petit">Ajouter</button>
                                 </form>
-                            </details></td>
+                            </details>
+                            <?php if (array_filter($r['activites'], fn($x) => est_activite_evaluation((string) $x['id']))):
+                                $oe = $ouv_evals[$r['app']][$r['atelier']] ?? []; $ee = etat_evaluation(array_filter($oe, fn($x) => $x['classe_id'] === null), null); ?>
+                                <div class="eval-atelier"><strong>Évaluation</strong>
+                                    <?php if (!$oe): ?><span class="pastille-dispo ferme" title="Les élèves ne voient pas l’évaluation tant que vous ne l’ouvrez pas">Fermée</span>
+                                    <?php elseif ($ee['ouverte']): ?><span class="pastille-dispo ouvert" title="Ouverte pour toutes les classes">Ouverte</span>
+                                    <?php else: ?><span class="discret">selon la classe ou la date</span><?php endif; ?>
+                                    <?php if ($oe): ?><ul class="liste-periodes"><?php foreach ($oe as $x): ?>
+                                        <li><?= h(texte_ouverture_evaluation($x)) ?> <?= bouton('fermer_evaluation_atelier', '✕', ['ouverture_id' => (int) $x['id']], 'lien', '', 'Retirer cette ouverture') ?></li>
+                                    <?php endforeach; ?></ul><?php endif; ?>
+                                    <details class="ajout-periode"><summary>+ Ouvrir l’évaluation</summary>
+                                        <form method="post" class="form-periode">
+                                            <?= csrf() ?>
+                                            <input type="hidden" name="action" value="ouvrir_evaluation_atelier">
+                                            <input type="hidden" name="app" value="<?= h($r['app']) ?>">
+                                            <input type="hidden" name="atelier" value="<?= h($r['atelier']) ?>">
+                                            <label>Classe<select name="classe_id"><option value="0">Toutes les classes</option><?php foreach ($classes as $cid => $cnom): ?><option value="<?= (int) $cid ?>"><?= h($cnom) ?></option><?php endforeach; ?></select></label>
+                                            <label>À partir du<input type="date" name="ouvre_le"><span class="aide">vide : tout de suite</span></label>
+                                            <button class="petit">Ouvrir</button>
+                                        </form>
+                                    </details>
+                                </div>
+                            <?php endif; ?></td>
                         <td class="discret"><?= h(SOURCES_CATALOGUE[$r['source']] ?? $r['source']) ?><?= $r['version'] !== '' ? '<br>v' . h($r['version']) : '' ?>
                             <?php if ($r['source'] === 'fichier'): ?><br><span class="alerte" title="Il ne restera disponible sans serveur qu’une fois publié avec l’application">pas encore dans l’application</span><?php endif; ?></td>
                         <td class="actions">

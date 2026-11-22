@@ -48,6 +48,7 @@ $filtrer = portail_seulement_proposees() && !$vue_prof;
 $cid = (int) $eleve['classe_id'];
 $gid = isset($eleve['groupe_id']) ? (int) $eleve['groupe_id'] : null;
 $dispos = disponibilites_classe($cid);
+$evaluations = evaluations_classe($cid);   // [app][atelier] => évaluation ouverte ? (fermée sans ouverture)
 $avec_progression = isset($dispos['*progression']);
 $rang = [];   // atelier du catalogue => place dans la progression
 foreach ($avec_progression ? progression_classe($cid) : [] as $i => $r) {
@@ -82,6 +83,9 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
     $fermees = 0;
     foreach ($cat as $id => $c) {
         $propose = isset($proposees[$app][$id]);
+        if (!$vue_prof && est_activite_evaluation((string) $id) && empty($evaluations[$app][strstr((string) $id, '/', true)]['ouverte'])) {
+            continue;   // évaluation pas encore ouverte par l'enseignant : pas montrée
+        }
         if ($filtrer && !$avec_progression && !$propose && !isset($lignes[$id])) {
             continue;
         }
@@ -164,6 +168,8 @@ foreach (ateliers_pour_classe($eleve['classe']) as $a) {   // tous les ateliers 
         'total'       => count(array_filter($activites, fn($x) => $x['disponible'] !== false || !empty($x['verrou']))),
         'maj'         => $global['maj'],
         'activites'   => $activites,
+        // ateliers dont l'évaluation est ouverte (TechnoStudio montre alors ses feuilles d'évaluation)
+        'evaluations_ouvertes' => array_keys(array_filter($evaluations[$app] ?? [], fn($e) => $e['ouverte'])),
         'disponible'    => $disponible,
         'disponible_le' => $disponible_le,   // horodatage d'ouverture si « bientôt », sinon null
     ];
