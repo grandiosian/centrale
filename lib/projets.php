@@ -150,6 +150,14 @@ function etapes_projet(array $parcours, array $proprio, ?array $prog_membres = n
         if ($sorties && ($etat['texte'] === '' || $et['activite'] === '')) {
             $etat['texte'] = count($deposees) . '/' . count($sorties) . ' fichier' . (count($sorties) > 1 ? 's' : '');
         }
+        // Étape validée par l'enseignant (Suivi, projets) : elle compte comme terminée
+        if (isset($validations[$i])) {
+            $etat['prof'] = $validations[$i];
+            if ($etat['statut'] !== 'termine') {
+                $etat['statut'] = 'termine';
+                $etat['taux'] = 1.0;
+            }
+        }
         $ouverte = match ($parcours['deblocage']) {
             'ordre'      => $i === 0 || $res[$i - 1]['statut'] === 'termine',
             'validation' => $i === 0 || isset($validations[$i - 1]),

@@ -501,6 +501,7 @@ function creer_tables(PDO $pdo): void
     creer_tables_competences($pdo);   // évaluations des compétences, compétences des étapes de parcours
     creer_tables_catalogue($pdo);     // ateliers importés depuis les applications
     creer_tables_progression($pdo);   // progression des ateliers par classe (dates, étapes une à une)
+    creer_tables_hors_ligne($pdo);    // ateliers hors ligne (portables) : fichiers préparés, rendus ; validation de l'enseignant
     // Mesures envoyées avec la progression (monitoring) : cumuls de l'application, remplacés à chaque envoi
     foreach (['temps_actif', 'essais', 'questions', 'premier_coup', 'revelees', 'delai_median'] as $c) {
         ajouter_colonne($pdo, 'progression', $c, 'INTEGER');
@@ -935,7 +936,8 @@ function etat_etape(string $activite, array $lignes, array $catalogue): array
             $texte = rtrim(rtrim(number_format((float) $p['score'], 1, ',', ''), '0'), ',') . '/' . rtrim(rtrim(number_format((float) $p['score_max'], 1, ',', ''), '0'), ',');
         }
         return ['statut' => $p['statut'] === 'termine' ? 'termine' : 'commence', 'taux' => taux_ligne($p),
-                'texte' => $texte, 'maj' => (int) $p['maj']];
+                'texte' => $texte, 'maj' => (int) $p['maj'],
+                'prof' => isset($p['valide_prof']) ? (int) $p['valide_prof'] : null, 'hl' => isset($p['hors_ligne']) ? (int) $p['hors_ligne'] : null];
     }
     // Tout l'atelier : moyenne sur le catalogue (ou sur ce qui a été commencé si rien n'est déclaré)
     $ids = $catalogue ? array_keys($catalogue) : array_keys($lignes);
@@ -953,8 +955,10 @@ function etat_etape(string $activite, array $lignes, array $catalogue): array
         $maj = max($maj, (int) ($lignes[$id]['maj'] ?? 0));
     }
     $taux = $somme / count($ids);
+    $prof = max(array_map(fn($id) => (int) ($lignes[$id]['valide_prof'] ?? 0), $ids)) ?: null;
+    $hl = max(array_map(fn($id) => (int) ($lignes[$id]['hors_ligne'] ?? 0), $ids)) ?: null;
     return ['statut' => $finies === count($ids) ? 'termine' : 'commence', 'taux' => $taux,
-            'texte' => $finies . '/' . count($ids), 'maj' => $maj ?: null];
+            'texte' => $finies . '/' . count($ids), 'maj' => $maj ?: null, 'prof' => $prof, 'hl' => $hl];
 }
 
 /** Progression d'un ensemble d'élèves : [eleve_id][app][activite] => ligne */
@@ -1905,4 +1909,5 @@ require_once __DIR__ . '/competences.php';
 require_once __DIR__ . '/catalogue_ateliers.php';
 require_once __DIR__ . '/ateliers_centrale.php';   // ateliers transférés par la Centrale (dossier ateliers/<app>/)
 require_once __DIR__ . '/progression.php';    // progression des ateliers d'une classe
+require_once __DIR__ . '/hors_ligne.php';     // travail hors ligne et écriture commune de la progression
 require_once __DIR__ . '/organisation.php';   // emploi du temps : utilisé par l'activation calendaire des ateliers (portail)

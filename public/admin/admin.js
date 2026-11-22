@@ -2427,3 +2427,63 @@
     });
   });
 })();
+
+/* Suivi : l'enseignant valide une étape (ou annule sa validation) en cliquant sur une case — lib/admin_hors_ligne.php,
+   action valider_activite_prof. Utile quand l'élève a travaillé sur papier, hors ligne ou avec un autre identifiant. */
+(function () {
+  'use strict';
+  var table = document.getElementById('table-suivi');
+  var form = document.getElementById('form-valider-suivi');
+  if (!table || !form) return;
+  var menu = null;
+  function fermer() { if (menu) { menu.remove(); menu = null; } }
+  function envoyer(td, annuler) {
+    ['eleve', 'app', 'activite', 'total', 'titre', 'parcours', 'ordre'].forEach(function (k) { form.elements[k].value = td.dataset[k] || ''; });
+    form.elements.annuler.value = annuler ? '1' : '';
+    form.submit();
+  }
+  table.addEventListener('click', function (ev) {
+    var td = ev.target.closest('td.cellule[data-eleve]');
+    if (!td) return;
+    ev.stopPropagation();
+    fermer();
+    var ligne = td.closest('tr');
+    var qui = ligne ? (ligne.querySelector('.numero') || {}).textContent : '';
+    var nom = ligne && ligne.querySelector('.fixe2') ? ligne.querySelector('.fixe2').textContent.trim() : '';
+    var statut = { termine: 'terminée', commence: 'en cours', a_faire: 'pas commencée' }[td.dataset.statut] || '';
+    menu = document.createElement('div');
+    menu.className = 'menu-valider';
+    menu.setAttribute('role', 'dialog');
+    var t = document.createElement('p'); t.className = 'mv-titre';
+    t.textContent = 'n° ' + (qui || '').trim() + (nom && nom !== '—' ? ' — ' + nom : '');
+    var s = document.createElement('p'); s.className = 'mv-sous';
+    s.textContent = td.dataset.titre + (td.dataset.parcours ? ' (étape ' + (+td.dataset.ordre + 1) + ' du parcours)' : '') + ' · ' + statut + (td.dataset.prof ? ' · validée par vous' : '');
+    menu.append(t, s);
+    var actions = document.createElement('div'); actions.className = 'mv-actions';
+    if (td.dataset.statut !== 'termine' || (td.dataset.parcours && !td.dataset.prof)) {
+      var v = document.createElement('button'); v.type = 'button'; v.className = 'petit';
+      v.textContent = '✓ Valider l’étape';
+      v.onclick = function () { envoyer(td, false); };
+      actions.append(v);
+    }
+    if (td.dataset.prof) {
+      var a = document.createElement('button'); a.type = 'button'; a.className = 'petit secondaire';
+      a.textContent = 'Annuler ma validation';
+      a.onclick = function () { envoyer(td, true); };
+      actions.append(a);
+    }
+    if (!actions.children.length) {
+      var r = document.createElement('span'); r.className = 'discret'; r.textContent = 'Déjà terminée par l’élève.'; actions.append(r);
+    }
+    var f = document.createElement('button'); f.type = 'button'; f.className = 'petit secondaire'; f.textContent = 'Fermer'; f.onclick = fermer;
+    actions.append(f);
+    menu.append(actions);
+    document.body.append(menu);
+    var b = td.getBoundingClientRect();
+    menu.style.top = (window.scrollY + b.bottom + 4) + 'px';
+    menu.style.left = Math.max(8, Math.min(window.scrollX + b.left, window.scrollX + document.documentElement.clientWidth - menu.offsetWidth - 8)) + 'px';
+    var premier = menu.querySelector('button'); if (premier) premier.focus();
+  });
+  document.addEventListener('click', function (ev) { if (menu && !menu.contains(ev.target)) fermer(); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fermer(); });
+})();

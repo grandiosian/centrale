@@ -576,7 +576,8 @@ function section_mesures_classe(array $colonnes, array $eleves, array $prog): vo
     <?php
 }
 
-function cellule_suivi(array $etat, string $titre): string
+/** $cible : ['eleve', 'app', 'activite', 'total'] pour que l'enseignant puisse valider l'étape (clic, admin.js). */
+function cellule_suivi(array $etat, string $titre, array $cible = []): string
 {
     $classes = ['a_faire' => 'st-a-faire', 'commence' => 'st-commence', 'termine' => 'st-termine'];
     $contenu = match ($etat['statut']) {
@@ -587,8 +588,25 @@ function cellule_suivi(array $etat, string $titre): string
     $info = $titre . ' — ' . ['a_faire' => 'pas commencé', 'commence' => 'en cours', 'termine' => 'terminé'][$etat['statut']]
         . ($etat['texte'] !== '' ? ' (' . $etat['texte'] . ')' : '')
         . ($etat['maj'] ? ' · ' . date('d/m H:i', $etat['maj']) : '');
+    $marques = '';
+    if (!empty($etat['prof'])) {
+        $info .= ' · validé par vous le ' . date('d/m', (int) $etat['prof']);
+        $marques .= ' valide-prof';
+    }
+    if (!empty($etat['hl'])) {
+        $info .= ' · travail hors ligne importé le ' . date('d/m', (int) $etat['hl']);
+        $marques .= ' hors-ligne';
+    }
+    $data = '';
+    if ($cible) {
+        $info .= ' — clic : valider';
+        $data = ' data-eleve="' . (int) $cible['eleve'] . '" data-app="' . h($cible['app']) . '" data-activite="' . h($cible['activite']) . '"'
+            . ' data-total="' . h((string) ($cible['total'] ?? '')) . '" data-titre="' . h($titre) . '" data-statut="' . h($etat['statut']) . '"'
+            . (!empty($etat['prof']) ? ' data-prof="1"' : '')
+            . (isset($cible['parcours']) ? ' data-parcours="' . (int) $cible['parcours'] . '" data-ordre="' . (int) $cible['ordre'] . '"' : '');
+    }
     $pct = (int) round($etat['taux'] * 100);
-    return '<td class="cellule ' . $classes[$etat['statut']] . '" title="' . h($info) . '" data-taux="' . $pct . '"'
+    return '<td class="cellule ' . $classes[$etat['statut']] . $marques . '" title="' . h($info) . '" data-taux="' . $pct . '"' . $data
         . ($etat['statut'] === 'commence' ? ' style="--taux:' . $pct . '%"' : '') . '>' . $contenu . '</td>';
 }
 
@@ -729,6 +747,7 @@ function page_suivi(): void
                 <p class="legende"><span class="pastille st-termine">✓</span> terminé
                     <span class="pastille st-commence" style="--taux:50%">3/5</span> en cours
                     <span class="pastille st-a-faire"></span> pas commencé</p>
+                <a class="btn secondaire" href="./?p=hors_ligne&classe=<?= (int) $classe_id ?>">Travail hors ligne</a>
                 <button type="button" class="secondaire" id="exporter-suivi"
                         data-fichier="suivi_<?= h(prefixe_classe($classe['nom'])) ?>_<?= h(preg_replace('/[^a-z0-9-]/i', '-', $vue)) ?>">Exporter (CSV)</button>
             </div>
@@ -764,7 +783,11 @@ function page_suivi(): void
                             if ($etat['statut'] === 'termine') {
                                 $termines_col[$i]++;
                             }
-                            echo cellule_suivi($etat, $c['titre']);
+                            $tot = $c['activite'] !== '' ? ($catalogue[$c['app']][$c['activite']]['total'] ?? null) : null;
+                            echo cellule_suivi($etat, $c['titre'], $c['activite'] !== '' || isset($catalogue[$c['app']])
+                                || $parcours_vu
+                                ? ['eleve' => (int) $e['id'], 'app' => $c['app'], 'activite' => $c['activite'], 'total' => $tot]
+                                    + ($parcours_vu ? ['parcours' => (int) $parcours_vu['id'], 'ordre' => $i] : []) : []);
                         endforeach;
                         $pct = (int) round(100 * $somme / count($colonnes));
                         $total_classe += $pct; ?>
@@ -781,6 +804,20 @@ function page_suivi(): void
                 </tr>
                 </tfoot>
             </table></div>
+            <p class="aide">Cliquez sur une case pour <strong>valider l’étape</strong> vous-même (travail fait sur papier, avec un autre identifiant…) :
+                elle compte comme terminée et l’étape suivante s’ouvre. <span class="pastille st-termine valide-prof">✓</span> validée par vous
+                · <span class="pastille st-termine hors-ligne">✓</span> travail hors ligne importé.</p>
+            <form method="post" id="form-valider-suivi" hidden>
+                <?= csrf() ?>
+                <input type="hidden" name="action" value="valider_activite_prof">
+                <input type="hidden" name="eleve"><input type="hidden" name="app"><input type="hidden" name="activite">
+                <input type="hidden" name="total"><input type="hidden" name="titre"><input type="hidden" name="annuler">
+                <input type="hidden" name="parcours"><input type="hidden" name="ordre">
+                <input type="hidden" name="retour" value="<?= h('./?' . http_build_query(array_intersect_key($_GET, array_flip(['p', 'classe', 'groupe', 'vue'])))) ?>">
+            </form>
+            <details class="hl-suivi"><summary>Importer un rendu hors ligne (fichier .tvrendu d’un élève)</summary>
+                <?php formulaire_import_rendus('suivi'); ?>
+            </details>
             <?php section_mesures_classe($colonnes, $eleves, $prog); ?>
             <?php if (str_starts_with($vue, 'app:') && isset($catalogue[substr($vue, 4)])): ?>
                 <p class="discret" style="margin-top:16px">Liste des activités envoyée par l'application <code><?= h(substr($vue, 4)) ?></code>.

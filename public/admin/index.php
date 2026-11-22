@@ -24,6 +24,7 @@ require __DIR__ . '/../../lib/admin_competences.php';
 require __DIR__ . '/../../lib/admin_catalogue.php';
 require __DIR__ . '/../../lib/admin_inspecter.php';
 require __DIR__ . '/../../lib/admin_progression.php';
+require __DIR__ . '/../../lib/admin_hors_ligne.php';
 
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
@@ -291,6 +292,7 @@ if ($action !== null) {
     action_catalogue($action);    // ateliers importés depuis les applications
     action_progression($action);  // progression des ateliers d'une classe (dates d'ouverture)
     action_accueil($action);      // accueil : version papier (FicheStudio) d'un atelier
+    action_hors_ligne($action);   // ateliers hors ligne (portables), validation des étapes par l'enseignant
 
     switch ($action) {
         case 'deconnexion':
@@ -723,6 +725,7 @@ match ($page) {
     'classe'   => page_classe((int) ($_GET['id'] ?? 0)),
     'eleve'    => page_eleve((int) ($_GET['id'] ?? 0)),
     'suivi'    => page_suivi(),
+    'hors_ligne' => page_hors_ligne(),       // ateliers hors ligne (portables sans internet) : lib/admin_hors_ligne.php
     'parcours' => page_parcours(),
     'essayer'  => page_essayer_atelier(),   // « Ouvrir » un atelier en session d'essai (élève test, Élève | Enseignant) : lib/admin_tester.php
     'ateliers' => page_ateliers(),           // ateliers des applications (cartes, imports, disponibilité) : lib/admin_catalogue.php
