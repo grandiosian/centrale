@@ -155,6 +155,7 @@ function page_ateliers(): void
             <h1>Ateliers</h1>
             <div class="titre-actions">
                 <?= bouton_nouvel_atelier() ?>
+                <a class="btn secondaire" href="./?p=hors_ligne" title="Un atelier ou un parcours dans un fichier, pour un ordinateur portable sans internet (élèves avec PAP…), et import des fichiers rendus">Atelier hors ligne</a>
                 <?= $apps ? bouton('importer_ateliers', 'Importer les ateliers de toutes les applications', ['app' => '*'], 'secondaire') : '' ?>
             </div>
         </div>
@@ -313,6 +314,7 @@ function corps_catalogue_ateliers(): void
                         <td class="actions">
                             <a class="btn petit secondaire" href="<?= h(lien_inspecter_atelier((string) $r['app'], (string) $r['atelier'])) ?>" title="Voir comment cet atelier est rangé : fiche, activités, où il sert, fichier publié">Inspecter</a>
                             <?php if ($ouvrir !== ''): ?><a class="btn petit secondaire" href="<?= h(lien_essayer_atelier((string) $r['app'], (string) $r['atelier'])) ?>" target="_blank" rel="noopener" title="<?= h($titre_essai) ?>">Ouvrir</a><?php endif; ?>
+                            <?php if ($r['etat'] === 'actif' && chemin_fichier_autonome((string) $r['app']) !== null): ?><a class="btn petit secondaire" href="<?= h(lien_hors_ligne_atelier((string) $r['app'], (string) $r['atelier'])) ?>" title="Préparer cet atelier pour un ordinateur portable sans internet">Hors ligne</a><?php endif; ?>
                             <?php if ($r['contenu'] !== ''): ?><a class="btn petit secondaire" href="./?p=ateliers&gestion=1&app=<?= rawurlencode($r['app']) ?>&telecharger=<?= rawurlencode($r['atelier']) ?>" title="Fichier à ajouter aux ateliers publiés par l’application">Fichier</a><?php endif; ?>
                             <?php if ($r['etat'] !== 'actif' || $r['source'] === 'fichier'): ?>
                                 <?= bouton('supprimer_atelier_catalogue', 'Enlever', ['app' => $r['app'], 'atelier' => $r['atelier']], 'danger', 'Enlever cet atelier du catalogue ?') ?>

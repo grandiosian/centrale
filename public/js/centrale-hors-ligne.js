@@ -34,6 +34,12 @@
     demandee = decodeURIComponent(demande[1]) === '*' ? null : decodeURIComponent(demande[1]);
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* rien */ }
   }
+  // Comme une ouverture depuis le portail (« #centrale=…&activite=… ») : chaque application passe en mode atelier
+  // (pas de menu du logo, pas de bibliothèque ni d'autre atelier, pas de niveau, pas de mode enseignant). init() retire
+  // ensuite cette adresse, comme centrale-client.js.
+  try {
+    history.replaceState(null, '', location.pathname + location.search + '#centrale=hors-ligne' + (demandee ? '&activite=' + encodeURIComponent(demandee) : ''));
+  } catch (e) { location.hash = 'centrale=hors-ligne' + (demandee ? '&activite=' + encodeURIComponent(demandee) : ''); }
   var CLE_FICHIERS = CLE + ':fichiers';
   var fichiers = (function () { try { return JSON.parse(localStorage.getItem(CLE_FICHIERS) || '{}') || {}; } catch (e) { return {}; } })();
   var fichiersGardes = true;
@@ -86,6 +92,7 @@
     horsLigne: true,
     init: function (options) {
       config = options || {};
+      if (/(^|[#&])centrale=/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* rien */ } }
       if (config.activites && config.activites.length) { etat.activites = copie(config.activites); ecrire(); }
       setTimeout(function () { signaler({ etat: 'enregistre' }); }, 0);
       return M;
@@ -156,6 +163,7 @@
       etat.progression[activite] = fusionner(etat.progression[activite], envoi);
       ecrire();
       majBouton();
+      majNavigation();
       return Promise.resolve();
     },
     mesProgressions: function () {
@@ -176,8 +184,68 @@
     nomAffiche: function () { return session.identifiant; },
     vue: function () { return 'eleve'; },
     rendre: function () { return rendre(); },
+    navigation: function (rappel, options) {
+      if (typeof rappel !== 'function') return null;
+      var n = { rappel: rappel, options: options || {} };
+      navs.push(n);
+      if (bouton) bouton.hidden = true;   // « Rendre mon travail » est proposé à la fin, dans l'application
+      majNavigation(0);
+      return { maj: function () { majNavigation(0); }, arreter: function () { navs = navs.filter(function (x) { return x !== n; }); } };
+    },
   };
   window.Centrale = M;
+
+  /* ---------- Navigation intégrée (contrat Centrale.navigation) : la suite proposée au pied de la consigne ----------
+     Parcours : l'étape suivante faite hors ligne (même fichier ou autre fichier), puis « Rendre mon travail ».
+     Atelier : « Rendre mon travail ». TechnoStudio ne montre la suite qu'à la dernière feuille ; NetSim et Établi 3D la
+     montrent tout le temps : elle n'apparaît donc pour eux qu'une fois l'activité terminée. */
+  var navs = [], navMinuteur = 0;
+  function activiteOuverte() {
+    for (var i = 0; i < navs.length; i++) {
+      var f = navs[i].options.activite;
+      if (typeof f === 'function') { try { var a = f(); if (a) return String(a); } catch (e) { /* rien */ } }
+    }
+    return '';
+  }
+  function finie(a) { var p = etat.progression[a]; return !!(p && p.statut === 'termine'); }
+  function etapeDe(a) {
+    var et = (C.parcours && C.parcours.etapes) || [], i;
+    for (i = 0; i < et.length; i++) if (et[i].app === C.app && et[i].activite && et[i].activite === a) return i;
+    for (i = 0; i < et.length; i++) if (et[i].app === C.app && et[i].activite && a.indexOf(et[i].activite + '/') === 0) return i;
+    for (i = 0; i < et.length; i++) if (et[i].app === C.app && !et[i].activite) return i;
+    return -1;
+  }
+  var versRendu = {
+    cible: 'portail', libelle: 'Rendre mon travail', court: 'Rendre mon travail', fin: true, verrou: false, raison: '',
+    titre: 'Enregistrer le fichier chiffré à envoyer à ton professeur',
+    aller: function () { ouvrirRendu(); return Promise.resolve(true); },
+  };
+  function calculerNavigation() {
+    var a = activiteOuverte();
+    var montrer = C.app === 'technostudio' || finie(a);
+    if (!C.parcours) return { contexte: 'parcours', position: null, precedent: null, suivant: montrer ? versRendu : null };
+    var et = C.parcours.etapes || [], i = etapeDe(a);
+    if (i < 0) return { contexte: 'parcours', position: null, precedent: null, suivant: null };
+    var suite = null;
+    for (var j = i + 1; j < et.length && !suite; j++) if (et[j].fichier) suite = et[j];
+    var suivant = !suite ? versRendu : {
+      cible: 'etape', libelle: 'Étape ' + (et.indexOf(suite) + 1) + ' : ' + suite.titre, app: suite.app, activite: suite.activite || '',
+      titre: suite.fichier === C.fichier ? 'Ouvrir l’étape suivante du parcours' : 'Ouvrir l’étape suivante (' + (suite.nom_app || suite.app) + ')',
+      fin: false, verrou: false, raison: '',
+      aller: function () { ouvrirEtape(suite); return Promise.resolve(true); },
+    };
+    // étape « toute l'application » (modéliser librement…) : rien à terminer, la suite est proposée tout de suite
+    return { contexte: 'parcours', precedent: null, suivant: montrer || !et[i].activite ? suivant : null,
+             position: { numero: i + 1, total: et.length, titre: et[i].titre, consigne: '' } };
+  }
+  function majNavigation(delai) {
+    if (!navs.length) return;
+    clearTimeout(navMinuteur);
+    navMinuteur = setTimeout(function () {
+      var nav = calculerNavigation();
+      navs.slice().forEach(function (n) { try { n.rappel(nav); } catch (e) { /* l'application gère */ } });
+    }, delai == null ? 300 : delai);
+  }
 
   /* ---------- Fichier pour le professeur ---------- */
   function b64(octets) {
@@ -253,7 +321,7 @@
       '.chl-barre{position:fixed;left:12px;bottom:12px;z-index:2147483000;display:flex;gap:8px;flex-wrap:wrap}' +
       '.chl-bouton{display:flex;align-items:center;gap:8px;padding:9px 14px;border:0;border-radius:999px;' +
       'background:#1f7a4d;color:#fff;font:600 14px/1.2 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}' +
-      '.chl-bouton:hover{background:#18633e}.chl-bouton small{font-weight:500;opacity:.85}' +
+      '.chl-bouton[hidden]{display:none}.chl-bouton:hover{background:#18633e}.chl-bouton small{font-weight:500;opacity:.85}' +
       '.chl-bouton-parcours{background:#2340b8}.chl-bouton-parcours:hover{background:#1b3290}' +
       '.chl-etapes{margin:10px 0;padding-left:22px}.chl-etapes li{margin:6px 0}.chl-etapes button{border:0;border-radius:7px;padding:4px 10px;background:#e9edf3;color:#1b2230;cursor:pointer;font:600 13px system-ui,sans-serif}' +
       '.chl-voile{position:fixed;inset:0;z-index:2147483001;background:rgba(15,20,30,.45);display:flex;align-items:center;justify-content:center;padding:16px}' +
@@ -301,7 +369,7 @@
       np.textContent = 'Parcours « ' + C.parcours.nom + ' » : ce fichier ne rend que ton travail sur ' + (C.nom_app || C.app) + '. Rends aussi : ' + autres.join(', ') + '.';
     }
     var msg = fenetre.querySelector('.chl-msg');
-    var fermer = function () { if (fenetre) { fenetre.remove(); fenetre = null; } };
+    var fermer = function () { if (fenetre) { fenetre.remove(); fenetre = null; } majNavigation(0); };
     fenetre.querySelector('.chl-fermer').onclick = fermer;
     fenetre.addEventListener('click', function (e) { if (e.target === fenetre) fermer(); });
     var principal = fenetre.querySelector('.chl-principal');
@@ -341,7 +409,7 @@
     fenetre.className = 'chl-voile';
     fenetre.innerHTML = '<div class="chl-fen" role="dialog" aria-modal="true" aria-labelledby="chl-titre"><h2 id="chl-titre"></h2>' +
       '<p class="chl-discret">Les étapes de ton parcours. Celles d’une autre application s’ouvrent dans un autre fichier du même dossier.</p>' +
-      '<ol class="chl-etapes"></ol><div class="chl-actions"><button type="button" class="chl-fermer">Fermer</button></div></div>';
+      '<ol class="chl-etapes"></ol><div class="chl-actions"><button type="button" class="chl-rendre">Rendre mon travail</button><button type="button" class="chl-fermer chl-principal">Fermer</button></div></div>';
     fenetre.querySelector('h2').textContent = 'Parcours « ' + C.parcours.nom + ' »';
     var ol = fenetre.querySelector('.chl-etapes');
     (C.parcours.etapes || []).forEach(function (e) {
@@ -362,6 +430,7 @@
     });
     var fermer = function () { if (fenetre) { fenetre.remove(); fenetre = null; } };
     fenetre.querySelector('.chl-fermer').onclick = fermer;
+    fenetre.querySelector('.chl-rendre').onclick = ouvrirRendu;
     fenetre.addEventListener('click', function (ev) { if (ev.target === fenetre) fermer(); });
     document.body.appendChild(fenetre);
   }
@@ -373,6 +442,8 @@
     bouton.className = 'chl-bouton';
     bouton.title = 'Atelier hors ligne : enregistre un fichier chiffré à envoyer à ton professeur';
     bouton.onclick = ouvrirRendu;
+    bouton.hidden = true;   // secours : seulement si l'application ne dessine pas la suite (navigation)
+    setTimeout(function () { if (!navs.length) bouton.hidden = false; }, 4000);
     var barre = document.createElement('div');
     barre.className = 'chl-barre';
     barre.appendChild(bouton);

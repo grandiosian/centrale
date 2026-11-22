@@ -162,6 +162,12 @@ function action_hors_ligne(string $action): void
     }
 }
 
+/** Lien vers « Travail hors ligne » avec cet atelier déjà choisi (page Ateliers). */
+function lien_hors_ligne_atelier(string $app, string $atelier): string
+{
+    return './?' . http_build_query(['p' => 'hors_ligne', 'atelier' => $app . '|' . $atelier]);
+}
+
 function texte_lisez_moi_hors_ligne(bool $parcours = false): string
 {
     if ($parcours) {
@@ -209,6 +215,7 @@ function page_hors_ligne(): void
         <form method="get" class="filtres">
             <input type="hidden" name="p" value="hors_ligne">
             <label>Classe
+                <?php if (isset($_GET['atelier'])): ?><input type="hidden" name="atelier" value="<?= h((string) $_GET['atelier']) ?>"><?php endif; ?>
                 <select name="classe" onchange="this.form.submit()">
                     <?php foreach ($classes as $c): ?>
                         <option value="<?= (int) $c['id'] ?>" <?= (int) $c['id'] === $classe_id ? 'selected' : '' ?>><?= h($c['nom']) ?></option>
@@ -239,7 +246,7 @@ function page_hors_ligne(): void
                             <?php foreach ($ateliers as $app => $liste): ?>
                                 <optgroup label="<?= h(nom_application_hl($app)) ?>">
                                     <?php foreach ($liste as $id => $a): ?>
-                                        <option value="<?= h($app . '|' . $id) ?>"><?= h(($a['niveau'] ? $a['niveau'] . ' · ' : '') . ($a['titre'] ?: $id)) ?></option>
+                                        <option value="<?= h($app . '|' . $id) ?>"<?= ($_GET['atelier'] ?? '') === $app . '|' . $id ? ' selected' : '' ?>><?= h(($a['niveau'] ? $a['niveau'] . ' · ' : '') . ($a['titre'] ?: $id)) ?></option>
                                     <?php endforeach; ?>
                                 </optgroup>
                             <?php endforeach; ?>

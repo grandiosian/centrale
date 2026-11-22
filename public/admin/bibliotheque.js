@@ -235,6 +235,12 @@
       lien.rel = 'noopener';
       actions.appendChild(lien);
     }
+    if (at.hors_ligne) {   // fichier pour un portable sans internet (lib/admin_hors_ligne.php)
+      var hl = el('a', 'btn petit secondaire', 'Atelier hors ligne');
+      hl.href = at.hors_ligne;
+      hl.title = 'Préparer cet atelier pour un ordinateur portable sans internet';
+      actions.appendChild(hl);
+    }
     if (at.inspecter) {   // fiche du catalogue, activités, où il sert, fichier publié par l'application (lib/admin_inspecter.php)
       var insp = el('a', 'btn petit secondaire', 'Inspecter les données');
       insp.href = at.inspecter;
