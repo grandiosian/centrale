@@ -599,7 +599,7 @@ function cellule_suivi(array $etat, string $titre, array $cible = []): string
     }
     $data = '';
     if ($cible) {
-        $info .= ' — clic : valider';
+        $info .= $cible['app'] === 'technostudio' && str_contains((string) $cible['activite'], '/') ? ' — clic : voir la feuille, valider' : ' — clic : valider';
         $data = ' data-eleve="' . (int) $cible['eleve'] . '" data-app="' . h($cible['app']) . '" data-activite="' . h($cible['activite']) . '"'
             . ' data-total="' . h((string) ($cible['total'] ?? '')) . '" data-titre="' . h($titre) . '" data-statut="' . h($etat['statut']) . '"'
             . (!empty($etat['prof']) ? ' data-prof="1"' : '')

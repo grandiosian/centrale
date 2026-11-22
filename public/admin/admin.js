@@ -2442,11 +2442,54 @@
     form.elements.annuler.value = annuler ? '1' : '';
     form.submit();
   }
+  /* Feuille TechnoStudio (« atelier/P1 ») : la feuille de l'élève dans une fenêtre (TechnoStudio ?revue=…, lecture seule,
+     juste / faux pour chaque question), avec les boutons de validation en haut. */
+  var revue = null;
+  function fermerRevue() { if (revue) { revue.remove(); revue = null; document.body.classList.remove('revue-ouverte'); } }
+  function ouvrirRevue(td, qui, nom, statut) {
+    fermerRevue();
+    var act = td.dataset.activite, i = act.lastIndexOf('/');
+    var src = '../miroir/technostudio/?' + new URLSearchParams({ revue: act.slice(0, i) + '/' + act.slice(i + 1), eleve: td.dataset.eleve }).toString();
+    revue = document.createElement('div'); revue.className = 'revue-fond'; revue.setAttribute('role', 'dialog'); revue.setAttribute('aria-modal', 'true');
+    var boite = document.createElement('div'); boite.className = 'revue-boite';
+    var tete = document.createElement('div'); tete.className = 'revue-tete';
+    var t = document.createElement('div'); t.className = 'revue-titre';
+    var b1 = document.createElement('strong'); b1.textContent = 'n° ' + (qui || '').trim() + (nom && nom !== '—' ? ' — ' + nom : '');
+    var b2 = document.createElement('span'); b2.className = 'discret';
+    b2.textContent = td.dataset.titre + (td.dataset.parcours ? ' (étape ' + (+td.dataset.ordre + 1) + ' du parcours)' : '') + ' · ' + statut + (td.dataset.prof ? ' · validée par vous' : '');
+    t.append(b1, b2);
+    var acts = document.createElement('div'); acts.className = 'mv-actions';
+    if (td.dataset.statut !== 'termine' || (td.dataset.parcours && !td.dataset.prof)) {
+      var v = document.createElement('button'); v.type = 'button'; v.className = 'petit'; v.textContent = '✓ Valider l’étape';
+      v.onclick = function () { envoyer(td, false); }; acts.append(v);
+    }
+    if (td.dataset.prof) {
+      var a = document.createElement('button'); a.type = 'button'; a.className = 'petit secondaire'; a.textContent = 'Annuler ma validation';
+      a.onclick = function () { envoyer(td, true); }; acts.append(a);
+    }
+    var nouv = document.createElement('a'); nouv.className = 'btn petit secondaire'; nouv.href = src; nouv.target = '_blank'; nouv.rel = 'noopener'; nouv.textContent = 'Nouvel onglet';
+    var f = document.createElement('button'); f.type = 'button'; f.className = 'petit secondaire'; f.textContent = 'Fermer ✕'; f.onclick = fermerRevue;
+    acts.append(nouv, f);
+    tete.append(t, acts);
+    var cadre = document.createElement('iframe'); cadre.className = 'revue-cadre'; cadre.src = src; cadre.title = 'Feuille de l’élève dans TechnoStudio';
+    boite.append(tete, cadre); revue.append(boite);
+    revue.addEventListener('click', function (e) { if (e.target === revue) fermerRevue(); });
+    document.body.append(revue); document.body.classList.add('revue-ouverte');
+    f.focus();
+  }
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fermerRevue(); });
+
   table.addEventListener('click', function (ev) {
     var td = ev.target.closest('td.cellule[data-eleve]');
     if (!td) return;
     ev.stopPropagation();
     fermer();
+    if (td.dataset.app === 'technostudio' && td.dataset.activite.indexOf('/') > 0) {
+      var l0 = td.closest('tr');
+      ouvrirRevue(td, l0 ? (l0.querySelector('.numero') || {}).textContent : '', l0 && l0.querySelector('.fixe2') ? l0.querySelector('.fixe2').textContent.trim() : '',
+        { termine: 'terminée', commence: 'en cours', a_faire: 'pas commencée' }[td.dataset.statut] || '');
+      return;
+    }
     var ligne = td.closest('tr');
     var qui = ligne ? (ligne.querySelector('.numero') || {}).textContent : '';
     var nom = ligne && ligne.querySelector('.fixe2') ? ligne.querySelector('.fixe2').textContent.trim() : '';
