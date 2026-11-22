@@ -218,7 +218,9 @@ function scan_calendrier_niveau(string $niveau): array
         $codes = $r ? array_values(array_unique($r['codes'])) : [];
         $ateliers[] = ['app' => $x['p']['app'], 'atelier' => $x['p']['atelier'], 'titre' => (string) ($r['titre'] ?? $x['p']['atelier']),
                        'nom_app' => (string) ($r['nom_app'] ?? $x['p']['app']), 'seances' => (int) $x['p']['seances'], 'classes' => count($x['rangs']),
-                       'codes' => $codes, 'caps' => array_values(array_filter($codes, fn($c) => isset($caps_niveau[$c])))];
+                       'codes' => $codes, 'caps' => array_values(array_filter($codes, fn($c) => isset($caps_niveau[$c]))),
+                       'activites' => array_map(fn($x) => ['id' => (string) ($x['id'] ?? ''), 'titre' => (string) ($x['titre'] ?? ''),
+                           'competences' => array_values(array_map('strval', (array) ($x['competences'] ?? [])))], (array) ($r['activites'] ?? []))];
     }
     return ['classes' => $classes, 'ateliers' => $ateliers];
 }
@@ -275,6 +277,17 @@ function page_progression(string $niveau): void
     $nb = 0;
     $non_placees = 0;
     $lien = './?p=competences&vue=progression&niveau=' . rawurlencode($niveau);
+    $detail = !empty($_GET['detail']);   // vue détaillée : la description de chaque capacité ; sinon condensée (codes seuls)
+    // Passages : pour chaque capacité, les ateliers du calendrier qui l'abordent et leurs activités (feuilles) concernées (admin.js)
+    $passages = [];
+    foreach ($ats as $i => $a) {
+        foreach ($a['caps'] as $c) {
+            $acts = array_values(array_filter($a['activites'], fn($x) => in_array($c, $x['competences'], true)));
+            $passages[$c][] = ['n' => $i + 1, 'titre' => $a['titre'], 'app' => $a['app'], 'nom_app' => $a['nom_app'], 'atelier' => $a['atelier'],
+                               'ouvrir' => lien_essayer_atelier($a['app'], $a['atelier']),
+                               'feuilles' => array_map(fn($x) => ['id' => $x['id'], 'titre' => $x['titre']], $acts)];
+        }
+    }
     ?>
     <details class="scan-calendrier" <?= $proposition || !array_filter($seq, fn($s) => $s['codes']) ? 'open' : '' ?>>
         <summary><strong>Scan du calendrier <?= h($niveau) ?></strong>
@@ -310,9 +323,12 @@ function page_progression(string $niveau): void
     <?php if ($proposition): ?>
         <p class="flash ok">Proposition d’après le calendrier : vérifiez les cases, puis « Enregistrer ». <a href="<?= h($lien) ?>">Annuler</a></p>
     <?php endif; ?>
-    <p class="aide" style="margin-top:12px">Cochez les capacités travaillées dans chaque séquence. Le Suivi « Compétences » peut ensuite se limiter
-        à une séquence. Une capacité qu’aucune séquence ne travaille est signalée en orange ; « 📅 » : ateliers du calendrier qui l’abordent.</p>
-    <form method="post" class="progression">
+    <p class="aide" style="margin-top:12px">Cliquez dans une case vide pour placer la capacité dans la séquence ; cliquez sur une pastille pour voir
+        les passages des ateliers qui l’abordent (et la retirer). Le Suivi « Compétences » peut ensuite se limiter à une séquence.
+        <a href="<?= h($lien . ($detail ? '' : '&detail=1') . ($proposition ? '&scan=1' : '')) ?>"><?= $detail ? 'Vue condensée' : 'Afficher les descriptions' ?></a></p>
+    <script type="application/json" id="passages-competences"><?= json_encode(['passages' => (object) $passages, 'textes' => (object) capacites_niveau($niveau)],
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+    <form method="post" class="progression<?= $detail ? '' : ' condensee' ?>">
         <?= csrf() ?>
         <input type="hidden" name="action" value="enregistrer_progression">
         <input type="hidden" name="niveau" value="<?= h($niveau) ?>">
@@ -326,18 +342,18 @@ function page_progression(string $niveau): void
             <tbody>
             <?php foreach (referentiel()['themes'] as $t): ?>
                 <?php foreach ($t['competences'] as $c): ?>
-                    <tr class="ligne-competence" style="--t:<?= h($t['couleur'] ?? '#888') ?>"><th class="fixe" colspan="<?= $nbs + 1 ?>"><?= puce_competence($c['code']) ?> <?= h($c['titre']) ?></th></tr>
+                    <tr class="ligne-competence" style="--t:<?= h($t['couleur'] ?? '#888') ?>"><th class="fixe" colspan="<?= $nbs + 1 ?>" title="<?= h($c['titre']) ?>"><?= puce_competence($c['code']) ?> <?= $detail ? h($c['titre']) : '<span class="titre-court">' . h(mb_strimwidth($c['titre'], 0, 70, '…')) . '</span>' ?></th></tr>
                     <?php foreach ($c['sous'] as $s):
                         $caps = array_values(array_filter($s['capacites'], fn($k) => $k['niveau'] === $niveau));
                         if (!$caps) continue; ?>
-                        <tr class="ligne-sous"><th class="fixe" colspan="<?= $nbs + 1 ?>"><?= puce_competence($s['code']) ?> <?= h($s['titre']) ?></th></tr>
+                        <?php if ($detail): ?><tr class="ligne-sous"><th class="fixe" colspan="<?= $nbs + 1 ?>"><?= puce_competence($s['code']) ?> <?= h($s['titre']) ?></th></tr><?php endif; ?>
                         <?php foreach ($caps as $k): $nb++; $nulle = empty($places[$k['code']]); $non_placees += $nulle ? 1 : 0; ?>
                             <tr class="<?= $nulle ? 'non-placee' : '' ?>">
-                                <td class="fixe cap-progression"><?= puce_competence($k['code']) ?> <?= h($k['texte']) ?>
+                                <td class="fixe cap-progression" title="<?= h($k['texte']) ?>"><?= puce_competence($k['code']) ?><?= $detail ? ' ' . h($k['texte']) : '' ?>
                                     <?php if (!empty($par_cap[$k['code']])): ?><span class="au-calendrier" title="Ateliers du calendrier (numéros du scan)">📅 <?= h(implode(', ', $par_cap[$k['code']])) ?></span><?php endif; ?></td>
                                 <?php foreach ($seq as $i => $sq): ?>
-                                    <td class="case-seq"><input type="checkbox" name="c[<?= h($k['code']) ?>][]" value="<?= $i ?>" <?= !empty($places[$k['code']][$i]) ? 'checked' : '' ?>
-                                        aria-label="<?= h($k['code']) ?> en séquence <?= $i ?>"></td>
+                                    <td class="case-seq"><label class="pastille-seq" data-code="<?= h($k['code']) ?>" data-seq="<?= $i ?>"><input type="checkbox" name="c[<?= h($k['code']) ?>][]" value="<?= $i ?>" <?= !empty($places[$k['code']][$i]) ? 'checked' : '' ?>
+                                        aria-label="<?= h($k['code']) ?> en séquence <?= $i ?>"><span class="num-cap code-comp th" style="--t:<?= h($t['couleur'] ?? '#888') ?>"><?= h($k['code']) ?></span></label></td>
                                 <?php endforeach; ?>
                             </tr>
                         <?php endforeach; ?>

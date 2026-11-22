@@ -2530,3 +2530,81 @@
   document.addEventListener('click', function (ev) { if (menu && !menu.contains(ev.target)) fermer(); });
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fermer(); });
 })();
+
+/* Compétences → Progression : clic sur une case vide = placer la capacité dans la séquence ; clic sur une pastille =
+   fenêtre des passages (ateliers du calendrier qui l'abordent, feuilles concernées ; TechnoStudio : la feuille avec les
+   questions surlignées, ?revue=<atelier>/<feuille>&comp=<code>) et bouton pour la retirer. lib/admin_competences.php */
+(function () {
+  'use strict';
+  var donnees = document.getElementById('passages-competences');
+  var form = document.querySelector('form.progression');
+  if (!donnees || !form) return;
+  var D = JSON.parse(donnees.textContent || '{}');
+  var fond = null;
+  function fermer() { if (fond) { fond.remove(); fond = null; document.body.classList.remove('revue-ouverte'); } }
+  function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function ouvrir(lab) {
+    fermer();
+    var code = lab.dataset.code, seq = lab.dataset.seq, box = lab.querySelector('input');
+    var theme = (form.querySelector('input[name="theme[' + seq + ']"]') || {}).value || '';
+    var liste = ((D.passages || {})[code] || []).slice();
+    // l'atelier de la séquence (même titre que son thème) en premier
+    liste.sort(function (a, b) { return (b.titre === theme) - (a.titre === theme) || a.n - b.n; });
+    fond = el('div', 'passages-fond'); fond.setAttribute('role', 'dialog'); fond.setAttribute('aria-modal', 'true');
+    var boite = el('div', 'passages-boite');
+    var tete = el('div', 'passages-tete');
+    var t = el('div', 'revue-titre');
+    t.append(el('strong', '', code + ' · séquence ' + seq + (theme ? ' (' + theme + ')' : '')), el('span', 'discret', (D.textes || {})[code] || ''));
+    var acts = el('div', 'mv-actions');
+    var ret = el('button', 'petit secondaire', 'Retirer de la séquence ' + seq); ret.type = 'button';
+    ret.onclick = function () { box.checked = false; fermer(); };
+    var f = el('button', 'petit secondaire', 'Fermer ✕'); f.type = 'button'; f.onclick = fermer;
+    acts.append(ret, f); tete.append(t, acts);
+    var corps = el('div', 'passages-liste');
+    var cadre = null;
+    function voir(src, btn) {
+      if (!cadre) { cadre = el('iframe', 'passages-cadre'); cadre.title = 'Passage de l’atelier'; boite.append(cadre); boite.classList.add('avec-cadre'); }
+      cadre.src = src;
+      corps.querySelectorAll('button.actif').forEach(function (b) { b.classList.remove('actif'); }); btn.classList.add('actif');
+    }
+    if (!liste.length) corps.append(el('p', 'vide', 'Aucun atelier du calendrier n’aborde cette capacité.'));
+    var ul = el('ul'); var premier = null;
+    liste.forEach(function (p) {
+      var li = el('li');
+      li.append(el('strong', '', p.n + '. ' + p.titre), el('span', 'discret', ' · ' + p.nom_app));
+      var fl = el('div', 'passage-feuilles');
+      (p.feuilles.length ? p.feuilles : [{ id: '', titre: 'tout l’atelier' }]).forEach(function (x) {
+        if (p.app === 'technostudio') {
+          var b = el('button', 'petit secondaire', x.titre); b.type = 'button';
+          var feuille = x.id ? x.id.slice(x.id.lastIndexOf('/') + 1) : '';
+          var src = '../miroir/technostudio/?' + new URLSearchParams({ revue: p.atelier + (feuille ? '/' + feuille : ''), comp: code }).toString();
+          b.onclick = function () { voir(src, b); };
+          fl.append(b); premier = premier || b;
+        } else {
+          fl.append(el('span', 'code-comp', x.titre));
+        }
+      });
+      if (p.app !== 'technostudio' && p.ouvrir) { var a = el('a', 'btn petit secondaire', 'Ouvrir l’atelier'); a.href = p.ouvrir; a.target = '_blank'; a.rel = 'noopener'; fl.append(a); }
+      li.append(fl); ul.append(li);
+    });
+    if (liste.length) corps.append(ul);
+    boite.append(tete, corps); fond.append(boite);
+    fond.addEventListener('click', function (e) { if (e.target === fond) fermer(); });
+    document.body.append(fond); document.body.classList.add('revue-ouverte');
+    if (premier) premier.click();   // la feuille du premier atelier TechnoStudio tout de suite
+    f.focus();
+  }
+  form.addEventListener('click', function (ev) {
+    var lab = ev.target.closest('.pastille-seq');
+    if (!lab) return;
+    ev.preventDefault();
+    var box = lab.querySelector('input');
+    if (!box.checked) { box.checked = true; return; }   // case vide : on place la capacité
+    ouvrir(lab);                                         // pastille : les passages
+  });
+  form.addEventListener('keydown', function (ev) {
+    var lab = ev.target.closest && ev.target.closest('.pastille-seq');
+    if (lab && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); lab.click(); }
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fermer(); });
+})();
