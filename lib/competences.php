@@ -315,15 +315,20 @@ function cellule_bilan(?array $b): string
 }
 
 /** Progression d'un niveau : numéro => [theme, support, codes[]] (8 séquences). */
+const SEQUENCES_MIN = 8;    // colonnes de la Progression ; davantage si le calendrier a plus d'ateliers
+const SEQUENCES_MAX = 30;
+
 function sequences_niveau(string $niveau): array
 {
+    $st = db()->prepare('SELECT * FROM sequences WHERE niveau = ? AND numero BETWEEN 1 AND ' . SEQUENCES_MAX);
+    $st->execute([$niveau]);
+    $lignes = $st->fetchAll();
+    $n = max(SEQUENCES_MIN, ...array_map(fn($r) => (int) $r['numero'], $lignes ?: [['numero' => 0]]));
     $res = [];
-    for ($i = 1; $i <= 8; $i++) {
+    for ($i = 1; $i <= $n; $i++) {
         $res[$i] = ['theme' => '', 'support' => '', 'codes' => []];
     }
-    $st = db()->prepare('SELECT * FROM sequences WHERE niveau = ?');
-    $st->execute([$niveau]);
-    foreach ($st->fetchAll() as $r) {
+    foreach ($lignes as $r) {
         $res[(int) $r['numero']] = ['theme' => $r['theme'], 'support' => $r['support'], 'codes' => liste_codes_competences($r['codes'])];
     }
     return $res;

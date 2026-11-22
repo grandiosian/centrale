@@ -21,17 +21,19 @@ function action_competences(string $action): bool
     foreach ((array) ($_POST['c'] ?? []) as $code => $nums) {
         foreach ((array) $nums as $n) {
             $n = (int) $n;
-            if ($n >= 1 && $n <= 8) {
+            if ($n >= 1 && $n <= SEQUENCES_MAX) {
                 $codes[$n][] = (string) $code;
             }
         }
     }
     $pdo = db();
+    $nb = max(SEQUENCES_MIN, min(SEQUENCES_MAX, (int) ($_POST['nb_seq'] ?? SEQUENCES_MIN)));
     $ins = $pdo->prepare('INSERT OR REPLACE INTO sequences (niveau, numero, theme, support, codes) VALUES (?, ?, ?, ?, ?)');
-    for ($i = 1; $i <= 8; $i++) {
+    for ($i = 1; $i <= $nb; $i++) {
         $ins->execute([$niveau, $i, mb_substr(trim((string) ($_POST['theme'][$i] ?? '')), 0, 120),
             mb_substr(trim((string) ($_POST['support'][$i] ?? '')), 0, 120), implode(', ', codes_valides($codes[$i] ?? []))]);
     }
+    $pdo->prepare('DELETE FROM sequences WHERE niveau = ? AND numero > ?')->execute([$niveau, $nb]);   // séquences retirées
     flash("Progression de $niveau enregistrée.");
     rediriger('./?p=competences&vue=progression&niveau=' . $niveau);
 }
@@ -177,45 +179,166 @@ function page_referentiel(): void
 }
 
 /** Progression d'un niveau : 8 séquences (thème, support) × capacités du niveau, comme le tableau « Progression 5e ». */
+/**
+ * Ateliers placés dans le Calendrier des classes d'un niveau (« 4e » : 4A, 4B…), dans l'ordre de l'année,
+ * avec leurs codes (catalogue) : [ 'classes' => [noms], 'ateliers' => [ {app, atelier, titre, nom_app, seances, codes, caps} ] ].
+ * caps : capacités du niveau (référentiel) travaillées par l'atelier.
+ */
+function scan_calendrier_niveau(string $niveau): array
+{
+    $chiffre = substr($niveau, 0, 1);
+    $caps_niveau = capacites_niveau($niveau);
+    $cat = [];
+    foreach (catalogue_ateliers() as $r) {
+        $cat[$r['app'] . '|' . $r['atelier']] = $r;
+    }
+    $classes = [];
+    $places = [];   // clé => [rang moyen, première vue, ligne]
+    $vu = 0;
+    foreach (db()->query('SELECT * FROM classes ORDER BY nom')->fetchAll() as $c) {
+        if (niveau_classe((string) $c['nom']) !== $chiffre) {
+            continue;
+        }
+        $prog = progression_classe((int) $c['id']);
+        if (!$prog) {
+            continue;
+        }
+        $classes[] = nom_court_classe($c);
+        $n = count($prog);
+        foreach ($prog as $i => $p) {
+            $k = $p['app'] . '|' . $p['atelier'];
+            $places[$k] ??= ['rangs' => [], 'vu' => $vu++, 'p' => $p];
+            $places[$k]['rangs'][] = $n > 1 ? $i / ($n - 1) : 0;   // place dans l'année de cette classe (0 → 1)
+        }
+    }
+    uasort($places, fn($a, $b) => (array_sum($a['rangs']) / count($a['rangs'])) <=> (array_sum($b['rangs']) / count($b['rangs'])) ?: $a['vu'] <=> $b['vu']);
+    $ateliers = [];
+    foreach ($places as $k => $x) {
+        $r = $cat[$k] ?? null;
+        $codes = $r ? array_values(array_unique($r['codes'])) : [];
+        $ateliers[] = ['app' => $x['p']['app'], 'atelier' => $x['p']['atelier'], 'titre' => (string) ($r['titre'] ?? $x['p']['atelier']),
+                       'nom_app' => (string) ($r['nom_app'] ?? $x['p']['app']), 'seances' => (int) $x['p']['seances'], 'classes' => count($x['rangs']),
+                       'codes' => $codes, 'caps' => array_values(array_filter($codes, fn($c) => isset($caps_niveau[$c])))];
+    }
+    return ['classes' => $classes, 'ateliers' => $ateliers];
+}
+
+/** Capacités d'un niveau dans le référentiel : code => texte. */
+function capacites_niveau(string $niveau): array
+{
+    $res = [];
+    foreach (referentiel()['themes'] ?? [] as $t) {
+        foreach ($t['competences'] as $c) {
+            foreach ($c['sous'] as $s) {
+                foreach ($s['capacites'] as $k) {
+                    if ($k['niveau'] === $niveau) {
+                        $res[$k['code']] = $k['texte'];
+                    }
+                }
+            }
+        }
+    }
+    return $res;
+}
+
 function page_progression(string $niveau): void
 {
     $seq = sequences_niveau($niveau);
+    $scan = scan_calendrier_niveau($niveau);
+    $ats = $scan['ateliers'];
+    $proposition = !empty($_GET['scan']) && $ats;
+    if ($proposition) {   // une séquence par atelier du calendrier, dans l'ordre (plus de 8 colonnes s'il le faut) : rien n'est enregistré
+        $seq = [];
+        for ($i = 1; $i <= max(SEQUENCES_MIN, min(SEQUENCES_MAX, count($ats))); $i++) {
+            $a = $ats[$i - 1] ?? null;
+            $seq[$i] = ['theme' => $a ? mb_substr($a['titre'], 0, 120) : '', 'support' => $a ? $a['nom_app'] : '', 'codes' => $a ? $a['caps'] : []];
+        }
+    } elseif (!empty($_GET['plus'])) {   // « + Séquence »
+        $n = min(SEQUENCES_MAX, count($seq) + 1);
+        $seq[$n] ??= ['theme' => '', 'support' => '', 'codes' => []];
+    }
+    $nbs = count($seq);
     $places = [];
     foreach ($seq as $i => $s) {
         foreach ($s['codes'] as $c) {
             $places[$c][$i] = true;
         }
     }
+    $par_cap = [];   // capacité => numéros des ateliers du calendrier qui la travaillent
+    foreach ($ats as $i => $a) {
+        foreach ($a['caps'] as $c) {
+            $par_cap[$c][] = $i + 1;
+        }
+    }
+    $caps_niveau = capacites_niveau($niveau);
+    $jamais = array_diff_key($caps_niveau, $par_cap);
     $nb = 0;
     $non_placees = 0;
+    $lien = './?p=competences&vue=progression&niveau=' . rawurlencode($niveau);
     ?>
+    <details class="scan-calendrier" <?= $proposition || !array_filter($seq, fn($s) => $s['codes']) ? 'open' : '' ?>>
+        <summary><strong>Scan du calendrier <?= h($niveau) ?></strong>
+            <span class="discret"><?= $ats ? count($ats) . ' atelier(s) · ' . count($par_cap) . ' / ' . count($caps_niveau) . ' capacités de ' . h($niveau) . ' abordées dans l’année' : 'aucun atelier dans le calendrier' ?></span></summary>
+        <?php if (!$ats): ?>
+            <p class="vide">Aucune classe de <?= h($niveau) ?> n’a d’atelier dans son <a href="./?p=calendrier">Calendrier</a>.</p>
+        <?php else: ?>
+            <p class="aide">Ateliers placés dans le Calendrier de <?= h(implode(', ', $scan['classes'])) ?>, dans l’ordre de l’année,
+                avec les capacités de <?= h($niveau) ?> qu’ils déclarent (catalogue des applications).</p>
+            <div class="defile"><table class="table-scan">
+                <thead><tr><th>#</th><th>Atelier</th><th>Séances</th><th>Capacités de <?= h($niveau) ?></th><th>Autres codes</th></tr></thead>
+                <tbody>
+                <?php foreach ($ats as $i => $a): $autres = array_values(array_diff($a['codes'], $a['caps'])); ?>
+                    <tr><td><?= $i + 1 ?></td>
+                        <td><?= icone_app($a['app']) ?> <strong><?= h($a['titre']) ?></strong><?= $a['classes'] < count($scan['classes']) ? ' <span class="discret">(' . $a['classes'] . ' classe' . ($a['classes'] > 1 ? 's' : '') . ')</span>' : '' ?></td>
+                        <td><?= $a['seances'] ?></td>
+                        <td><?= $a['caps'] ? implode(' ', array_map('puce_competence', $a['caps'])) : '<span class="alerte" title="L’atelier ne déclare aucune capacité de ce niveau">aucune</span>' ?></td>
+                        <td><?= $autres ? implode(' ', array_map('puce_competence', $autres)) : '' ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table></div>
+            <p class="bilan-scan"><strong>Compétences de l’année :</strong> <?= count($par_cap) ?> capacités de <?= h($niveau) ?> sur <?= count($caps_niveau) ?> sont abordées par ces ateliers.</p>
+            <?php if ($jamais): ?>
+                <details><summary><?= count($jamais) ?> capacité(s) qu’aucun atelier du calendrier n’aborde</summary>
+                    <ul class="liste-jamais"><?php foreach ($jamais as $c => $t): ?><li><?= puce_competence($c) ?> <?= h($t) ?></li><?php endforeach; ?></ul></details>
+            <?php endif; ?>
+            <p class="ligne-actions">
+                <a class="btn" href="<?= h($lien . '&scan=1') ?>">Proposer la progression d’après le calendrier</a>
+                <span class="discret">une séquence par atelier<?= count($ats) > SEQUENCES_MIN ? ' : ' . min(SEQUENCES_MAX, count($ats)) . ' séquences (' . (min(SEQUENCES_MAX, count($ats)) - SEQUENCES_MIN) . ' ajoutée(s) au-delà de 8)' : '' ?> ; rien n’est enregistré avant « Enregistrer ».</span>
+            </p>
+        <?php endif; ?>
+    </details>
+    <?php if ($proposition): ?>
+        <p class="flash ok">Proposition d’après le calendrier : vérifiez les cases, puis « Enregistrer ». <a href="<?= h($lien) ?>">Annuler</a></p>
+    <?php endif; ?>
     <p class="aide" style="margin-top:12px">Cochez les capacités travaillées dans chaque séquence. Le Suivi « Compétences » peut ensuite se limiter
-        à une séquence. Une capacité qu’aucune séquence ne travaille est signalée en orange.</p>
+        à une séquence. Une capacité qu’aucune séquence ne travaille est signalée en orange ; « 📅 » : ateliers du calendrier qui l’abordent.</p>
     <form method="post" class="progression">
         <?= csrf() ?>
         <input type="hidden" name="action" value="enregistrer_progression">
         <input type="hidden" name="niveau" value="<?= h($niveau) ?>">
+        <input type="hidden" name="nb_seq" value="<?= $nbs ?>">
         <div class="defile"><table class="table-progression">
             <thead>
-                <tr><th class="fixe">Progression <?= h($niveau) ?></th><?php for ($i = 1; $i <= 8; $i++): ?><th class="col-seq">Séquence <?= $i ?></th><?php endfor; ?></tr>
-                <tr><th class="fixe">thème</th><?php for ($i = 1; $i <= 8; $i++): ?><td><input name="theme[<?= $i ?>]" value="<?= h($seq[$i]['theme']) ?>" maxlength="120" aria-label="Thème de la séquence <?= $i ?>"></td><?php endfor; ?></tr>
-                <tr><th class="fixe">support</th><?php for ($i = 1; $i <= 8; $i++): ?><td><input name="support[<?= $i ?>]" value="<?= h($seq[$i]['support']) ?>" maxlength="120" aria-label="Support de la séquence <?= $i ?>"></td><?php endfor; ?></tr>
+                <tr><th class="fixe">Progression <?= h($niveau) ?><?php if ($nbs < SEQUENCES_MAX && !$proposition): ?> <a class="discret" href="<?= h($lien . '&plus=1') ?>" title="Ajouter une colonne">+ Séquence</a><?php endif; ?></th><?php foreach ($seq as $i => $s): ?><th class="col-seq">Séquence <?= $i ?></th><?php endforeach; ?></tr>
+                <tr><th class="fixe">thème</th><?php foreach ($seq as $i => $s): ?><td><input name="theme[<?= $i ?>]" value="<?= h($s['theme']) ?>" maxlength="120" aria-label="Thème de la séquence <?= $i ?>"></td><?php endforeach; ?></tr>
+                <tr><th class="fixe">support</th><?php foreach ($seq as $i => $s): ?><td><input name="support[<?= $i ?>]" value="<?= h($s['support']) ?>" maxlength="120" aria-label="Support de la séquence <?= $i ?>"></td><?php endforeach; ?></tr>
             </thead>
             <tbody>
             <?php foreach (referentiel()['themes'] as $t): ?>
                 <?php foreach ($t['competences'] as $c): ?>
-                    <tr class="ligne-competence" style="--t:<?= h($t['couleur'] ?? '#888') ?>"><th class="fixe" colspan="9"><?= puce_competence($c['code']) ?> <?= h($c['titre']) ?></th></tr>
+                    <tr class="ligne-competence" style="--t:<?= h($t['couleur'] ?? '#888') ?>"><th class="fixe" colspan="<?= $nbs + 1 ?>"><?= puce_competence($c['code']) ?> <?= h($c['titre']) ?></th></tr>
                     <?php foreach ($c['sous'] as $s):
                         $caps = array_values(array_filter($s['capacites'], fn($k) => $k['niveau'] === $niveau));
                         if (!$caps) continue; ?>
-                        <tr class="ligne-sous"><th class="fixe" colspan="9"><?= puce_competence($s['code']) ?> <?= h($s['titre']) ?></th></tr>
+                        <tr class="ligne-sous"><th class="fixe" colspan="<?= $nbs + 1 ?>"><?= puce_competence($s['code']) ?> <?= h($s['titre']) ?></th></tr>
                         <?php foreach ($caps as $k): $nb++; $nulle = empty($places[$k['code']]); $non_placees += $nulle ? 1 : 0; ?>
                             <tr class="<?= $nulle ? 'non-placee' : '' ?>">
-                                <td class="fixe cap-progression"><?= puce_competence($k['code']) ?> <?= h($k['texte']) ?></td>
-                                <?php for ($i = 1; $i <= 8; $i++): ?>
+                                <td class="fixe cap-progression"><?= puce_competence($k['code']) ?> <?= h($k['texte']) ?>
+                                    <?php if (!empty($par_cap[$k['code']])): ?><span class="au-calendrier" title="Ateliers du calendrier (numéros du scan)">📅 <?= h(implode(', ', $par_cap[$k['code']])) ?></span><?php endif; ?></td>
+                                <?php foreach ($seq as $i => $sq): ?>
                                     <td class="case-seq"><input type="checkbox" name="c[<?= h($k['code']) ?>][]" value="<?= $i ?>" <?= !empty($places[$k['code']][$i]) ? 'checked' : '' ?>
                                         aria-label="<?= h($k['code']) ?> en séquence <?= $i ?>"></td>
-                                <?php endfor; ?>
+                                <?php endforeach; ?>
                             </tr>
                         <?php endforeach; ?>
                     <?php endforeach; ?>
@@ -224,7 +347,7 @@ function page_progression(string $niveau): void
             </tbody>
         </table></div>
         <div class="ligne-actions"><button>Enregistrer la progression de <?= h($niveau) ?></button>
-            <span class="discret"><?= $nb - $non_placees ?> / <?= $nb ?> capacités placées dans au moins une séquence.</span></div>
+            <span class="discret"><?= $nb - $non_placees ?> / <?= $nb ?> capacités placées dans au moins une séquence<?= $nbs > SEQUENCES_MIN ? ' · ' . $nbs . ' séquences' : '' ?>.</span></div>
     </form>
     <?php
 }

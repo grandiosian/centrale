@@ -2844,3 +2844,12 @@ table.hl-detail td { padding: 2px 8px; font-size: .88rem; }
 .revue-titre { display: grid; gap: 2px; }
 .revue-cadre { flex: 1; width: 100%; border: 0; background: #fff; }
 body.revue-ouverte { overflow: hidden; }
+/* Progression : scan des ateliers du calendrier (page_progression) */
+.scan-calendrier { margin: 12px 0; padding: 10px 14px; border: 1px solid var(--bord); border-radius: 10px; background: var(--surface); }
+.scan-calendrier > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.table-scan { border-collapse: collapse; margin: 8px 0; font-size: .88rem; }
+.table-scan th, .table-scan td { border: 1px solid var(--bord); padding: 4px 8px; vertical-align: top; text-align: left; }
+.table-scan td:first-child, .table-scan td:nth-child(3) { text-align: center; }
+.bilan-scan { margin: 6px 0; }
+.liste-jamais { margin: 6px 0; padding-left: 18px; font-size: .86rem; }
+.au-calendrier { margin-left: 6px; font-size: .75rem; color: var(--discret, #6b7280); white-space: nowrap; }
