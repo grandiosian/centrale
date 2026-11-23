@@ -1,7 +1,7 @@
 {
  "format": 2,
  "id": "radar-recul-robot-mbot",
- "version": 3,
+ "version": 4,
  "title": "Radar de recul robot mBot",
  "level": "college",
  "niveau": "4e",
@@ -2436,7 +2436,7 @@
       "T3C31",
       "T2C14"
      ],
-     "question": "**Programmer le vrai mBot.** Complète le programme comme en **4.1** : range la distance mesurée dans la variable **distance**, remplace les cases vides par **10** et **30**, ajoute **arrêter les moteurs** et choisis les couleurs (pas d'orange sur le robot : prends **jaune**). Ajoute ensuite les bips plus rapides (**4.2**) : mettre **attente** à distance ÷ 100, puis attendre **attente** secondes. Compile, téléverse, puis teste avec le capteur tourné **vers l'arrière** (aide : ressource 10).",
+     "question": "**Programmer le vrai mBot.** Complète le programme comme en **4.1** : range la distance mesurée dans la variable **distance**, remplace les cases vides par **10** et **30**, ajoute **arrêter les moteurs** et choisis les couleurs (pas d'orange sur le robot : prends **jaune**). Ajoute ensuite les bips plus rapides (**4.2**) : mettre **attente** à distance ÷ 100, puis attendre **attente** secondes. Compile, téléverse, puis teste avec le capteur tourné **vers l'arrière** (aide : ressource 10). Si ton capteur est monté **à l'avant** du robot, choisis **avancer** au lieu de **reculer** dans le bloc du moteur.",
      "toolbox": [
       "rb_start",
       "rb_back",
@@ -6280,7 +6280,7 @@
       "T3C31"
      ],
      "robot": "mbot",
-     "question": "**Programmer le robot** : le programme du radar (3.1) est déjà écrit. Clique sur **Compiler**, puis téléverse-le dans le mBot.",
+     "question": "**Programmer le robot** : le programme du radar (3.1) est déjà écrit. Clique sur **Compiler**, puis téléverse-le dans le mBot. Si le capteur est **à l'avant** du robot, choisis **avancer** dans le bloc « reculer ».",
      "toolbox": [
       "rb_start",
       "rb_forever",
