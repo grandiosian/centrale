@@ -377,7 +377,9 @@ function action_accueil(string $action): void
     }
     definir_reglage('fiche_atelier:' . $cle, $doc);
     flash($doc !== '' ? 'Version papier associée : « ' . $doc . ' ».' : 'Association retirée.');
-    rediriger('./');
+    // depuis la page Ateliers (panneau Détail) : on y revient
+    $retour = (string) ($_POST['retour'] ?? '');
+    rediriger(preg_match('#^\./\?p=[a-z_]+[A-Za-z0-9_=&%.-]*$#', $retour) ? $retour : './');
 }
 
 /** Icône de trait pour les widgets du tableau de bord (couleur héritée du bouton). */

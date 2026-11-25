@@ -146,6 +146,20 @@ function date_fr(string $date): string
  * Centrale en connaît : résumé, compétences, activités (détail de centrale.json, suivi, propositions), ressources.
  * Renvoie [ateliers par clé « app|atelier », clé de l'atelier par « app|activite »].
  */
+/** Source papier (document FicheStudio rangé sur la Centrale) d'un atelier, pour « Modifier la fiche » : null s'il n'y en a pas. */
+function fiche_atelier_bibliotheque(string $cle, string $titre): ?array
+{
+    $f = fiche_pour_atelier($cle, $titre);
+    if (!$f) {
+        return null;
+    }
+    $nom = nom_document_fichestudio((string) $f['doc']);
+    if (!is_file(DOSSIER_DATA . '/fichestudio/' . $nom . '.fstudio')) {
+        return null;
+    }
+    return ['doc' => $nom, 'devine' => (bool) $f['devine'], 'lien' => 'appli.php/fichestudio/#ouvrir=' . rawurlencode($nom)];
+}
+
 function ateliers_bibliotheque(array $items, array $props): array
 {
     $par_act = [];
@@ -196,7 +210,8 @@ function ateliers_bibliotheque(array $items, array $props): array
             'source' => SOURCES_CATALOGUE[$r['source']] ?? $r['source'], 'ouvrir' => adresse_ouvrir_atelier($r) !== '' ? lien_essayer_atelier((string) $r['app'], (string) $r['atelier']) : '', 'fichier' => $r['fichier'],
             'inspecter' => lien_inspecter_atelier((string) $r['app'], (string) $r['atelier']),
             'hors_ligne' => $r['etat'] === 'actif' && chemin_fichier_autonome((string) $r['app']) !== null ? lien_hors_ligne_atelier((string) $r['app'], (string) $r['atelier']) : '',
-            'competences' => $r['codes'], 'activites' => $acts, 'ressources' => $ressources[$r['app']] ?? []];
+            'competences' => $r['codes'], 'activites' => $acts, 'ressources' => $ressources[$r['app']] ?? [],
+            'fiche' => fiche_atelier_bibliotheque($cle, (string) $r['titre'])];
     }
     // Activités hors catalogue (application sans ateliers importés) : un atelier par groupe
     foreach ($items as $x) {
@@ -454,6 +469,7 @@ function corps_bibliotheque(): void
             <div id="b-dialogue-corps"></div>
         </dialog>
         <script type="application/json" id="b-donnees-ateliers"><?= json_encode(['ateliers' => $ateliers_b, 'competences' => $libelles,
+            'fiches' => documents_fichestudio(), 'csrf' => (string) ($_SESSION['csrf'] ?? ''),
             'niveaux' => NIVEAUX_BIBLIOTHEQUE, 'couleurs' => COULEURS_NIVEAUX,
             'themes' => array_combine(['OST', 'SFC', 'CCRI'], array_map('couleur_theme', ['OST', 'SFC', 'CCRI']))], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 

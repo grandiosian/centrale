@@ -235,6 +235,15 @@
       lien.rel = 'noopener';
       actions.appendChild(lien);
     }
+    if (at.fiche) {   // source papier : le document FicheStudio de l'atelier, ouvert dans l'éditeur (FicheStudio : #ouvrir=)
+      var fs = el('a', 'btn petit secondaire', 'Modifier la fiche (FicheStudio) ↗');
+      fs.href = at.fiche.lien;
+      fs.target = '_blank';
+      fs.rel = 'noopener';
+      fs.title = 'Ouvre « ' + at.fiche.doc + ' » dans FicheStudio pour le modifier ; ⌘S l’enregistre sur la Centrale'
+        + (at.fiche.devine ? ' (fiche trouvée d’après le nom de l’atelier)' : '');
+      actions.appendChild(fs);
+    }
     if (at.hors_ligne) {   // fichier pour un portable sans internet (lib/admin_hors_ligne.php)
       var hl = el('a', 'btn petit secondaire', 'Atelier hors ligne');
       hl.href = at.hors_ligne;
@@ -248,6 +257,7 @@
     }
     if (choisis.length > 1) actions.appendChild(bouton('Comparer la sélection', 'petit secondaire', comparer));
     corps.appendChild(actions);
+    if (/^[*A-Za-z0-9_-]+\|[A-Za-z0-9_.\/-]+$/.test(cle) && at.atelier) corps.appendChild(choixFiche(at));
 
     if (at.competences.length) {
       corps.appendChild(el('h3', '', 'Compétences travaillées'));
@@ -280,6 +290,32 @@
     }
     corps.appendChild(pied);
     ouvrirDialogue(at.titre, corps);
+  }
+
+  /** Fiche FicheStudio de l'atelier : laquelle, et le choix d'une autre (réglage « fiche_atelier:<cle> », lib/admin_accueil.php). */
+  function choixFiche(at) {
+    var p = el('p', 'discret detail-fiche');
+    if (at.fiche) p.appendChild(document.createTextNode('Fiche FicheStudio : « ' + at.fiche.doc + ' »' + (at.fiche.devine ? ' (trouvée d’après le nom de l’atelier)' : '') + ' · '));
+    else p.appendChild(document.createTextNode('Pas encore de fiche FicheStudio pour cet atelier · '));
+    var fiches = donnees.fiches || [];
+    if (!fiches.length) { p.appendChild(document.createTextNode('aucun document FicheStudio sur la Centrale')); return p; }
+    var d = el('details', 'detail-fiche-choix', el('summary', '', at.fiche ? 'en choisir une autre' : 'en associer une'));
+    var f = el('form');
+    f.method = 'post';
+    f.action = './';
+    [['csrf', donnees.csrf || ''], ['action', 'associer_fiche_atelier'], ['cle', at.cle], ['retour', './' + location.search]].forEach(function (c) {
+      var i = el('input'); i.type = 'hidden'; i.name = c[0]; i.value = c[1]; f.appendChild(i);
+    });
+    var sel = el('select');
+    sel.name = 'doc';
+    sel.appendChild(new Option('— aucune (retirer l’association)', ''));
+    fiches.forEach(function (n) { sel.appendChild(new Option(n, n, false, !!at.fiche && at.fiche.doc === n && !at.fiche.devine)); });
+    if (at.fiche && at.fiche.devine) sel.value = at.fiche.doc;
+    f.appendChild(sel);
+    f.appendChild(el('button', 'petit', 'Associer'));
+    d.appendChild(f);
+    p.appendChild(d);
+    return p;
   }
 
   function comparer() {
